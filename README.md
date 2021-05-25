@@ -1,6 +1,7 @@
 # CMM Turbulence
 
 Code for the characteristic mapping method with particle flow written in C++ (C) using Nvidia CUDA on Linux.
+
 Introduction here
 
 # Licensing and contributions
@@ -37,7 +38,7 @@ Nvidia Cuda and other packages
    
    Running the code:
    - Run the code in a shell by executing 'SimulationCuda2d.out'
-   - Cuda errors are quite commong to see, for any furher error provide the error stack
+   - Cuda errors are quite common, any furher error however should be reported as an issue along with the error stack
 
 # Restrictions on code for different machines
 
