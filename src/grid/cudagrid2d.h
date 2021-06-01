@@ -31,10 +31,9 @@ using namespace std;
 	#define PI 		3.141592653589793238462643383279502884197169399375105820974944592307816406286208998628034825342117067
 	#define twoPI 	6.283185307179586476925286766559005768394338798750211641949889184615632812572417997256069650684234136
 	#define FOR(i, N)	for(int i=0;i<N;i++)
-	#define DISCRET
 
 	// "4_nodes"		"quadropole"		"three_vortices"		"single_shear_layer"		"two_votices"
-        #define PROBLEM_CODE "4_nodes" //"single_shear_layer"
+	#define PROBLEM_CODE "single_shear_layer"
 	//#define TIME_TESTING																						//active le temps
 
 	extern ptype ep;
@@ -117,8 +116,7 @@ using namespace std;
 	void readAllRealFromBinaryFile(int Len, ptype *var, string simulationName, string fileName);
 	void writeAllData(TCudaGrid2D *Gc, TCudaGrid2D *Gsf, ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ChiDualX, ptype *ChiDualY, ptype *wsf, ptype *wc, ptype *lsf, ptype *Phi, int stack_map_passed, string t_nb, string simulationName);
 	void readAllData(TCudaGrid2D *Gc, TCudaGrid2D *Gsf, ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ChiDualX, ptype *ChiDualY, ptype *wsf, ptype *lsf, ptype *Phi, int stack_map_passed, string t_nb, string simulationName);
-	void writeRealToBinaryAnyFile(int Len, ptype *var, string fileAdress);
-	void readRealToBinaryAnyFile(int Len, ptype *var, string fileAdress);
+
 
 
 

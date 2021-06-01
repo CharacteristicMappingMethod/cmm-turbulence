@@ -4,15 +4,12 @@
 #include "../simulation/cudasimulation2d.h"
 #include "../grid/cudagrid2d.h"
 #include "../particle/cudaparticle2d.h"
-#include "../simulation/cudamesure2d.h"
 
 #ifdef __CUDACC__
 
 //calculate a new inital condition for hermite	by applying full map stack
-//void translate_initial_condition_through_map_stack(TCudaGrid2D *Gc, TCudaGrid2D *Gsc, ptype *devChiX_stack, ptype *devChiY_stack, ptype *devChiX, ptype *devChiY, int stack_length, ptype *devWsf, cuPtype *devWsfC, cuPtype *devWsfOut, ptype *devWHsc, cuPtype *devWHscC, cuPtype *devWHscOut, cufftHandle cufftPlan_f, ptype *W_initial);
-void translate_initial_condition_through_map_stack(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX_stack, ptype *Dev_ChiY_stack, ptype *Dev_ChiX, ptype *Dev_ChiY, int stack_length, ptype *W_real, ptype *W_H_real, cufftHandle cufftPlan_fine, ptype *W_initial, cuPtype *Dev_Complex_fine, cuPtype *Dev_Hat_fine, cuPtype *Dev_Hat_fine_bis);
-//void evaulate_stream_hermite(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX, ptype *Dev_ChiY, ptype *Dev_W_H_fine_real, ptype *W_real, cuPtype *W_complex, cuPtype *W_hat, ptype *Psi_real, cuPtype *Psi_complex, cuPtype *Psi_hat, cufftHandle cufftPlan_coarse);
-void evaulate_stream_hermite(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX, ptype *Dev_ChiY, ptype *Dev_W_H_fine_real, ptype *W_real, ptype *Psi_real, cufftHandle cufftPlan_coarse, cuPtype *Dev_Complex_coarse, cuPtype *Dev_Hat_coarse, cuPtype *Dev_Hat_coarse_bis);
+void translate_initial_condition_through_map_stack(TCudaGrid2D *Gc, TCudaGrid2D *Gsc, ptype *devChiX_stack, ptype *devChiY_stack, ptype *devChiX, ptype *devChiY, int stack_length, ptype *devWsf, cuPtype *devWsfC, cuPtype *devWsfOut, ptype *devWHsc, cuPtype *devWHscC, cuPtype *devWHscOut, cufftHandle cufftPlan_f);
+void evaulate_stream_hermite(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX, ptype *Dev_ChiY, ptype *Dev_W_H_fine_real, ptype *W_real, cuPtype *W_complex, cuPtype *W_hat, ptype *Psi_real, cuPtype *Psi_complex, cuPtype *Psi_hat, cufftHandle cufftPlan_coarse);
 //cudaStream_t streams
 #endif
 

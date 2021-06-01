@@ -33,11 +33,11 @@
 //Main function
 int main(int argc, char *args[])
 {
-	int grid_scale = 32; 
-	int fine_grid_scale = 512;
+	int grid_scale = 256;
+	int fine_grid_scale = 4096;
 	// max working on RTX 2070 : grid_scale = 2048; fine_grid_scale = 4096;
 	
-	cuda_euler_2d("4_nodes", grid_scale, fine_grid_scale);						//make sure to change the problem code in the cudagrid2d.h
+	cuda_euler_2d("single_shear_layer", grid_scale, fine_grid_scale);						//make sure to change the problem code in the cudagrid2d.h
 	
 	//Zoom_load_frame("vortex_shear_1000_4", grid_scale, fine_grid_scale, "final");
 	

@@ -40,8 +40,8 @@ void recompute_output_files();	//read binary files storing diffeos and recompute
 	
 	//map applications
 	__global__ void kernel_apply_map_to_W(ptype *ChiX, ptype *ChiY, ptype *ws, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs);	//apply map on passed coarse grid to vorticiy field on sample grid
-	__global__ void kernel_apply_map_stack_to_W(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ws, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, ptype *W_initial);	//apply map on passed coarse grid to vorticiy field on sample grid
-	__global__ void kernel_apply_map_stack_to_W_custom(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ws, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, ptype xl, ptype xr, ptype yl, ptype yr, ptype *W_initial);	
+	__global__ void kernel_apply_map_stack_to_W(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ws, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs);	//apply map on passed coarse grid to vorticiy field on sample grid
+	__global__ void kernel_apply_map_stack_to_W_custom(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ws, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, ptype xl, ptype xr, ptype yl, ptype yr);	
 	__global__ void kernel_apply_map_and_sample_from_hermite(ptype *ChiX, ptype *ChiY, ptype *fs, ptype *H, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, int NXh, int NYh, ptype hh);	//apply map and sample function from passed hermite
 	__global__ void kernel_compare_map_stack_with_identity(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *error, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs);	
 	__global__ void kernel_compare_vorticity_with_initial(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *error, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs);	
@@ -55,11 +55,10 @@ void recompute_output_files();	//read binary files storing diffeos and recompute
 	__device__ ptype device_advection_velocity_X(ptype x, ptype y, ptype t);
 	__device__ ptype device_advection_velocity_Y(ptype x, ptype y, ptype t);
 	__device__ ptype device_initial_W(ptype x, ptype y);
-	__device__ ptype device_initial_W_discret(ptype x, ptype y, ptype *W_initial, int NX, int NY);
 	__device__ ptype initHomeoIso(ptype x, ptype y);
 	
 	
-	void Zoom(string simulationName, ptype L, TCudaGrid2D *Gc, TCudaGrid2D *Gsf, ptype *devChiX_stack, ptype *devChiY_stack, ptype *devChiX, ptype *devChiY, ptype *devWs, int stack_length, ptype *W_initial);		//Zoom
+	void Zoom(string simulationName, ptype L, TCudaGrid2D *Gc, TCudaGrid2D *Gsf, ptype *devChiX_stack, ptype *devChiY_stack, ptype *devChiX, ptype *devChiY, ptype *devWs, int stack_length);		//Zoom
 	
 	
 	

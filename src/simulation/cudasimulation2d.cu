@@ -228,7 +228,7 @@ __global__ void kernel_complex_to_real_H(ptype *varR, cuPtype *varC, int NX, int
 *******************************************************************/
 
 
-__global__ void kernel_apply_map_stack_to_W(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ws, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, ptype *W_initial)
+__global__ void kernel_apply_map_stack_to_W(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ws, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -248,19 +248,11 @@ __global__ void kernel_apply_map_stack_to_W(ptype *ChiX_stack, ptype *ChiY_stack
 	for(int k = stack_length - 1; k >= 0; k--)
 		device_diffeo_interpolate(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x, y, &x, &y, NXc, NYc, hc);		
 	
-	#ifndef DISCRET
-		ws[In] = device_initial_W(x, y);
-	#endif
-	
-	#ifdef DISCRET
-		ws[In] = device_hermite_interpolate(W_initial, x, y, NXs, NYs, hs);
-		//ws[In] = device_initial_W_discret(x, y, W_initial, NXs, NYs);
-	#endif
-	
+	ws[In] = device_initial_W(x, y);
 }
 
 
-__global__ void kernel_apply_map_stack_to_W_custom(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ws, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, ptype xl, ptype xr, ptype yl, ptype yr, ptype *W_initial)		// Zoom
+__global__ void kernel_apply_map_stack_to_W_custom(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ws, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, ptype xl, ptype xr, ptype yl, ptype yr)		// Zoom
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -282,17 +274,7 @@ __global__ void kernel_apply_map_stack_to_W_custom(ptype *ChiX_stack, ptype *Chi
 	for(int k = stack_length - 1; k >= 0; k--)
 		device_diffeo_interpolate(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x, y, &x, &y, NXc, NYc, hc);
 		
-	ws[In] = device_initial_W(x, y); //device_initial_W_discret(x, y)
-	
-	#ifndef DISCRET
-		ws[In] = device_initial_W(x, y);
-	#endif
-	
-	#ifdef DISCRET
-		ws[In] = device_hermite_interpolate(W_initial, x, y, NXs, NYs, hs);
-		//ws[In] = device_initial_W_discret(x, y, W_initial, NXs, NYs);
-	#endif
-	
+	ws[In] = device_initial_W(x, y);
 }
 
 
@@ -477,29 +459,6 @@ __device__ ptype device_initial_W(ptype x, ptype y)
 
 
 
-__device__ ptype device_initial_W_discret(ptype x, ptype y, ptype *W_initial, int NX, int NY){
-	
-	int In; 
-	
-	
-	x = fmod(x, twoPI);
-	x = (x < 0)*(twoPI+x) + (x > 0)*(x);
-	y = fmod(y, twoPI);
-	y = (y < 0)*(twoPI+y) + (y > 0)*(y);
-	
-	In = floor(y/twoPI * NY) * NX + floor(x/twoPI * NX); 
-	//In = floor(x * NY) * NX + floor(y * NX); 
-	
-	return W_initial[In];
-
-}
-
-
-
-
-
-
-
 
 /*******************************************************************
 *							   Zoom								   *
@@ -508,7 +467,7 @@ __device__ ptype device_initial_W_discret(ptype x, ptype y, ptype *W_initial, in
 
 
 
-void Zoom(string simulationName, ptype L, TCudaGrid2D *Gc, TCudaGrid2D *Gsf, ptype *devChiX_stack, ptype *devChiY_stack, ptype *devChiX, ptype *devChiY, ptype *devWs, int stack_map_passed, ptype *W_initial)
+void Zoom(string simulationName, ptype L, TCudaGrid2D *Gc, TCudaGrid2D *Gsf, ptype *devChiX_stack, ptype *devChiY_stack, ptype *devChiX, ptype *devChiY, ptype *devWs, int stack_map_passed)
 {
 	ptype *ws;
 	ws = new ptype[Gsf->N];
@@ -537,7 +496,7 @@ void Zoom(string simulationName, ptype L, TCudaGrid2D *Gc, TCudaGrid2D *Gsf, pty
 		yMax = yMin + width;
 		
 		
-		kernel_apply_map_stack_to_W_custom<<<Gsf->blocksPerGrid, Gsf->threadsPerBlock>>>(devChiX_stack, devChiY_stack, devChiX, devChiY, devWs, stack_map_passed, Gc->NX, Gc->NY, Gc->h, Gsf->NX, Gsf->NY, Gsf->h, xMin*L, xMax*L, yMin*L, yMax*L, W_initial);	
+		kernel_apply_map_stack_to_W_custom<<<Gsf->blocksPerGrid, Gsf->threadsPerBlock>>>(devChiX_stack, devChiY_stack, devChiX, devChiY, devWs, stack_map_passed, Gc->NX, Gc->NY, Gc->h, Gsf->NX, Gsf->NY, Gsf->h, xMin*L, xMax*L, yMin*L, yMax*L);	
 		
 		
 		cudaMemcpy(ws, devWs, Gsf->sizeNReal, cudaMemcpyDeviceToHost);

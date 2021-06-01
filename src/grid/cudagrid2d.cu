@@ -498,39 +498,6 @@ void readAllData(TCudaGrid2D *Gc, TCudaGrid2D *Gsf, ptype *ChiX_stack, ptype *Ch
 }
 
 
-void writeRealToBinaryAnyFile(int Len, ptype *var, string fileAdress)
-{
-	string fileName = fileAdress;
-	ofstream file(fileName.c_str(), ios::out | ios::binary);
-	
-		if(!file)
-		{
-			cout<<"Error saving file. Unable to open : "<<fileName<<endl;
-			return;
-		}
-	
-	FOR(l, Len)
-		file.write( (char*) &var[l], sizeof(ptype) );
-		
-	file.close();
-}
-
-
-void readRealToBinaryAnyFile(int Len, ptype *var, string fileAdress)
-{
-	string fileName = fileAdress;
-	ifstream file(fileName.c_str(), ios::in | ios::binary);
-	
-		if(!file)
-		{
-			cout<<"Error saving file. Unable to open : "<<fileName<<endl;
-		}
-		
-	FOR(l, Len)
-		file.read( (char*) &var[l], sizeof(ptype) );
-		
-	file.close();
-}
 
 
 

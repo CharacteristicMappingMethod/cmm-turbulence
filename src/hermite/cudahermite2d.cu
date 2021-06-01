@@ -103,7 +103,7 @@ __device__ ptype device_hermite_interpolate_dx(ptype *H, ptype x, ptype y, int N
 				
 				+ (b[0][2]* H[1*N+I00] + b[0][3]* H[1*N+I10] + b[1][2]* H[1*N+I01] + b[1][3]* H[1*N+I11]) * (h)
 				+ (b[2][0]* H[2*N+I00] + b[2][1]* H[2*N+I10] + b[3][0]* H[2*N+I01] + b[3][1]* H[2*N+I11]) * (h)
-			        + (b[2][2]* H[3*N+I00] + b[2][3]* H[3*N+I10] + b[3][2]* H[3*N+I01] + b[3][3]* H[3*N+I11]) * (h*h) )/h;
+				+ (b[2][2]* H[3*N+I00] + b[2][3]* H[3*N+I10] + b[3][2]* H[3*N+I01] + b[3][3]* H[3*N+I11]) * (h*h) )/h;
 	
 }
 
@@ -154,7 +154,7 @@ __device__ ptype device_hermite_interpolate_dy(ptype *H, ptype x, ptype y, int N
 				
 				+ (b[0][2]* H[1*N+I00] + b[0][3]* H[1*N+I10] + b[1][2]* H[1*N+I01] + b[1][3]* H[1*N+I11]) * (h)
 				+ (b[2][0]* H[2*N+I00] + b[2][1]* H[2*N+I10] + b[3][0]* H[2*N+I01] + b[3][1]* H[2*N+I11]) * (h)
-		                + (b[2][2]* H[3*N+I00] + b[2][3]* H[3*N+I10] + b[3][2]* H[3*N+I01] + b[3][3]* H[3*N+I11]) * (h*h) )/h;
+				+ (b[2][2]* H[3*N+I00] + b[2][3]* H[3*N+I10] + b[3][2]* H[3*N+I01] + b[3][3]* H[3*N+I11]) * (h*h) )/h;
 	
 }
 

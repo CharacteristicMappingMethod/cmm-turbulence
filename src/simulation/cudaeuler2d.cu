@@ -29,7 +29,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	ptype inCompThreshold = 0.01;										// the maximum allowance of map to deviate from grad_chi begin 1
 	
 	//GPU dependent parameters
-	int mem_index = 256; 												// mem_index = 1024 for 2GB GPU ram												// Need to be change in the future for large data
+	int mem_index = 1024; 												// mem_index = 1024 for 2GB GPU ram												// Need to be change in the future for large data
 	
 	//initialization of parameters
 	simulationName = problem_name;
@@ -44,9 +44,9 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	if(simulationName == "4_nodes")
 	{
 		grid_by_time = 8.0;
-		snapshots_per_second = 2;
+		snapshots_per_second = 128;
 		dt = 1.0/(NX_coarse * grid_by_time);
-		tf = 1;		
+		tf = 5;		
 	}
 	else if(simulationName == "quadropole")
 	{
@@ -67,7 +67,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 		grid_by_time = 8.0;
 		snapshots_per_second = 1;
 		dt = 1.0/(NX_coarse * grid_by_time);
-		tf = 100; //50; //0.5;//100;//300;//
+		tf = 50;//0.5;//100;//300;//
 	}
 	else if(simulationName == "two_votices")
 	{
@@ -95,20 +95,6 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	}
 	
 	
-	#ifdef DISCRET
-	
-		grid_by_time = 8.0;
-		snapshots_per_second = 10;
-		dt = 1.0/(NX_coarse * grid_by_time);
-		tf = 10;	
-	#endif
-	#ifndef DISCRET
-		ptype *Dev_W_H_initial;
-		cudaMalloc((void**)&Dev_W_H_initial, 8);
-	#endif
-	
-	
-	
 	//shared parameters
 	iterMax = ceil(tf / dt);
 	save_buffer_count = (NX_coarse * grid_by_time) / snapshots_per_second;							// the denominator is snapshots per second
@@ -131,6 +117,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	Logger logger(simulationName);
 	
 	
+	
 	/*******************************************************************
 	*							Grids								   *
 	* 	One a coarse grid where we compute derivatives and one large   *
@@ -140,30 +127,6 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	
 	TCudaGrid2D Grid_coarse(NX_coarse, NY_coarse, LX);
 	TCudaGrid2D Grid_fine(NX_fine, NY_fine, LX);
-	
-	
-	/*******************************************************************
-	*							CuFFT plans							   *
-	* 	Plan use to compute FFT using Cuda library CuFFT	 	       *
-	* 																   *
-	*******************************************************************/
-	
-	cufftHandle cufftPlan_coarse, cufftPlan_fine;
-	cufftPlan2d(&cufftPlan_coarse, Grid_coarse.NX, Grid_coarse.NY, CUFFT_Z2Z);
-	cufftPlan2d(&cufftPlan_fine, Grid_fine.NX, Grid_fine.NY, CUFFT_Z2Z);
-	
-	
-	/*******************************************************************
-	*							Complex variable					   *
-	*******************************************************************/
-	
-	cuPtype *Dev_Complex_coarse, *Dev_Complex_fine, *Dev_Hat_coarse, *Dev_Hat_fine, *Dev_Hat_coarse_bis, *Dev_Hat_fine_bis;
-	cudaMalloc((void**)&Dev_Complex_coarse, Grid_coarse.sizeNComplex);
-	cudaMalloc((void**)&Dev_Hat_coarse, Grid_coarse.sizeNComplex);
-	cudaMalloc((void**)&Dev_Hat_coarse_bis, Grid_coarse.sizeNComplex);
-	cudaMalloc((void**)&Dev_Complex_fine, Grid_fine.sizeNComplex);
-	cudaMalloc((void**)&Dev_Hat_fine, Grid_fine.sizeNComplex);
-	cudaMalloc((void**)&Dev_Hat_fine_bis, Grid_fine.sizeNComplex);
 	
 	
 	/*******************************************************************
@@ -211,63 +174,22 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	*******************************************************************/
 	
 	ptype *Host_W_coarse, *Host_W_fine, *Dev_W_coarse, *Dev_W_fine, *Dev_W_H_fine_real;
+	cuPtype *Dev_W_coarse_complex, *Dev_W_coarse_hat, *Dev_W_fine_complex, *Dev_W_fine_hat, *Dev_W_H_fine_complex, *Dev_W_H_fine_hat;
 	
 	Host_W_coarse = new ptype[Grid_coarse.N];
 	cudaMalloc((void**)&Dev_W_coarse, Grid_coarse.sizeNReal);
+	cudaMalloc((void**)&Dev_W_coarse_complex, Grid_coarse.sizeNComplex);
+	cudaMalloc((void**)&Dev_W_coarse_hat, Grid_coarse.sizeNComplex);
 	
 	Host_W_fine = new ptype[Grid_fine.N];
 	cudaMalloc((void**)&Dev_W_fine, Grid_fine.sizeNReal);
+	cudaMalloc((void**)&Dev_W_fine_complex, Grid_fine.sizeNComplex);
+	cudaMalloc((void**)&Dev_W_fine_hat, Grid_fine.sizeNComplex);
 	
 	//vorticity hermite 
 	cudaMalloc((void**)&Dev_W_H_fine_real, 4*Grid_fine.sizeNReal);
-	
-	
-	/*******************************************************************
-	*							DISCRET								   *
-	*******************************************************************/
-	
-	#ifdef DISCRET	
-		
-		ptype *Host_W_initial, *Dev_W_H_initial;
-		Host_W_initial = new ptype[Grid_fine.N];		
-		cudaMalloc((void**)&Dev_W_H_initial, 4*Grid_fine.sizeNReal);
-		
-		std::ostringstream fine_grid_scale_nb;
-		fine_grid_scale_nb<<fine_grid_scale;
-		
-		readRealToBinaryAnyFile(Grid_fine.N, Host_W_initial, "src/Initial_W_discret/file2D_" + fine_grid_scale_nb.str() + ".bin");
-		
-		cudaMemcpy(Dev_W_fine, Host_W_initial, Grid_fine.sizeNReal, cudaMemcpyHostToDevice);
-		
-		kernel_real_to_complex<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_W_fine, Dev_Complex_fine, Grid_fine.NX, Grid_fine.NY);
-		cufftExecZ2Z(cufftPlan_fine, Dev_Complex_fine, Dev_Hat_fine, CUFFT_FORWARD);
-		kernel_normalize<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_Hat_fine, Grid_fine.NX, Grid_fine.NY);
-		
-		// Hermite vorticity array : [vorticity, x-derivative, y-derivative, xy-derivative]
-		cudaMemcpy(Dev_W_H_initial, Dev_W_fine, Grid_fine.sizeNReal, cudaMemcpyDeviceToDevice);
-		
-		kernel_fft_dy<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_Hat_fine, Dev_Hat_fine_bis, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);													// y-derivative of the vorticity in Fourier space
-		cufftExecZ2Z(cufftPlan_fine, Dev_Hat_fine_bis, Dev_Complex_fine, CUFFT_INVERSE);
-		kernel_complex_to_real  <<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(&Dev_W_H_initial[2*Grid_fine.N], Dev_Complex_fine, Grid_fine.NX, Grid_fine.NY);
-		
-		kernel_fft_dx<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_Hat_fine, Dev_Hat_fine_bis, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);													// x-derivative of the vorticity in Fourier space
-		cufftExecZ2Z(cufftPlan_fine, Dev_Hat_fine_bis, Dev_Complex_fine, CUFFT_INVERSE);
-		kernel_complex_to_real  <<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(&Dev_W_H_initial[Grid_fine.N], Dev_Complex_fine, Grid_fine.NX, Grid_fine.NY);
-		
-		kernel_fft_dy<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_Hat_fine_bis, Dev_Hat_fine, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);													// y-derivative of x-derivative of of the vorticity in Fourier space
-		cufftExecZ2Z(cufftPlan_fine, Dev_Hat_fine, Dev_Complex_fine, CUFFT_INVERSE);
-		kernel_complex_to_real  <<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(&Dev_W_H_initial[3*Grid_fine.N], Dev_Complex_fine, Grid_fine.NX, Grid_fine.NY);
-		
-		delete [] Host_W_initial;
-		
-		cout<<cudaGetErrorName (cudaGetLastError());
-		printf("\n");
-		
-		
-		//			Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis
-		
-		
-	#endif
+	cudaMalloc((void**)&Dev_W_H_fine_complex, 4*Grid_fine.sizeNComplex);
+	cudaMalloc((void**)&Dev_W_H_fine_hat, 4*Grid_fine.sizeNComplex);
 	
 	
 	/*******************************************************************
@@ -291,11 +213,14 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	*******************************************************************/
 	
 	//stream hermite on coarse computational grid
-	ptype *Host_Psi, *Dev_Psi_real, *Dev_Psi_real_previous;	
+	ptype *Host_Psi, *Dev_Psi_real, *Dev_Psi_real_previous;					
+	cuPtype *Dev_Psi_complex, *Dev_Psi_hat;
 	
 	Host_Psi = new ptype[4*Grid_coarse.N];
 	cudaMalloc((void**) &Dev_Psi_real, 4*Grid_coarse.sizeNReal);
 	cudaMalloc((void**) &Dev_Psi_real_previous, 4*Grid_coarse.sizeNReal);
+	cudaMalloc((void**) &Dev_Psi_complex, 4*Grid_coarse.sizeNComplex);
+	cudaMalloc((void**) &Dev_Psi_hat, 4*Grid_coarse.sizeNComplex);
 	
 	
 	/*******************************************************************
@@ -324,63 +249,33 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	
 	
 	/*******************************************************************
+	*							CuFFT plans							   *
+	* 	Plan use to compute FFT using Cuda library CuFFT	 	       *
+	* 																   *
+	*******************************************************************/
+	
+	cufftHandle cufftPlan_coarse, cufftPlan_fine;
+	cufftPlan2d(&cufftPlan_coarse, Grid_coarse.NX, Grid_coarse.NY, CUFFT_Z2Z);
+	cufftPlan2d(&cufftPlan_fine, Grid_fine.NX, Grid_fine.NY, CUFFT_Z2Z);
+	
+	
+	/*******************************************************************
 	*							 Particles							   *
 	*******************************************************************/
 	
-	int Nb_Tau_p = 20;
-	ptype Tau_p[Nb_Tau_p] = {0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.125, 0.15, 0.25, 0.5, 0.75, 1, 2, 5, 13};
-	int Nb_particles = 1024 * 64; // *512 ; // pow(2, 10)*2048 = 2076672
-	int particle_thread =  256 /*pow(2, 10);*/, particle_block = Nb_particles / particle_thread; // 128 ;
+	int Nb_particles = pow(2, 10)*512; // pow(2, 10)*2048 = 2076672
+	int particle_block = 128, particle_thread = pow(2, 10);
 	printf("Nb_particles : %d\n", Nb_particles);
 	ptype *Host_particles_pos ,*Dev_particles_pos, *Host_particles_vel ,*Dev_particles_vel;
-	Host_particles_pos = new ptype[2*Nb_particles*Nb_Tau_p];
-	Host_particles_vel = new ptype[2*Nb_particles*Nb_Tau_p];
-	cudaMalloc((void**) &Dev_particles_pos, 2*Nb_particles*Nb_Tau_p*sizeof(ptype));
-	cudaMalloc((void**) &Dev_particles_vel, 2*Nb_particles*Nb_Tau_p*sizeof(ptype));
+	Host_particles_pos = new ptype[2*Nb_particles];
+	Host_particles_vel = new ptype[2*Nb_particles];
+	cudaMalloc((void**) &Dev_particles_pos, 2*Nb_particles*sizeof(ptype));
+	cudaMalloc((void**) &Dev_particles_vel, 2*Nb_particles*sizeof(ptype));
 	curandGenerator_t prng;
 	curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_DEFAULT);
-	curandGenerateUniformDouble(prng, Dev_particles_pos, 2*Nb_particles*Nb_Tau_p);
+	curandGenerateUniformDouble(prng, Dev_particles_pos, 2*Nb_particles);
 	
-	for(int index_tau_p = 1; index_tau_p < Nb_Tau_p; index_tau_p+=1)
-		cudaMemcpy(&Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_pos[0], 2*Nb_particles*sizeof(ptype), cudaMemcpyDeviceToDevice);
-
-	int Nb_fine_dt_particles = 100;
-	int freq_fine_dt_particles = 10000;
-	int prod_fine_dt_particles = Nb_fine_dt_particles * freq_fine_dt_particles;
-	ptype *Dev_particles_pos_fine_dt, *Host_particles_pos_fine_dt;
-
-	Host_particles_pos_fine_dt = new ptype[2*prod_fine_dt_particles];
-	cudaMalloc((void**) &Dev_particles_pos_fine_dt, 2*prod_fine_dt_particles*sizeof(ptype));
-	
-	for(int index_tau_p = 0; index_tau_p < Nb_Tau_p; index_tau_p+=1){
-		Rescale<<<particle_block, particle_thread>>>(Nb_particles, twoPI, &Dev_particles_pos[2*Nb_particles*index_tau_p]);
-		//Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], Dev_Psi_real, Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-		Particle_advect_iner_ini<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-		Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
-	}
-
-
-	/*******************************************************************
-	*				 Energy, Enstrophy, Palinstrophy				   *
-	*******************************************************************/
-
-	// Placeholder : Compute initial energy
-	int count_mesure = 0;
-	ptype *Mesure;
-	cudaMallocManaged(&Mesure, 3*tf*sizeof(ptype));
-	Compute_Energy<<<1,1024>>>(Mesure, Dev_Psi_real, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-	//Compute_Enstrophy<<<1,1024>>>(&(E+1), W, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-	//Compute_Palinstrophy<<<1,1024>>>(&(E+2), W, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-	cudaDeviceSynchronize();
-	printf("ENERGY : %lf, Enstrophy : %lf \n", 0.5 * (*Mesure), 0.5 * (*(Mesure + 1)));
-	
-	
-	ptype *Dev_W_coarse_real_dx_dy;
-	cuPtype *Dev_W_coarse_complex_dx_dy, *Dev_W_coarse_hat_dx_dy;
-	
-	cudaMalloc((void**)&Dev_W_coarse_real_dx_dy, Grid_coarse.sizeNReal);
-	cudaMalloc((void**)&Dev_W_coarse_complex_dx_dy, Grid_coarse.sizeNComplex);
-	cudaMalloc((void**)&Dev_W_coarse_hat_dx_dy, Grid_coarse.sizeNComplex);
+	Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos, Dev_Psi_real, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY);
 	
 	
 	/*******************************************************************
@@ -411,20 +306,28 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	/*******************************************************************
 	*						   Initialization						   *
 	*******************************************************************/
-		
+	
+	
 	//initialization of diffeo
 	kernel_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
 	kernel_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiDualX, Dev_ChiDualY, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
 	//cudaDeviceSynchronize();
 	
-	//setting initial conditions
-	translate_initial_condition_through_map_stack(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, map_stack_ctr, Dev_W_fine, Dev_W_H_fine_real, cufftPlan_fine, Dev_W_H_initial, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
+	cout<<cudaGetErrorName (cudaGetLastError());
+	printf("\n");
 
-	//in step 1, Psi_p stays the same old one
-	evaulate_stream_hermite(&Grid_coarse, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real_previous, cufftPlan_coarse, Dev_Complex_coarse, Dev_Hat_coarse, Dev_Hat_coarse_bis);
+	//setting initial conditions
+	translate_initial_condition_through_map_stack(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, map_stack_ctr, Dev_W_fine, Dev_W_fine_complex, Dev_W_fine_hat, Dev_W_H_fine_real, Dev_W_H_fine_complex, Dev_W_H_fine_hat, cufftPlan_fine);
 	
 	cout<<cudaGetErrorName (cudaGetLastError());
 	printf("\n");
+
+	//in step 1, Psi_p stays the same old one
+	evaulate_stream_hermite(&Grid_coarse, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_coarse, Dev_W_coarse_complex, Dev_W_coarse_hat, Dev_Psi_real_previous, Dev_Psi_complex, Dev_Psi_hat, cufftPlan_coarse);
+	
+	cout<<cudaGetErrorName (cudaGetLastError());
+	printf("\n");
+
 	
 	char buffer[50];
 	
@@ -442,8 +345,6 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	int save_ctr = 1;
 	
 	int old_ctr = 0;
-
-	//int count_fine_dt  = 0;
 	
 	cout<<std::setprecision(30)<<"dt = "<<dt<<endl;
 	
@@ -457,7 +358,6 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	cout<<cudaGetErrorName (cudaGetLastError());
 	printf("\n");
 
-
 	/*******************************************************************
 	*							 Main loop							   *
 	*******************************************************************/
@@ -469,32 +369,27 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 			dt = tf - t;
 			
 		//stream hermite
-		evaulate_stream_hermite(&Grid_coarse, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufftPlan_coarse, Dev_Complex_coarse, Dev_Hat_coarse, Dev_Hat_coarse_bis);
-
-		// Particles advection
-		//Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos, Dev_Psi_real, Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-		for(int index_tau_p = 0; index_tau_p < Nb_Tau_p; index_tau_p+=1)
-			Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
-		//cudaMemcpy(&Dev_particles_pos_fine_dt[(loop_ctr * Nb_fine_dt_particles * 2) % (2*prod_fine_dt_particles)], Dev_particles_pos, 2*Nb_fine_dt_particles*sizeof(ptype), cudaMemcpyDeviceToDevice);
+		evaulate_stream_hermite(&Grid_coarse, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_coarse, Dev_W_coarse_complex, Dev_W_coarse_hat, Dev_Psi_real, Dev_Psi_complex, Dev_Psi_hat, cufftPlan_coarse);
+		
+		Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos, Dev_Psi_real, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY);
 		
 		kernel_advect_using_stream_hermite2<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Dev_ChiDualX, Dev_ChiDualY, Dev_Psi_real, Dev_Psi_real_previous, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, t, dt, ep);	// time cost		
 		kernel_update_map_from_dual<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock, 0, streams[0]>>>(Dev_ChiX, Dev_ChiY, Dev_ChiDualX, Dev_ChiDualY, Grid_coarse.NX, Grid_coarse.NY, ep);																	
-
-	
+		
 		//copy Psi to Psi_previous
 		//cudaMemcpy(Dev_Psi_real_previous, Dev_Psi_real, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice);
 		cudaMemcpyAsync(Dev_Psi_real_previous, Dev_Psi_real, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice, streams[1]);
 		
 		
 		/*******************************************************************
-		*							 Remapping							   *
+		*							 Remaping							   *
 		*******************************************************************/
 		
 		grad_chi_min = 1;
 		grad_chi_max = 1;
 		//incompressibility check (port it on cuda)
 		if(loop_ctr % 10 == 0){
-			kernel_incompressibility_check<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Dev_gradChi, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);								// time cost		A optimiser
+			kernel_incompressibility_check<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Dev_gradChi, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);								// time cost		
 			// We don't need to have Dev_gradChi in memory we juste need to know if it exist a value such as : abs(this_value - 1) > inCompThreshold
 			
 			//cudaDeviceSynchronize();
@@ -515,7 +410,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 					grad_chi_max = Host_w_max[i];
 			}
 		}
-
+		
 		//resetting map and adding to stack
 		if( ( fabs(grad_chi_min - 1) > inCompThreshold ) || ( fabs(grad_chi_max - 1) > inCompThreshold ) )
 		{
@@ -540,7 +435,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 			cudaMemcpy(&Dev_ChiY_stack[map_stack_ctr*4*Grid_coarse.N], Dev_ChiY, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice);
 			
 			//adjusting initial conditions
-			translate_initial_condition_through_map_stack(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, map_stack_ctr, Dev_W_fine, Dev_W_H_fine_real, cufftPlan_fine, Dev_W_H_initial, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
+			translate_initial_condition_through_map_stack(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, map_stack_ctr, Dev_W_fine, Dev_W_fine_complex, Dev_W_fine_hat, Dev_W_H_fine_real, Dev_W_H_fine_complex, Dev_W_H_fine_hat, cufftPlan_fine);
 			
 			//resetting map
 			kernel_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
@@ -576,70 +471,39 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 					else
 						cout<<r<<"%";
 					cout<<endl;
-					}
+				}
 			}
 			*/
 			
 			/*******************************************************************
 			*							 Save snap shot						   *
 			*******************************************************************/
-	       
-		/*	if (loop_ctr % freq_fine_dt_particles == 0){                             // look at the first hundred particles for a finer time step
-
-		  std::ostringstream fdt;
-		  count_fine_dt += 1;
-		  cudaMemcpy(Host_particles_pos_fine_dt, Dev_particles_pos_fine_dt, 2*prod_fine_dt_particles*sizeof(ptype), cudaMemcpyDeviceToHost);
-		  //		  cudaMallocManaged(&particles_pos_fine_dt, 200 * sizeof(ptype));
-		  //particles_pos_fine_dt = Dev_particles_pos;
-		  fdt<<count_fine_dt;
-		  printf("Saving Frame finer timestep... ctr = %d \t save_ctr = %d  \t time = %f \n", loop_ctr, save_ctr, t); 
-		  writeAllRealToBinaryFile(2*prod_fine_dt_particles, Host_particles_pos_fine_dt, simulationName, "particles_pos_fine_dt_" + fdt.str());
-		    		  
-		  }*/
-				  
 			
-	      
 			if( loop_ctr % save_buffer_count == 0 )
 			{
 				printf("Saving Image... ctr = %d \t save_ctr = %d  \t time = %f \n", loop_ctr, save_ctr, t); 
 				snprintf(logger.buffer, sizeof(logger.buffer), "Saving Image... ctr = %d \t save_ctr = %d  \t time = %f", loop_ctr, save_ctr, t); 
 				logger.push();
 				
-				kernel_apply_map_stack_to_W<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Dev_W_fine, map_stack_ctr, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h, Dev_W_H_initial);
+				kernel_apply_map_stack_to_W<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Dev_W_fine, map_stack_ctr, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);
 				
 				//copying data on host
-				cudaMemcpy(Host_W_coarse, Dev_W_coarse, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
 				cudaMemcpy(Host_W_fine, Dev_W_fine, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
 				cudaMemcpy(Host_Psi, Dev_Psi_real, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
-				cudaMemcpy(Host_particles_pos, Dev_particles_pos, 2*Nb_particles*Nb_Tau_p*sizeof(ptype), cudaMemcpyDeviceToHost);
+				cudaMemcpy(Host_particles_pos, Dev_particles_pos, 2*Nb_particles*sizeof(ptype), cudaMemcpyDeviceToHost);
 				
 				//writing to file
 				std::ostringstream ss;
 				ss<<save_ctr;
 				
-				writeAllRealToBinaryFile(Grid_coarse.N, Host_W_coarse, simulationName, "w_coarse_" + ss.str());
-				writeAllRealToBinaryFile(Grid_fine.N, Host_W_fine, simulationName, "w_fine_" + ss.str());
+				//writeAllRealToBinaryFile(Grid_fine.N, Host_W_fine, simulationName, "w_" + ss.str());
 				//writeAllRealToBinaryFile(4*Grid_coarse.N, Host_Psi, simulationName, "Psi_" + ss.str()); 
-				writeAllRealToBinaryFile(2*Nb_particles*Nb_Tau_p, Host_particles_pos, simulationName, "particles_pos_" + ss.str());
+				writeAllRealToBinaryFile(2*Nb_particles, Host_particles_pos, simulationName, "particles_pos_" + ss.str());
 				
 				save_ctr++;
-				
-				//Energy placeholder : need to be put into a array in order to plot it and see the leak of energy
-				Compute_Energy<<<1,1024>>>(&Mesure[3*count_mesure], Dev_Psi_real, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-				Compute_Enstrophy<<<1,1024>>>(&Mesure[1 + 3*count_mesure], Dev_W_coarse, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-				//Compute_Palinstrophy(&Grid_coarse, Mesure, Dev_W_coarse_hat, Dev_W_coarse_hat_dx_dy, Dev_W_coarse_complex_dx_dy, Dev_W_coarse_real_dx_dy, cufftPlan_coarse); //change mesure
-		        //cudaDeviceSynchronize();
-				//*(Mesure + 3*count_mesure) = (*(Mesure + 3*count_mesure)) * 0.5 ;
-				//*(Mesure + 3*count_mesure +1)) = (*(Mesure + 3*count_mesure +1))) * 0.5;
-		        //printf("ENERGY : %lf, Enstrophy: %lf\n", *(Mesure + 3*count_mesure), *(Mesure + 3*count_mesure +1));
-				count_mesure+=1;
 			}
 	
 			int error = cudaGetLastError();
-			//cudaError_t err = cudaGetLastError();
-			//if (err != cudaSuccess){
-			//	  printf("%s\n", cudaGetErrorString(err));
-			//}
 			if(error != 0)
 			{
 				cout<<"Finished; Last Cuda Error : "<<error<<endl;
@@ -650,7 +514,6 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 			}
 		
 		#endif
-		
 	}
 	
 	
@@ -659,7 +522,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	*					  Zoom on the last frame					   *
 	*******************************************************************/
 	
-	Zoom(simulationName, LX, &Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Dev_W_fine, map_stack_ctr, Dev_W_H_initial);		
+	Zoom(simulationName, LX, &Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Dev_W_fine, map_stack_ctr);		
 	
 	/*******************************************************************
 	*						 Save final step						   *
@@ -668,8 +531,6 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	writeAllRealToBinaryFile(Grid_fine.N, Host_W_fine, simulationName, "w_final");
 	writeAllRealToBinaryFile(4*Grid_coarse.N, Host_Psi, simulationName, "Psi_final");
 	writeAllRealToBinaryFile(2*Nb_particles, Host_particles_pos, simulationName, "particles_pos_final");
-
-	writeAllRealToBinaryFile(3*tf, Mesure, simulationName, "Mesure");
 	
 	
 	/*******************************************************************
@@ -686,13 +547,11 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	
 	#endif
 
-	/*
 	kernel_compare_vorticity_with_initial<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Dev_W_fine, map_stack_ctr, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);
 	cudaMemcpy(Host_W_fine, Dev_W_fine, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
 	get_max_min(&Grid_fine, Host_W_fine, &w_min, &w_max);
 	cout<<fabs(w_min)<<endl<<fabs(w_max)<<endl;
 	//writeRealToImage(&Grid_fine, Host_W_fine, simulationName + "/w_bmp/Error" , w_min, w_max, JET, true);	
-	*/
 	
 	double maxError = fabs(w_max);
 	if(fabs(w_min) > fabs(w_max))
@@ -719,12 +578,14 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	cudaFree(Dev_ChiY);
 	cudaFree(Dev_ChiDualX);
 	cudaFree(Dev_ChiDualY);
+	// Size on GPU : coarse(4*4)
 	
 	// Chi_stack
 	delete [] Host_ChiX_stack;
 	delete [] Host_ChiY_stack;
 	cudaFree(Dev_ChiX_stack);
 	cudaFree(Dev_ChiY_stack);
+	// Size on GPU : coarse(2*4)
 	
 	// Vorticity
 	delete [] Host_W_coarse;
@@ -732,14 +593,35 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	cudaFree(Dev_W_coarse);
 	cudaFree(Dev_W_fine);
 	cudaFree(Dev_W_H_fine_real);
+	cudaFree(Dev_W_coarse_complex);
+	cudaFree(Dev_W_coarse_hat);
+	cudaFree(Dev_W_fine_complex);
+	cudaFree(Dev_W_fine_hat);
+	cudaFree(Dev_W_H_fine_complex);
+	cudaFree(Dev_W_H_fine_hat);
+	// Size on GPU : coarse(1+2+2) + fine(1+4+2+2+4*2+4*2)
+	
+	/*
+	// Laplacian
+	delete [] Host_lap_fine;
+	cudaFree(Dev_lap_fine_real);
+	cudaFree(Dev_lap_fine_complex);
+	cudaFree(Dev_lap_fine_hat);
+	// Size on GPU : fine(1+2+2)
+	*/
 	
 	// Psi
 	delete [] Host_Psi;
 	cudaFree(Dev_Psi_real);
 	cudaFree(Dev_Psi_real_previous);
+	cudaFree(Dev_Psi_complex);
+	cudaFree(Dev_Psi_hat);
+	// Size on GPU : coarse(1+1+2+2)
 	
 	// Gradient of Chi
+	//delete [] Host_gradChi;
 	cudaFree(Dev_gradChi);
+	// Size on GPU : fine(1)
 	
 	// CuFFT plans
 	cufftDestroy(cufftPlan_coarse);
@@ -748,11 +630,19 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	// Particles
 	delete [] Host_particles_pos;
 	delete [] Host_particles_vel;
-	delete [] Host_particles_pos_fine_dt;
 	cudaFree(Dev_particles_pos);
 	cudaFree(Dev_particles_vel);
-	cudaFree(Dev_particles_pos_fine_dt);
+	// Size on GPU : 
 	
+	
+	// Complex variable (not in Fourier space) : 2*coarse(1+1) + 2*fine(1+4+1)
+	// Complex variable can be remove for more memory.
+	
+	
+	// RTX	2070 	: 	8GB 	VRAM
+	// RTX	3090 	: 	24GB 	VRAM
+	// TESLA V100 	: 	36GB 	VRAM
+	// RTX	A6000 	: 	48GB 	VRAM
 	
 
 	
@@ -764,30 +654,30 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 *							 Remapping							   *
 *******************************************************************/
 
-void translate_initial_condition_through_map_stack(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX_stack, ptype *Dev_ChiY_stack, ptype *Dev_ChiX, ptype *Dev_ChiY, int stack_length, ptype *W_real, ptype *W_H_real, cufftHandle cufftPlan_fine, ptype *W_initial, cuPtype *Dev_Complex_fine, cuPtype *Dev_Hat_fine, cuPtype *Dev_Hat_fine_bis)
+void translate_initial_condition_through_map_stack(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX_stack, ptype *Dev_ChiY_stack, ptype *Dev_ChiX, ptype *Dev_ChiY, int stack_length, 
+				ptype *W_real, cuPtype *W_complex, cuPtype *W_hat, ptype *W_H_real, cuPtype *W_H_complex, cuPtype *W_H_hat, cufftHandle cufftPlan_fine)
 {
 	
 	// Vorticity on coarse grid to vorticity on fine grid
-	kernel_apply_map_stack_to_W<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, W_real, stack_length, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, W_initial);
-	
-	kernel_real_to_complex<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_real, Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY);
-	cufftExecZ2Z(cufftPlan_fine, Dev_Complex_fine, Dev_Hat_fine, CUFFT_FORWARD);
-	kernel_normalize<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Hat_fine, Grid_fine->NX, Grid_fine->NY);
+	kernel_apply_map_stack_to_W<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, W_real, stack_length, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h);
+	kernel_real_to_complex<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_real, W_complex, Grid_fine->NX, Grid_fine->NY);
+	cufftExecZ2Z(cufftPlan_fine, W_complex, W_hat, CUFFT_FORWARD);
+	kernel_normalize<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_hat, Grid_fine->NX, Grid_fine->NY);
 	
 	// Hermite vorticity array : [vorticity, x-derivative, y-derivative, xy-derivative]
-	cudaMemcpy(W_H_real, W_real, Grid_fine->sizeNReal, cudaMemcpyDeviceToDevice);
+	kernel_sample_on_coarse_grid<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_H_hat, W_hat, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h);			// copy the vorticity in a Hermite array, i.e. vorticity -> [vorticity, :, :, :]
+	kernel_fft_dx<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_H_hat, &W_H_hat[Grid_fine->N], Grid_fine->NX, Grid_fine->NY, Grid_fine->h);													// x-derivative of the vorticity in Fourier space
+	kernel_fft_dy<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_H_hat, &W_H_hat[2*Grid_fine->N], Grid_fine->NX, Grid_fine->NY, Grid_fine->h);													// y-derivative of the vorticity in Fourier space
+	kernel_fft_dy<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(&W_H_hat[Grid_fine->N], &W_H_hat[3*Grid_fine->N], Grid_fine->NX, Grid_fine->NY, Grid_fine->h);									// y-derivative of x-derivative of of the vorticity in Fourier space
 	
-	kernel_fft_dy<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Hat_fine, Dev_Hat_fine_bis, Grid_fine->NX, Grid_fine->NY, Grid_fine->h);													// y-derivative of the vorticity in Fourier space
-	cufftExecZ2Z(cufftPlan_fine, Dev_Hat_fine_bis, Dev_Complex_fine, CUFFT_INVERSE);
-	kernel_complex_to_real  <<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(&W_H_real[2*Grid_fine->N], Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY);
+	// Go out the Fourier space
+	cufftExecZ2Z(cufftPlan_fine, W_H_hat, W_H_complex, CUFFT_INVERSE);
+	cufftExecZ2Z(cufftPlan_fine, &W_H_hat[Grid_fine->N], &W_H_complex[Grid_fine->N], CUFFT_INVERSE);
+	cufftExecZ2Z(cufftPlan_fine, &W_H_hat[2*Grid_fine->N], &W_H_complex[2*Grid_fine->N], CUFFT_INVERSE);
+	cufftExecZ2Z(cufftPlan_fine, &W_H_hat[3*Grid_fine->N], &W_H_complex[3*Grid_fine->N], CUFFT_INVERSE);
 	
-	kernel_fft_dx<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Hat_fine, Dev_Hat_fine_bis, Grid_fine->NX, Grid_fine->NY, Grid_fine->h);													// x-derivative of the vorticity in Fourier space
-	cufftExecZ2Z(cufftPlan_fine, Dev_Hat_fine_bis, Dev_Complex_fine, CUFFT_INVERSE);
-	kernel_complex_to_real  <<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(&W_H_real[Grid_fine->N], Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY);
-	
-	kernel_fft_dy<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Hat_fine_bis, Dev_Hat_fine, Grid_fine->NX, Grid_fine->NY, Grid_fine->h);													// y-derivative of x-derivative of of the vorticity in Fourier space
-	cufftExecZ2Z(cufftPlan_fine, Dev_Hat_fine, Dev_Complex_fine, CUFFT_INVERSE);
-	kernel_complex_to_real  <<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(&W_H_real[3*Grid_fine->N], Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY);
+	// Back to the real space
+	kernel_complex_to_real_H<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_H_real, W_H_complex, Grid_fine->NX, Grid_fine->NY);
 	
 }
 
@@ -795,38 +685,41 @@ void translate_initial_condition_through_map_stack(TCudaGrid2D *Grid_coarse, TCu
 /*******************************************************************
 *						 Computation of Psi						   *
 *******************************************************************/
-	
-void evaulate_stream_hermite(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX, ptype *Dev_ChiY, ptype *Dev_W_H_fine_real, ptype *W_real, ptype *Psi_real, cufftHandle cufftPlan_coarse, cuPtype *Dev_Complex_coarse, cuPtype *Dev_Hat_coarse, cuPtype *Dev_Hat_coarse_bis)
+
+void evaulate_stream_hermite(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX, ptype *Dev_ChiY, ptype *Dev_W_H_fine_real, ptype *W_real, cuPtype *W_complex, cuPtype *W_hat, ptype *Psi_real, cuPtype *Psi_complex, cuPtype *Psi_hat, cufftHandle cufftPlan_coarse)
 {
 	
 	// Obtaining stream function at time t 
 	kernel_apply_map_and_sample_from_hermite<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, W_real, Dev_W_H_fine_real, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h); 
-	kernel_real_to_complex<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(W_real, Dev_Complex_coarse, Grid_coarse->NX, Grid_coarse->NY);
-	cufftExecZ2Z(cufftPlan_coarse, Dev_Complex_coarse, Dev_Hat_coarse_bis, CUFFT_FORWARD);	
-	kernel_normalize<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Hat_coarse_bis, Grid_coarse->NX, Grid_coarse->NY);
+	kernel_real_to_complex<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(W_real, W_complex, Grid_coarse->NX, Grid_coarse->NY);
+	cufftExecZ2Z(cufftPlan_coarse, W_complex, W_hat, CUFFT_FORWARD);	
+	//cufftXtExecDescriptorZ2Z(plan, W_complex, W_hat, CUFFT_FORWARD);
+	kernel_normalize<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(W_hat, Grid_coarse->NX, Grid_coarse->NY);
 	
 	// Forming Psi hermite
-	kernel_fft_iLap<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Hat_coarse_bis, Dev_Hat_coarse, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h);												// Inverse laplacian in Fourier space
-	cufftExecZ2Z(cufftPlan_coarse, Dev_Hat_coarse, Dev_Complex_coarse, CUFFT_INVERSE);
-	kernel_complex_to_real  <<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Psi_real, Dev_Complex_coarse, Grid_coarse->NX, Grid_coarse->NY);
+	kernel_fft_iLap<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(W_hat, Psi_hat, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h);														// Inverse laplacian in Fourier space
+	kernel_fft_dx<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Psi_hat, &Psi_hat[Grid_coarse->N], Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h);										// x-derivative in Fourier space
+	kernel_fft_dy<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Psi_hat, &Psi_hat[2*Grid_coarse->N], Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h);										// y-derivative in Fourier space
+	kernel_fft_dy<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(&Psi_hat[Grid_coarse->N], &Psi_hat[3*Grid_coarse->N], Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h);					// y-derivative of x-derivative in Fourier space
 	
-	kernel_fft_dy<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Hat_coarse, Dev_Hat_coarse_bis, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h);													// y-derivative of the vorticity in Fourier space
-	cufftExecZ2Z(cufftPlan_coarse, Dev_Hat_coarse_bis, Dev_Complex_coarse, CUFFT_INVERSE);
-	kernel_complex_to_real  <<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(&Psi_real[2*Grid_coarse->N], Dev_Complex_coarse, Grid_coarse->NX, Grid_coarse->NY);
+	// Go out the Fourier space
 	
-	kernel_fft_dx<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Hat_coarse, Dev_Hat_coarse_bis, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h);													// x-derivative of the vorticity in Fourier space
-	cufftExecZ2Z(cufftPlan_coarse, Dev_Hat_coarse_bis, Dev_Complex_coarse, CUFFT_INVERSE);
-	kernel_complex_to_real  <<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(&Psi_real[Grid_coarse->N], Dev_Complex_coarse, Grid_coarse->NX, Grid_coarse->NY);
+	cufftExecZ2Z(cufftPlan_coarse, Psi_hat, Psi_complex, CUFFT_INVERSE);																																	// stream function from vorticity on coarse grid
+	cufftExecZ2Z(cufftPlan_coarse, &Psi_hat[Grid_coarse->N], &Psi_complex[Grid_coarse->N], CUFFT_INVERSE);																									// x-derivative of the stream function = v-velocity 
+	cufftExecZ2Z(cufftPlan_coarse, &Psi_hat[2*Grid_coarse->N], &Psi_complex[2*Grid_coarse->N], CUFFT_INVERSE);																								// y-derivative of the stream function = -1 * u-velocity
+	cufftExecZ2Z(cufftPlan_coarse, &Psi_hat[3*Grid_coarse->N], &Psi_complex[3*Grid_coarse->N], CUFFT_INVERSE);																								// y-derivative of x-derivative of the stream function
 	
-	kernel_fft_dy<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Hat_coarse_bis, Dev_Hat_coarse, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h);													// y-derivative of x-derivative of of the vorticity in Fourier space
-	cufftExecZ2Z(cufftPlan_coarse, Dev_Hat_coarse, Dev_Complex_coarse, CUFFT_INVERSE);
-	kernel_complex_to_real  <<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(&Psi_real[3*Grid_coarse->N], Dev_Complex_coarse, Grid_coarse->NX, Grid_coarse->NY);
+	cufftExecZ2Z(cufftPlan_coarse, W_hat, W_complex, CUFFT_INVERSE);
+	
+	// Back to the real space
+	kernel_complex_to_real_H<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Psi_real, Psi_complex, Grid_coarse->NX, Grid_coarse->NY);
+	kernel_complex_to_real  <<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(W_real, W_complex, Grid_coarse->NX, Grid_coarse->NY);
 	
 }
 
 
 /*******************************************************************
-*				     Creation of storage files					   *
+*				     Creating of storage files					   *
 *******************************************************************/
 
 string create_directory_structure(string simulationName, int NX_coarse, int NXf, double dt, double T, int save_buffer_count, int show_progress_at, int iterMax, int map_stack_length, double inCompThreshold)
@@ -963,7 +856,7 @@ void Zoom_load_frame(string File, int grid_scale, int fine_grid_scale, string t_
 	*						   Some comments						   
 	* 
 	* 	- We can Dev_ChiX_stack from the Host to Dev because it is not always used. We will have more GPU memory.
-	* 	- We can remove complex variables for more memory. 
+	* 	- We can remove compex variables for more memory. 
 	* 	- Parallel computing for FFT and Hermite interpolation
 	*	
 	* 
