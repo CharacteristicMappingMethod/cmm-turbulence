@@ -24,3 +24,5 @@ main2d.o: src/main2d.cpp src/simulation/cudaeuler2d.h src/simulation/cudasimulat
 	
 clean:
 	rm -rf *.o *.out
+
+# Test
