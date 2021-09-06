@@ -1,11 +1,2 @@
-# ignore eclipse files
-/.settings/
-/.cproject
 /.project
-
-# ignore compiled files
-*.o
-*.out
-
-# ignore discrete initial conditions for now
-/src/Initial_W_discret/
+/.cproject
