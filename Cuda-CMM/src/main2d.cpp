@@ -31,8 +31,8 @@
 //Main function
 int main(int argc, char *args[])
 {
-	int grid_scale = 128;
-	int fine_grid_scale = 512;
+	int grid_scale = 32;
+	int fine_grid_scale = 128;
 	// 32		64		128		256		512		1024		2048		4096		8192		16384
 	// max working on V100 : grid_scale = 4096; fine_grid_scale = 16384;
 	

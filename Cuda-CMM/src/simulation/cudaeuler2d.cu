@@ -29,9 +29,9 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	ptype inCompThreshold = 0.0001;										// the maximum allowance of map to deviate from grad_chi begin 1
 	
 	//GPU dependent parameters
-	int mem_index = 1024; 												// mem_index = 1024 for 1GB GPU ram												
-	int mem_RAM = 5;													// 45
-	int Nb_array_RAM = 4;												// 4
+	int mem_index = 900; 												// mem_index = 1024 for 1GB GPU ram
+	int mem_RAM = 2;													// 45
+	int Nb_array_RAM = 8;												// 4
 	
 	//initialization of parameters
 	simulationName = problem_name;
@@ -153,7 +153,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	
 	TCudaGrid2D Grid_coarse(NX_coarse, NY_coarse, LX);
 	TCudaGrid2D Grid_fine(NX_fine, NY_fine, LX);
-	TCudaGrid2D Grid_NDFT(512, 512, LX);
+	TCudaGrid2D Grid_NDFT(128, 128, LX);
 	
 	
 	/*******************************************************************
@@ -408,9 +408,11 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	
     #ifdef PARTICLES
 
-	   	int Nb_Tau_p = 21;
-		ptype Tau_p[Nb_Tau_p] = {0.0, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.125, 0.15, 0.25, 0.5, 0.75, 1, 2, 5, 13};
-        int Nb_particles = 1024 * 128; //64; // *512 ;
+	   	// int Nb_Tau_p = 21;
+		// ptype Tau_p[Nb_Tau_p] = {0.0, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.125, 0.15, 0.25, 0.5, 0.75, 1, 2, 5, 13};
+	   	int Nb_Tau_p = 1;
+		ptype Tau_p[Nb_Tau_p] = {0.0};
+		int Nb_particles = 1024 * 8; //64; // *512 ;
         int particle_thread =  256 /*pow(2, 10);*/, particle_block = Nb_particles / particle_thread; // 128 ;
         printf("Nb_particles : %d\n", Nb_particles);
         ptype *Host_particles_pos ,*Dev_particles_pos, *Host_particles_vel ,*Dev_particles_vel;
@@ -772,11 +774,11 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 
 	while(tf - t > 0.0000000001 && loop_ctr < iterMax)
 	{
-		//avoiding over-stepping
+		//avoiding over-stepping for last time-step
 		if(t + dt > tf)
 			dt = tf - t;
 
-		//stream hermite
+		// compute stream hermite from vorticity
 		evaulate_stream_hermite(&Grid_coarse, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufftPlan_coarse, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
 
         //evaulate_stream_hermite(&Grid_2048, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_2048, Dev_Psi_2048_previous, cufftPlan_2048, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
@@ -839,28 +841,31 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 		*******************************************************************/
 		
 		grad_chi_min = 1;
-		grad_chi_max = 1;
+		grad_chi_max = 1;  // not needed?
 		//incompressibility check (port it on cuda)
 		if(loop_ctr % 1 == 0){
+			// compute gradient of map to be used for incompressibility check
 			kernel_incompressibility_check<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Complex_fine, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);								// time cost		A optimiser
 			// We don't need to have Dev_gradChi in memory we juste need to know if it exist a value such as : abs(this_value - 1) > inCompThreshold
 			
 			//cudaDeviceSynchronize();
+			// compute minimum for actual check on dev, coppy to machine
 			Dev_get_max_min<<<grad_block, grad_thread>>>(Grid_fine.N, (cufftDoubleReal*)Dev_Complex_fine, Dev_w_min, Dev_w_max);// Dev_gradChi cufftDoubleComplex cufftDoubleReal
 			//cudaMemcpy(Host_w_min, Dev_w_min, sizeof(ptype)*grad_block*grad_thread, cudaMemcpyDeviceToHost);
 			//cudaMemcpy(Host_w_max, Dev_w_max, sizeof(ptype)*grad_block*grad_thread, cudaMemcpyDeviceToHost);
 			cudaMemcpyAsync(Host_w_min, Dev_w_min, sizeof(ptype)*grad_block*grad_thread, cudaMemcpyDeviceToHost, streams[0]);
-			cudaMemcpyAsync(Host_w_max, Dev_w_max, sizeof(ptype)*grad_block*grad_thread, cudaMemcpyDeviceToHost, streams[1]);
+			cudaMemcpyAsync(Host_w_max, Dev_w_max, sizeof(ptype)*grad_block*grad_thread, cudaMemcpyDeviceToHost, streams[1]);  // not needed?
 			
 			grad_chi_min = Host_w_min[0];
-			grad_chi_max = Host_w_max[0];
+			grad_chi_max = Host_w_max[0];  // not needed?
+			// for-loop to compute final min/max on host
 			for(int i=0;i<grad_block*grad_thread;i++)
 			{			
 				if(grad_chi_min > Host_w_min[i])
 					grad_chi_min = Host_w_min[i];
 					
-				if(grad_chi_max < Host_w_max[i])
-					grad_chi_max = Host_w_max[i];
+				if(grad_chi_max < Host_w_max[i])  // not needed?
+					grad_chi_max = Host_w_max[i];  // not needed?
 			}
 		}
 			
@@ -1337,7 +1342,7 @@ string create_directory_structure(string simulationName, int NX_coarse, int NX_f
 	
 	//simulationName = simulationName + "_" + currentDateTime();		// Attention !
 	//simulationName = simulationName + "_currentDateTime";				
-	simulationName = simulationName;
+
 	string folderName = "data/" + simulationName;
 	
 	//creating folder

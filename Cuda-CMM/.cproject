@@ -17,7 +17,7 @@
 					<folderInfo id="com.nvidia.cuda.toolchain.linux.configuration.debug.1539343341." name="/" resourcePath="">
 						<toolChain id="com.nvidia.cuda.toolchain.linux.debugToolchain.1579173365" name="CUDA Linux toolchain" superClass="com.nvidia.cuda.toolchain.linux.debugToolchain">
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="com.nvidia.cuda.toolchain.targetLinuxPlatform.771268143" isAbstract="false" osList="linux" superClass="com.nvidia.cuda.toolchain.targetLinuxPlatform"/>
-							<builder buildPath="${workspace_loc:/Cuda-CMM-E}/Debug" id="com.nvidia.cuda.toolchain.builder.233948283" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="CUDA Toolkit Builder" superClass="com.nvidia.cuda.toolchain.builder"/>
+							<builder buildPath="${workspace_loc:/Cuda-CMM-E}" command="make" id="com.nvidia.cuda.toolchain.builder.233948283" keepEnvironmentInBuildfile="false" managedBuildOn="false" name="CUDA Toolkit Builder" superClass="com.nvidia.cuda.toolchain.builder"/>
 							<tool id="nvcc.linker.595785361" name="NVCC linker" superClass="nvcc.linker">
 								<inputType id="com.nvidia.cuda.toolchain.nvcc.linker.input.466885024" superClass="com.nvidia.cuda.toolchain.nvcc.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
@@ -84,4 +84,32 @@
 		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
+	<storageModule moduleId="refreshScope" versionNumber="2">
+		<configuration configurationName="Debug">
+			<resource resourceType="PROJECT" workspacePath="/Cuda-CMM"/>
+		</configuration>
+		<configuration configurationName="Release">
+			<resource resourceType="PROJECT" workspacePath="/Cuda-CMM"/>
+		</configuration>
+	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets">
+		<buildTargets>
+			<target name="clean" path="" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
+				<buildCommand>make</buildCommand>
+				<buildArguments/>
+				<buildTarget>clean</buildTarget>
+				<stopOnError>true</stopOnError>
+				<useDefaultCommand>false</useDefaultCommand>
+				<runAllBuilders>true</runAllBuilders>
+			</target>
+			<target name="SimulationCuda2d.out" path="" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
+				<buildCommand>make</buildCommand>
+				<buildArguments/>
+				<buildTarget>SimulationCuda2d.out</buildTarget>
+				<stopOnError>true</stopOnError>
+				<useDefaultCommand>false</useDefaultCommand>
+				<runAllBuilders>true</runAllBuilders>
+			</target>
+		</buildTargets>
+	</storageModule>
 </cproject>

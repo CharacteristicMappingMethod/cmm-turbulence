@@ -16,7 +16,9 @@ __global__ void Compute_Energy(ptype *E, ptype *psi, int N, int NX, int NY, ptyp
 
 	int In = iY*NX + iX;
 
-    atomicAdd(E, 0.5*h * h * (psi[In + N] * psi[In + N] + psi[In + 2 * N] * psi[In + 2 * N]));
+	// atomicAdd defined for double at sm_60
+    // atomicAdd(E, 0.5*h * h * (psi[In + N] * psi[In + N] + psi[In + 2 * N] * psi[In + 2 * N]));
+    *E += 0.5*h * h * (psi[In + N] * psi[In + N] + psi[In + 2 * N] * psi[In + 2 * N]);
 
 /*	int idx = threadIdx.x;
 	int stride_x = blockDim.x;
@@ -38,7 +40,9 @@ __global__ void Compute_Enstrophy(ptype *Ens, ptype *W, int N, int NX, int NY, p
 
 	int In = iY*NX + iX;
 
-    atomicAdd(Ens, 0.5 * h * h * (W[In] * W[In]));
+	// atomicAdd defined for double at sm_60
+    // atomicAdd(Ens, 0.5 * h * h * (W[In] * W[In]));
+	*Ens += 0.5 * h * h * (W[In] * W[In]);
 
 
 /*	int idx = threadIdx.x;

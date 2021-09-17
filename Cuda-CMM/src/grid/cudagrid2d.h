@@ -36,11 +36,11 @@ using namespace std;
 	// "4_nodes"		"quadropole"		"three_vortices"		"single_shear_layer"		"two_votices"		"turbulence_gaussienne"
         #define PROBLEM_CODE   "4_nodes"
 	//#define TIME_TESTING																						//active le temps
-   //#define PARTICLES
-   // #define RKThree_PARTICLES
+    #define PARTICLES
+    // #define RKThree_PARTICLES
     // Time integration
     //#define ABTwo
-   // #define Eulerexp
+    // #define Eulerexp
     #define RKThree
 	extern ptype ep;
 extern ptype epdx[4], epdy[4];

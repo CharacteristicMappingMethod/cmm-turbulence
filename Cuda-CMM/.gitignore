@@ -1,2 +1,20 @@
-/.project
+# ignore eclipse files
+/.settings/
 /.cproject
+/.project
+/Debug/
+
+# ignore compiled files
+*.o
+*.out
+
+# ignore weird temporary files
+*.cpp~
+*.cu~
+*.h~
+
+# ignore discrete initial conditions for now
+/src/Initial_W_discret/
+
+# ignore created data
+/data/
