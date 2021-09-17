@@ -23,18 +23,19 @@ Nvidia Cuda and other packages
    
 3) Prepare the execution of the code on your local machine:
    
-   Folder structure:
-   - rename the wanted src-version to 'src', this will be the working directory of the program
-
-   Checking initial conditions:
-   - Check grid_scale and fine_grid_scale in /src/main2d.cpp to work with your GPU memory
-   - Change mem_index in /src/simulation/cudaeuler2d.cu to work with your GPU memory
-   - Set the initial condition in /src/main2d.cpp and ??? (I forgot the second position)
+   Initialize files:
+   - clone the repository to your machine, all code is located in the Cuda-CMM folder
 
    Makefile:
-   - Change the -arch flag in the make-file to match your GPU architecture. This specifies the name of the NVIDIA GPU architecture that the CUDA files will be compiled for.
-   - compile the code in a shell by changing into it and running 'make'
-     check for further errors, if not listed, please provide them as an issue right with the given error stack
+   - Change the -arch flag in the make-file to match your GPU architecture. This specifies the name of the NVIDIA GPU architecture that the CUDA files will be          compiled for. Further information regarding the architecture can be found at 'https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#gpu-feature-list'. Chose a version matching your architecture name.
+   - compile the code in a shell by changing into the directory and running 'make' or 'make all'
+     check for errors, if not listed, please provide them as an issue along with the given error stack
+
+   Checking initial conditions:
+   - Check grid_scale and fine_grid_scale in Cuda-CMM/src/main2d.cpp to work with your GPU memory
+   - Change mem_index and mem_RAM in Cuda-CMM/src/simulation/cudaeuler2d.cu to your maximum GPU memory. mem_index defaults to 1024.
+   - Change Nb_array_RAM in Cuda-CMM/src/simulation/cudaeuler2d.cu to match your CPU memory in Gb. Recommended is a value of half your maximum RAM.
+   - Set the initial condition in Cuda-CMM/src/main2d.cpp and Cuda-CMM/src/grid/cudagrid2d.h
    
    Running the code:
    - Run the code in a shell by executing 'SimulationCuda2d.out'
