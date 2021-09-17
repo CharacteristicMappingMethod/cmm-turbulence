@@ -34,16 +34,20 @@ using namespace std;
 	//#define DISCRET
 
 	// "4_nodes"		"quadropole"		"three_vortices"		"single_shear_layer"		"two_votices"		"turbulence_gaussienne"
-        #define PROBLEM_CODE   "4_nodes"
-	//#define TIME_TESTING																						//active le temps
-    #define PARTICLES
+    #define PROBLEM_CODE   "4_nodes"
+
+	//active le temps
+	//#define TIME_TESTING
+
+    // #define PARTICLES
     // #define RKThree_PARTICLES
-    // Time integration
-    //#define ABTwo
-    // #define Eulerexp
-    #define RKThree
+
+    // Time integration, define by name, "RKThree", "ABTwo", "EulerExp"
+	#define TIME_INTEGRATION	"RKThree"
+
+
 	extern ptype ep;
-extern ptype epdx[4], epdy[4];
+	extern ptype epdx[4], epdy[4];
 
 	enum color_map_choice
 	{

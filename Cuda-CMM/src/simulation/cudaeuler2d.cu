@@ -20,18 +20,19 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	
 	double grid_by_time;
 	ptype t0, dt, tf;													// time - initial, step, final
-	int iterMax;													// maximum iteration count
+	int iterMax;														// maximum iteration count
 	string simulationName;												// name of the simulation: files get stored in the directory of this name
 	int snapshots_per_second;
-	int save_buffer_count;												// iteractions after which files should be saved
+	int save_buffer_count;												// iterations after which files should be saved
 	int map_stack_length;												// this parameter is set to avoide memory overflow on GPU
 	int show_progress_at;
-	ptype inCompThreshold = 0.0001;										// the maximum allowance of map to deviate from grad_chi begin 1
+	ptype inCompThreshold = 1e-4;										// the maximum allowance of map to deviate from grad_chi begin 1
 	
 	//GPU dependent parameters
-	int mem_index = 900; 												// mem_index = 1024 for 1GB GPU ram
-	int mem_RAM = 2;													// 45
-	int Nb_array_RAM = 8;												// 4
+	int mem_index = 128; 												// mem_index = 1024 for 1GB GPU ram
+	int mem_RAM = 16;													// 45
+	int Nb_array_RAM = 4;												// 4
+	double ref_coarse_grid = 128;											// ref value to be compared for stack copzing to cpu
 	
 	//initialization of parameters
 	simulationName = problem_name;
@@ -40,16 +41,25 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	NX_fine = NY_fine = fine_grid_scale;
 	t0 = 0.0;
 
-	ptype tmp = 32;
+	// time steps per second used by 4_nodes
+	ptype tmp_4nodes = 64;
 
+	/*
+	 *  Initial conditions
+	 *  "4_nodes" 				-	flow containing exactly 4 fourier modes with two vortices
+	 *  "quadropole"			-	???
+	 *  "three_vortices"		-	???
+	 *  "single_shear_layer"	-	shear layer problem forming helmholtz-instabilities, merging into two vortices which then merges into one big vortex
+	 *  "two_vortices"			-	???
+	 *  "turbulence_gaussienne"	-	???
+	 */
 	// "4_nodes"		"quadropole"		"three_vortices"		"single_shear_layer"		"two_votices"
-
 	if(simulationName == "4_nodes")
 	{
 		grid_by_time = 1.0;
 		snapshots_per_second = 1;
-		dt = 1.0/ tmp;//(NX_coarse * grid_by_time);
-		tf = 8;
+		dt = 1.0/ tmp_4nodes;//(NX_coarse * grid_by_time);
+		tf = 2;
 	}
 	else if(simulationName == "quadropole")
 	{
@@ -119,28 +129,34 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	
 	//shared parameters
 	iterMax = ceil(tf / dt);
-	save_buffer_count = tmp/snapshots_per_second;//(NX_coarse * grid_by_time) / snapshots_per_second;//	tmp/snapshots_per_second;//(NX_coarse * grid_by_time) / snapshots_per_second;							// the denominator is snapshots per second
-	show_progress_at = (32 * 4 * pow(128.0, 3.0)) / pow(NX_coarse, 3.0); 
+	save_buffer_count = tmp_4nodes/snapshots_per_second;//(NX_coarse * grid_by_time) / snapshots_per_second;//	tmp/snapshots_per_second;//(NX_coarse * grid_by_time) / snapshots_per_second;							// the denominator is snapshots per second
+	show_progress_at = (32 * 4 * pow(ref_coarse_grid, 3.0)) / pow(NX_coarse, 3.0);
 		if(show_progress_at < 1) show_progress_at = 1;
-	map_stack_length = (mem_index * pow(128.0, 2.0))/ (double(NX_coarse * NX_coarse)); 
+	map_stack_length = (mem_index * pow(ref_coarse_grid, 2.0))/ (double(NX_coarse * NX_coarse));
 	
 	cout<<"Simulation name : "<<simulationName<<endl;
 	cout<<"Iter max : "<<iterMax<<endl;
-	cout<<"Save buffer cout : "<<save_buffer_count<<endl;
+	cout<<"Save buffer count : "<<save_buffer_count<<endl;
 	cout<<"Progress at : "<<show_progress_at<<endl;
 	cout<<"map stack length : "<<map_stack_length<<endl;
 	cout<<"map stack length on RAM : "<<mem_RAM * map_stack_length<<endl;
 	cout<<"map stack length total on RAM : "<<mem_RAM * map_stack_length * Nb_array_RAM<<endl;
 	
-	
-	#ifdef ABTwo
-        simulationName =  simulationName + "_DEV_AB2_" + std::to_string(grid_scale); 				
-	    simulationName = create_directory_structure(simulationName, NX_coarse, NX_fine, dt, tf, save_buffer_count, show_progress_at, iterMax, map_stack_length, inCompThreshold);
-    #endif
-	#ifdef RKThree
-        simulationName =  simulationName + "_ULYSSE_"  + std::to_string(grid_scale) + "_" + std::to_string(tmp).substr(0, std::to_string(tmp).find(".")); //"vortex_shear_1000_4";
-	    simulationName = create_directory_structure(simulationName, NX_coarse, NX_fine, dt, tf, save_buffer_count, show_progress_at, iterMax, map_stack_length, inCompThreshold);
-    #endif
+	// create naming for folder structure, dependent on time integration
+	string sim_name_addition;
+	if (TIME_INTEGRATION == "EulerExp") {
+		sim_name_addition = "_DEV_EulExp_";
+	}
+	else if (TIME_INTEGRATION == "ABTwo") {
+		sim_name_addition = "_DEV_AB2_";
+	}
+	else if (TIME_INTEGRATION == "RKThree") {
+		sim_name_addition = "_ULYSSE_";
+	}
+	else sim_name_addition = "_DEV_UNNOWN_";
+
+	simulationName = simulationName + sim_name_addition + std::to_string(grid_scale) + "_" + std::to_string(tmp_4nodes).substr(0, std::to_string(tmp_4nodes).find(".")); //"vortex_shear_1000_4";
+    simulationName = create_directory_structure(simulationName, NX_coarse, NX_fine, dt, tf, save_buffer_count, show_progress_at, iterMax, map_stack_length, inCompThreshold);
     Logger logger(simulationName);
 	
 	
@@ -153,7 +169,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	
 	TCudaGrid2D Grid_coarse(NX_coarse, NY_coarse, LX);
 	TCudaGrid2D Grid_fine(NX_fine, NY_fine, LX);
-	TCudaGrid2D Grid_NDFT(128, 128, LX);
+	// TCudaGrid2D Grid_NDFT(128, 128, LX);
 	
 	
 	/*******************************************************************
@@ -772,7 +788,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	*							 Main loop							   *
 	*******************************************************************/
 
-	while(tf - t > 0.0000000001 && loop_ctr < iterMax)
+	while(tf - t > 1e-10 && loop_ctr < iterMax)
 	{
 		//avoiding over-stepping for last time-step
 		if(t + dt > tf)
@@ -823,9 +839,8 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
             cudaMemcpy(Dev_particles_vel_previous, Dev_particles_vel, 2*Nb_particles*Nb_Tau_p*sizeof(ptype), cudaMemcpyDeviceToDevice);
         #endif*/
 
-        //copy Psi to Psi_previous
+        //copy Psi to Psi_previous and Psi_previous to Psi_previous_previous
 		//cudaMemcpy(Dev_Psi_real_previous, Dev_Psi_real, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice);
-
         cudaMemcpy(Dev_Psi_real_previous_p, Dev_Psi_real_previous, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice);
         cudaDeviceSynchronize();
         cudaMemcpyAsync(Dev_Psi_real_previous, Dev_Psi_real, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice, streams[1]);
@@ -879,8 +894,8 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 			}
 			
 			#ifndef TIME_TESTING
-				printf("Refining Map... ctr = %d \t map_stack_ctr = %d ; %d ; %d \t gap = %d\n", loop_ctr, map_stack_ctr, stack_length_RAM, stack_length_Nb_array_RAM, loop_ctr - old_ctr); 
-				snprintf(logger.buffer, sizeof(logger.buffer), "Refining Map... ctr = %d \t map_stack_ctr = %d \t gap = %d", loop_ctr, map_stack_ctr, loop_ctr - old_ctr);
+				printf("Refining Map... ctr = %d \t map_stack_ctr = %d ; %d ; %d \t gap = %d \t incomp_err = %e\n", loop_ctr, map_stack_ctr, stack_length_RAM, stack_length_Nb_array_RAM, loop_ctr - old_ctr, fmax(fabs(grad_chi_min - 1), fabs(grad_chi_max - 1)));
+				snprintf(logger.buffer, sizeof(logger.buffer), "Refining Map... ctr = %d \t map_stack_ctr = %d \t gap = %d \t incomp_err = %e", loop_ctr, map_stack_ctr, loop_ctr - old_ctr, fmax(fabs(grad_chi_min - 1), fabs(grad_chi_max - 1)));
 				logger.push();
 				old_ctr = loop_ctr;
 			#endif

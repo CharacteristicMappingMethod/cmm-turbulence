@@ -122,142 +122,111 @@ __global__ void kernel_advect_using_stream_hermite2(ptype *ChiX, ptype *ChiY, pt
 	ptype phi_x, phi_y;
 	
 	
-	ptype u, v, u_p, v_p;
-    #ifdef RKThree
-        ptype u_p_p, v_p_p;
-        ptype k1_x, k1_y, k2_x, k2_y, k3_x, k3_y;
-    #endif
-    ptype xf, yf;
+	ptype u, v, u_p, v_p, u_p_p, v_p_p;  // velocity at current and previous time steps
+	ptype k1_x, k1_y, k2_x, k2_y, k3_x, k3_y;  // different intermediate functions for RKThree
+	ptype l[6] = {3.0,-3.0,1,1.875,-1.25,0.375};  // coefficients for lagrangian time interpolation of velocity
+    ptype xf, yf;  // coordinates in loop
     
-	#ifdef ABTwo
-		ptype xf_p, yf_p;
-	#endif
+	ptype xf_p, yf_p;  // variables used for fixed-point iteration in ABTwo
 
     //ptype l[6] = {L1(t+dt, t, t-dt, t-2*dt), L2(t+dt, t, t-dt, t-2*dt), L3(t+dt, t, t-dt, t-2*dt), L1(t+dt/2, t, t-dt, t-2*dt), L2(t+dt/2, t, t-dt, t-2*dt), L3(t+dt/2, t, t-dt, t-2*dt)}; Work but slow
-    ptype l[6] = {3.0,-3.0,1,1.875,-1.25,0.375};
 
+	// repeat for all 4 footpoints
     #pragma unroll 4
 	FOR(k, 4)
 	{
-		
+		// get position of footpoint
 		xep = x+ep*(1 - 2*((k/2)%2 == 1));
 		yep = y+ep*(1 - 2*(((k+1)/2)%2 == 1));
 		
 		xf = xep;
 		yf = yep;
 
-        #ifdef ABTwo
-        
-		xf_p = xep;
-		yf_p = yep;
-        
-            #pragma unroll 10
-            FOR(ctr, 10) // fixed point iteration for xf,yf using previous foot points (self-correction)
-            {
-
-				//adam-B 2
-
-				//step 1
-                device_hermite_interpolate_dx_dy(phi_p, xf_p, yf_p, &phi_x, &phi_y, NXc, NYc, hc);
-                u_p =  phi_y;
-                v_p = -phi_x;
-
-                xf_p = xf - dt * u_p;
-                yf_p = yf - dt * v_p;
-
-				//step 2
-                device_hermite_interpolate_dx_dy(phi_p, xf_p, yf_p, &phi_x, &phi_y, NXc, NYc, hc);
-
-                u_p =  phi_y;
-                v_p = -phi_x;
-
-                device_hermite_interpolate_dx_dy(phi, xf , yf, &phi_x, &phi_y, NXc, NYc, hc);
-
-                u =  phi_y;
-                v = -phi_x;
-
-                xf = xep - dt * (1.5*u - 0.5*u_p);
-                yf = yep - dt * (1.5*v - 0.5*v_p);
-
-            }
-		#endif
-
-		#ifdef EulerExp
+        if (TIME_INTEGRATION == "EulerExp") {
 			device_hermite_interpolate_dx_dy(phi, xf, yf, &phi_x, &phi_y, NXc, NYc, hc);
 			u_p =  phi_y;
 			v_p = -phi_x;
 
 			xf = xep - dt * u_p;
 			yf = yep - dt * v_p;
-		#endif      
+        }
 
-		#ifdef RKThree
-			// compute u_tilda(X,t_n+1)
+		// Adam-Bashfords of order two, where a fixed point iteration with 10 iterations is utilized
+        else if (TIME_INTEGRATION == "ABTwo") {
+			xf_p = xep; yf_p = yep;
+
+			// fixed point iteration for xf,yf using previous foot points (self-correction)
+            #pragma unroll 10
+            FOR(ctr, 10)
+            {
+				//step 1
+                device_hermite_interpolate_dx_dy(phi_p, xf_p, yf_p, &phi_x, &phi_y, NXc, NYc, hc);
+                u_p =  phi_y; v_p = -phi_x;
+
+                xf_p = xf - dt * u_p;
+                yf_p = yf - dt * v_p;
+
+				//step 2
+                device_hermite_interpolate_dx_dy(phi_p, xf_p, yf_p, &phi_x, &phi_y, NXc, NYc, hc);
+                u_p =  phi_y; v_p = -phi_x;
+
+                device_hermite_interpolate_dx_dy(phi, xf , yf, &phi_x, &phi_y, NXc, NYc, hc);
+                u =  phi_y; v = -phi_x;
+
+                xf = xep - dt * (1.5*u - 0.5*u_p);
+                yf = yep - dt * (1.5*v - 0.5*v_p);
+
+            }
+		}
+
+		// RKThree time step utilizing some intermediate steps
+        else if (TIME_INTEGRATION == "RKThree") {
+			// compute u_tilde(X,t_n+1)
 			device_hermite_interpolate_dx_dy(phi_p_p, xep, yep, &phi_x, &phi_y, NXc, NYc, hc);
-			u_p_p = phi_y;
-			v_p_p = -phi_x;
+			u_p_p = phi_y; v_p_p = -phi_x;
 
 			device_hermite_interpolate_dx_dy(phi_p, xep, yep, &phi_x, &phi_y, NXc, NYc, hc);
-			u_p = phi_y;
-			v_p = -phi_x;
+			u_p = phi_y; v_p = -phi_x;
 
 			device_hermite_interpolate_dx_dy(phi, xep, yep, &phi_x, &phi_y, NXc, NYc, hc);
-			u = phi_y;
-			v = -phi_x;
+			u = phi_y; v = -phi_x;
 
-
-			//printf("LAGRANGE A222 : %lf \n", L1(t+dt, t, t-dt, t-2*dt));
-			//k1
-
-			//k1_x = L1(t+dt, t, t-dt, t-2*dt) * u + L2(t+dt, t, t-dt, t-2*dt)* u_p + L3(t+dt, t, t-dt, t-2*dt)*u_p_p;
-			//k2_y = L1(t+dt, t, t-dt, t-2*dt) * v + L2(t+dt, t, t-dt, t-2*dt)* v_p + L3(t+dt, t, t-dt, t-2*dt)*v_p_p;
-
+			// k1 = u_tilde(x,t_n+1)
 			k1_x = l[0] * u + l[1] * u_p + l[2] * u_p_p;
 			k1_y = l[0] * v + l[1] * v_p + l[2] * v_p_p;
 
-			// compute u_tilda(X - dt*k1/2, t_n+1 - dt/2)
+			// compute u_tilde(x - dt*k1/2, t_n+1 - dt/2)
 			device_hermite_interpolate_dx_dy(phi_p_p, xep - dt*k1_x/2, yep - dt*k1_y/2, &phi_x, &phi_y, NXc, NYc, hc);
-			u_p_p = phi_y;
-			v_p_p = -phi_x;
+			u_p_p = phi_y; v_p_p = -phi_x;
 
 			device_hermite_interpolate_dx_dy(phi_p, xep - dt*k1_x/2, yep - dt*k1_y/2, &phi_x, &phi_y, NXc, NYc, hc);
-			u_p = phi_y;
-			v_p = -phi_x;
+			u_p = phi_y; v_p = -phi_x;
 
 			device_hermite_interpolate_dx_dy(phi, xep - dt*k1_x/2, yep - dt*k1_y/2, &phi_x, &phi_y, NXc, NYc, hc);
-			u = phi_y;
-			v = -phi_x;
+			u = phi_y; v = -phi_x;
 
-			//k2
-			//k2_x = L1(t+dt/2, t, t-dt, t-2*dt) * u + L2(t+dt/2, t, t-dt, t-2*dt)* u_p + L3(t+dt/2, t, t-dt, t-2*dt)*u_p_p;
-			//k2_y = L1(t+dt/2, t, t-dt, t-2*dt) * v + L2(t+dt/2, t, t-dt, t-2*dt)* v_p + L3(t+dt/2, t, t-dt, t-2*dt)*v_p_p;
-
+			//k2 = u_tilde(x - k1 dt/2, t_n+1 - dt/2)
 			k2_x = l[3] * u + l[4]* u_p + l[5] * u_p_p;
 			k2_y = l[3] * v + l[4] * v_p + l[5] * v_p_p;
 
-			//compute u_tilda(X + dt * k1 - 2*dt*k2, t_n+1 - dt)
-
-			/*device_hermite_interpolate_dx_dy(phi_p_p, xep + dt*k1_x - dt*k2_x, yep + dt*k1_y - dt*k2_y, &phi_x, &phi_y, NXc, NYc, hc);
-			u_p_p = phi_y;
-			v_p_p = -phi_x;
-
-			device_hermite_interpolate_dx_dy(phi_p, xep + dt*k1_x - dt*k2_x , yep + dt*k1_y - dt*k2_y, &phi_x, &phi_y, NXc, NYc, hc);
-			u_p = phi_y;
-			v_p = -phi_x;
-			*/
+			//compute u_tilde(x + dt * k1 - 2*dt*k2, t_n+1 - dt)
 			device_hermite_interpolate_dx_dy(phi, xep + dt*k1_x - 2*dt*k2_x, yep + dt*k1_y - 2*dt*k2_y , &phi_x, &phi_y, NXc, NYc, hc);
-			u = phi_y;
-			v = -phi_x;
-			//k3_x = L1(t+dt, t, t-dt, t-2*dt) * u + L2(t+dt, t, t-dt, t-2*dt)* u_p + L3(t+dt, t, t-dt, t-2*dt)*u_p_p;
-			//k3_y = L1(t+dt, t, t-dt, t-2*dt) * v + L2(t+dt, t, t-dt, t-2*dt)* v_p + L3(t+dt, t, t-dt, t-2*dt)*v_p_p;
+			u = phi_y; v = -phi_x;
 
+			// k3 = u_tilde(x = k1 dt - 2 k2 dt, t_n)
 			k3_x = u;
 			k3_y = v;
 
 			xf = xep - dt * (k1_x + 4*k2_x + k3_x)/6;
 			yf = yep - dt * (k1_y + 4*k2_y + k3_y)/6;
+		}
 
-		#endif
+        // scheme name not known, do euler explicit to avoid errors (a bit cheeky, i know, but i dont know how to throw errors yet)
+        else {
+			device_hermite_interpolate_dx_dy(phi, xf, yf, &phi_x, &phi_y, NXc, NYc, hc);
+			u_p =  phi_y; v_p = -phi_x; xf = xep - dt * u_p; yf = yep - dt * v_p;
+        }
+
 		device_diffeo_interpolate(ChiX, ChiY, xf, yf, &ChiDualX[k*N+In], &ChiDualY[k*N+In], NXc, NYc, hc);
 	}
 }
