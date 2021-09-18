@@ -29,8 +29,8 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	ptype inCompThreshold = 1e-4;										// the maximum allowance of map to deviate from grad_chi begin 1
 	
 	//GPU dependent parameters
-	int mem_RAM_GPU_remaps = 128; 												// mem_index in MB on the GPU
-	int mem_RAM_CPU_remaps = 8096;													// mem_RAM_CPU_remaps in MB on the CPU
+	int mem_RAM_GPU_remaps = 128; 										// mem_index in MB on the GPU
+	int mem_RAM_CPU_remaps = 8096;										// mem_RAM_CPU_remaps in MB on the CPU
 	int Nb_array_RAM = 4;												// fixed for four different stacks
 	double ref_coarse_grid = 128;										// ref value to be compared for stack copzing to cpu, height still unclear
 	
