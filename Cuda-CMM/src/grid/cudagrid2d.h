@@ -27,7 +27,7 @@ using namespace std;
 	typedef double ptype; 						//float or double
 	typedef cufftDoubleComplex cuPtype;			//depending on ptype
 
-	#define BLOCK_SIZE 16	
+	#define BLOCK_SIZE 16	// most devices have maximum thread size of 1024, i don't know why this is 16*16=256
 	#define PI 		3.141592653589793238462643383279502884197169399375105820974944592307816406286208998628034825342117067
 	#define twoPI 	6.283185307179586476925286766559005768394338798750211641949889184615632812572417997256069650684234136
 	#define FOR(i, N)	for(int i=0;i<N;i++)

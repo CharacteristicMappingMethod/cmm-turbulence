@@ -31,8 +31,8 @@
 //Main function
 int main(int argc, char *args[])
 {
-	int grid_scale = 256;
-	int fine_grid_scale = 1024;
+	int grid_scale = 512;
+	int fine_grid_scale = 2048;
 	// 32		64		128		256		512		1024		2048		4096		8192		16384
 	// max working on V100 : grid_scale = 4096; fine_grid_scale = 16384;
 	
@@ -52,13 +52,28 @@ int main(int argc, char *args[])
 *					   Interesting command						   *
 *******************************************************************/
 
-// main programs location / commands for them
-// /usr/local/cuda/bin/nvcc  // compiler
-// sudo /usr/local/cuda/bin/nvvp -vm /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java  // visual profiler, sudo needed for memory investigation, reference to java needed for starting
+/*
+ * main programs location / commands for them
+ *
+ * compiler
+ * /usr/local/cuda/bin/nvcc
+ *
+ * old visual profiler, sudo needed for memory investigation, reference to java needed for starting
+ * good for individual profiling of functios
+ * sudo /usr/local/cuda/bin/nvvp -vm /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+ *
+ * new compiler, good timeline but wrong times
+ * nvidia-smi
+ *
+ * device information, very useful details
+ * build:
+ * cd /usr/local/cuda/samples/1_Utilities/deviceQuery
+ * sudo make
+ * run:
+ * /usr/local/cuda/samples/1_Utilities/deviceQuery/deviceQuery
+ */
 
 
-
-// nvidia-smi
 // make clean
 // make CUDAFLAGS=-lineinfo SimulationCuda2d.out
 

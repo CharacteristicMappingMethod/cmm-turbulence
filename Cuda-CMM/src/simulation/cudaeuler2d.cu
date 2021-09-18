@@ -30,7 +30,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	
 	//GPU dependent parameters
 	int mem_RAM_GPU_remaps = 128; 										// mem_index in MB on the GPU
-	int mem_RAM_CPU_remaps = 8096;										// mem_RAM_CPU_remaps in MB on the CPU
+	int mem_RAM_CPU_remaps = 4096;										// mem_RAM_CPU_remaps in MB on the CPU
 	int Nb_array_RAM = 4;												// fixed for four different stacks
 	double ref_coarse_grid = 128;										// ref value to be compared for stack copzing to cpu, height still unclear
 	
@@ -59,7 +59,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 		grid_by_time = 1.0;
 		snapshots_per_second = 1;
 		dt = 1.0/ tmp_4nodes;//(NX_coarse * grid_by_time);
-		tf = 2;
+		tf = 1;
 	}
 	else if(simulationName == "quadropole")
 	{
@@ -135,13 +135,13 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	map_stack_length = (mem_RAM_GPU_remaps * pow(ref_coarse_grid, 2.0))/ (double(NX_coarse * NX_coarse));
 	int frac_mem_cpu_to_gpu = int(double(mem_RAM_CPU_remaps)/double(mem_RAM_GPU_remaps)/double(Nb_array_RAM));  // define how many more remappings we can save on CPU than on GPU
 	
-	cout<<"Simulation name : "<<simulationName<<endl;
+	cout<<"Initial condition : "<<simulationName<<endl;
 	cout<<"Iter max : "<<iterMax<<endl;
 	cout<<"Save buffer count : "<<save_buffer_count<<endl;
 	cout<<"Progress at : "<<show_progress_at<<endl;
-	cout<<"map stack length : "<<map_stack_length<<endl;
-	cout<<"map stack length on RAM : "<<frac_mem_cpu_to_gpu * map_stack_length<<endl;
-	cout<<"map stack length total on RAM : "<<frac_mem_cpu_to_gpu * map_stack_length * Nb_array_RAM<<endl;
+	cout<<"Map stack length : "<<map_stack_length<<endl;
+	cout<<"Map stack length on RAM : "<<frac_mem_cpu_to_gpu * map_stack_length<<endl;
+	cout<<"Map stack length total on RAM : "<<frac_mem_cpu_to_gpu * map_stack_length * Nb_array_RAM<<endl;
 	
 	// create naming for folder structure, dependent on time integration
 	string sim_name_addition;
@@ -156,9 +156,10 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	}
 	else sim_name_addition = "_DEV_UNNOWN_";
 
-	simulationName = simulationName + sim_name_addition + std::to_string(grid_scale) + "_" + std::to_string(tmp_4nodes).substr(0, std::to_string(tmp_4nodes).find(".")); //"vortex_shear_1000_4";
+	simulationName = simulationName + sim_name_addition + "C" + std::to_string(grid_scale) + "_F" + std::to_string(fine_grid_scale) + "_" + std::to_string(tmp_4nodes).substr(0, std::to_string(tmp_4nodes).find(".")); //"vortex_shear_1000_4";
     simulationName = create_directory_structure(simulationName, NX_coarse, NX_fine, dt, tf, save_buffer_count, show_progress_at, iterMax, map_stack_length, inCompThreshold);
     Logger logger(simulationName);
+    cout<<"Name of simulation : "<<simulationName<<endl;
 	
 	
 	/*******************************************************************
@@ -410,7 +411,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	
 	ptype grad_chi_min, grad_chi_max;
 	
-	int grad_block = 32, grad_thread = 1024;
+	int grad_block = 1, grad_thread = 1024; // settings for min/max function, maximum threads and just one block
 	ptype *Host_w_min, *Host_w_max;
 	ptype *Dev_w_min, *Dev_w_max;
 	Host_w_min = new ptype[grad_block*grad_thread];
@@ -500,6 +501,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	int mes_size = tf*snapshots_per_second;
     ptype *Mesure;
     ptype *Mesure_fine;
+    ptype incomp_error [iterMax+1];
 	cudaMallocManaged(&Mesure, 3*mes_size*sizeof(ptype));
 	cudaMallocManaged(&Mesure_fine, 3*mes_size*sizeof(ptype));
 
@@ -601,6 +603,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
     cudaMalloc((void**)&Dev_lap_fine_2048_real, Grid_2048.sizeNReal);
     cudaMalloc((void**)&Dev_lap_fine_2048_complex, Grid_2048.sizeNComplex);
     cudaMalloc((void**)&Dev_lap_fine_2048_hat, Grid_2048.sizeNComplex);
+
 
 
 
@@ -865,27 +868,31 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 			// We don't need to have Dev_gradChi in memory we juste need to know if it exist a value such as : abs(this_value - 1) > inCompThreshold
 			
 			//cudaDeviceSynchronize();
-			// compute minimum for actual check on dev, coppy to machine
+			// compute minimum for actual check on dev, coppy to machine to get minimum from all blocks
 			Dev_get_max_min<<<grad_block, grad_thread>>>(Grid_fine.N, (cufftDoubleReal*)Dev_Complex_fine, Dev_w_min, Dev_w_max);// Dev_gradChi cufftDoubleComplex cufftDoubleReal
 			//cudaMemcpy(Host_w_min, Dev_w_min, sizeof(ptype)*grad_block*grad_thread, cudaMemcpyDeviceToHost);
 			//cudaMemcpy(Host_w_max, Dev_w_max, sizeof(ptype)*grad_block*grad_thread, cudaMemcpyDeviceToHost);
 			cudaMemcpyAsync(Host_w_min, Dev_w_min, sizeof(ptype)*grad_block*grad_thread, cudaMemcpyDeviceToHost, streams[0]);
-			cudaMemcpyAsync(Host_w_max, Dev_w_max, sizeof(ptype)*grad_block*grad_thread, cudaMemcpyDeviceToHost, streams[1]);  // not needed?
+			cudaMemcpyAsync(Host_w_max, Dev_w_max, sizeof(ptype)*grad_block*grad_thread, cudaMemcpyDeviceToHost, streams[1]);
+
+//			Host_get_max_min(grad_block*grad_thread, Host_w_min, Host_w_max, grad_chi_min, grad_chi_max);
 			
 			grad_chi_min = Host_w_min[0];
-			grad_chi_max = Host_w_max[0];  // not needed?
+			grad_chi_max = Host_w_max[0];
 			// for-loop to compute final min/max on host
 			for(int i=0;i<grad_block*grad_thread;i++)
-			{			
+			{
 				if(grad_chi_min > Host_w_min[i])
 					grad_chi_min = Host_w_min[i];
-					
-				if(grad_chi_max < Host_w_max[i])  // not needed?
-					grad_chi_max = Host_w_max[i];  // not needed?
+
+				if(grad_chi_max < Host_w_max[i])
+					grad_chi_max = Host_w_max[i];
 			}
+			cout<<grad_chi_min<<" "<<loop_ctr<<endl;
 		}
 			
 		//resetting map and adding to stack
+		incomp_error[loop_ctr] = fmax(fabs(grad_chi_min - 1), fabs(grad_chi_max - 1));
 		if( ( fabs(grad_chi_min - 1) > inCompThreshold ) || ( fabs(grad_chi_max - 1) > inCompThreshold ) )
 		{
 			if(map_stack_ctr > map_stack_length*frac_mem_cpu_to_gpu*Nb_array_RAM)
@@ -1115,6 +1122,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
     #endif
 	writeAllRealToBinaryFile(3*mes_size, Mesure, simulationName, "Mesure");
 	writeAllRealToBinaryFile(3*mes_size, Mesure_fine, simulationName, "Mesure_fine");
+	writeAllRealToBinaryFile(iterMax, incomp_error, simulationName, "Incompressibility_check");
 	
 	
 	/*******************************************************************
@@ -1378,13 +1386,16 @@ string create_directory_structure(string simulationName, int NX_coarse, int NX_f
 	else
 	{
         file<<"Simulation name \t\t:"<<simulationName<<endl;
-        #ifdef RKThree
-            file<<"Time integration : RK3"<<endl;
-        #elif defined(ABTwo)
-              file<<"Time integration : AB2"<<endl;
-        #else
-              file<<"Time integration : Euler explicit"<<endl;
-        #endif
+        if (TIME_INTEGRATION == "RKThree") {
+        	file<<"Time integration : Runge Kutta 3"<<endl;
+        }
+        else if (TIME_INTEGRATION == "ABTwo") {
+        	file<<"Time integration : Adam Bashfords 2"<<endl;
+        }
+        else if (TIME_INTEGRATION == "EulExp") {
+        	file<<"Time integration : Euler explicit"<<endl;
+        }
+        else file<<"Time integration : Euler explicit"<<endl;
 
         #ifdef PARTICLES
               file<<"Particles enabled"<<endl;
