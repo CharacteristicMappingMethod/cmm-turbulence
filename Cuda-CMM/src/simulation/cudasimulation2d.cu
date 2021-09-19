@@ -35,24 +35,65 @@ __global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, 
 		return;
 	
 	int In = iY*NX + iX;	
-	
-	double c1 = 1.0/(4.0);
-	double c2 = 1.0/(4.0*ep);
-	double c3 = 1.0/(4.0*ep*ep);
-	
 	long int N = NX*NY;
 	
-	ChiX[    In] = ( (X[0*N+In] + X[1*N+In] + X[2*N+In] + X[3*N+In])*c1 );
-	ChiY[    In] = ( (Y[0*N+In] + Y[1*N+In] + Y[2*N+In] + Y[3*N+In])*c1 );
-		
-	ChiX[1*N+In] = ( (X[0*N+In] + X[1*N+In] - X[2*N+In] - X[3*N+In])*c2 );
-	ChiY[1*N+In] = ( (Y[0*N+In] + Y[1*N+In] - Y[2*N+In] - Y[3*N+In])*c2 );
-		
-	ChiX[2*N+In] = ( (X[0*N+In] - X[1*N+In] - X[2*N+In] + X[3*N+In])*c2 );
-	ChiY[2*N+In] = ( (Y[0*N+In] - Y[1*N+In] - Y[2*N+In] + Y[3*N+In])*c2 );
-		
-	ChiX[3*N+In] = ( (X[0*N+In] - X[1*N+In] + X[2*N+In] - X[3*N+In])*c3 );
-	ChiY[3*N+In] = ( (Y[0*N+In] - Y[1*N+In] + Y[2*N+In] - Y[3*N+In])*c3 );
+	// 4th order interpolation
+	if (MAPUPDATE_ORDER == "4th") {
+		// 4th order values, some negated to keep the stencil signs similar to 2th order
+		double c12 = -1.0/(12.0);  // 0th order, outer points
+		double c11 = +1.0/(3.0);  // 0th order, inner points
+		double c22 = -1.0/(24.0);  // 1th order, outer points
+		double c21 = +1.0/(3.0);  // 1th order, inner points
+		double c32 = -1.0/(24.0);  // 1th order cross, outer points
+		double c31 = +1.0/(3.0);  // 1th order cross, inner points
+
+		// chi values - normal central average of order 4 with stencil -1/6 2/3 2/3 -1/6
+		ChiX[    In] = ( (X[0*N+In] + X[1*N+In] + X[2*N+In] + X[3*N+In])*c11 )
+					 + ( (X[4*N+In] + X[5*N+In] + X[6*N+In] + X[7*N+In])*c12 );
+		ChiY[    In] = ( (Y[0*N+In] + Y[1*N+In] + Y[2*N+In] + Y[3*N+In])*c11 )
+					 + ( (Y[4*N+In] + Y[5*N+In] + Y[6*N+In] + Y[7*N+In])*c12 );
+
+		// chi grad x - central differences of order 4 with stencil -1/12 8/12 -8/12 1/12
+		ChiX[1*N+In] = (( (X[0*N+In] + X[1*N+In] - X[2*N+In] - X[3*N+In])*c21 )
+					 +  ( (X[4*N+In] + X[5*N+In] - X[6*N+In] - X[7*N+In])*c22 ))/ep;
+		ChiY[1*N+In] = (( (Y[0*N+In] + Y[1*N+In] - Y[2*N+In] - Y[3*N+In])*c21 )
+					 +  ( (Y[4*N+In] + Y[5*N+In] - Y[6*N+In] - Y[7*N+In])*c22 ))/ep;
+
+		// chi grad y - central differences of order 4 with stencil -1/12 8/12 -8/12 1/12
+		ChiX[2*N+In] = (( (X[0*N+In] - X[1*N+In] - X[2*N+In] + X[3*N+In])*c21 )
+					 +  ( (X[4*N+In] - X[5*N+In] - X[6*N+In] + X[7*N+In])*c22 ))/ep;
+		ChiY[2*N+In] = (( (Y[0*N+In] - Y[1*N+In] - Y[2*N+In] + Y[3*N+In])*c21 )
+					 +  ( (Y[4*N+In] - Y[5*N+In] - Y[6*N+In] + Y[7*N+In])*c22 ))/ep;
+
+		// chi grad x y - cross central differences of order 4 with stencil -1/12 8/12 -8/12 1/12
+		ChiX[3*N+In] = (( (X[0*N+In] - X[1*N+In] + X[2*N+In] - X[3*N+In])*c31 )
+					 +  ( (X[4*N+In] - X[5*N+In] + X[6*N+In] - X[7*N+In])*c32 ))/ep/ep;
+		ChiY[3*N+In] = (( (Y[0*N+In] - Y[1*N+In] + Y[2*N+In] - Y[3*N+In])*c31 )
+					 +  ( (Y[4*N+In] - Y[5*N+In] + Y[6*N+In] - Y[7*N+In])*c32 ))/ep/ep;
+	}
+	// 2th order interpolation
+	else {
+		double c1 = 1.0/(4.0);
+		double c2 = 1.0/(4.0*ep);
+		double c3 = 1.0/(4.0*ep*ep);
+
+		// chi values - normal central average of order 2 with stencil 1/2 1/2
+		ChiX[    In] = ( (X[0*N+In] + X[1*N+In] + X[2*N+In] + X[3*N+In])*c1 );
+		ChiY[    In] = ( (Y[0*N+In] + Y[1*N+In] + Y[2*N+In] + Y[3*N+In])*c1 );
+
+		// chi grad x - central differences of order 2 with stencil -1/2 1/2
+		ChiX[1*N+In] = ( (X[0*N+In] + X[1*N+In] - X[2*N+In] - X[3*N+In])*c2 );
+		ChiY[1*N+In] = ( (Y[0*N+In] + Y[1*N+In] - Y[2*N+In] - Y[3*N+In])*c2 );
+
+		// chi grad y - central differences of order 2 with stencil -1/2 1/2
+		ChiX[2*N+In] = ( (X[0*N+In] - X[1*N+In] - X[2*N+In] + X[3*N+In])*c2 );
+		ChiY[2*N+In] = ( (Y[0*N+In] - Y[1*N+In] - Y[2*N+In] + Y[3*N+In])*c2 );
+
+		// chi grad x y - central differences of order 2 with stencil -1/2 1/2
+		ChiX[3*N+In] = ( (X[0*N+In] - X[1*N+In] + X[2*N+In] - X[3*N+In])*c3 );
+		ChiY[3*N+In] = ( (Y[0*N+In] - Y[1*N+In] + Y[2*N+In] - Y[3*N+In])*c3 );
+	}
+
 }
 
 
@@ -131,13 +172,21 @@ __global__ void kernel_advect_using_stream_hermite2(ptype *ChiX, ptype *ChiY, pt
 
     //ptype l[6] = {L1(t+dt, t, t-dt, t-2*dt), L2(t+dt, t, t-dt, t-2*dt), L3(t+dt, t, t-dt, t-2*dt), L1(t+dt/2, t, t-dt, t-2*dt), L2(t+dt/2, t, t-dt, t-2*dt), L3(t+dt/2, t, t-dt, t-2*dt)}; Work but slow
 
-	// repeat for all 4 footpoints
-    #pragma unroll 4
-	FOR(k, 4)
-	{
-		// get position of footpoint
-		xep = x+ep*(1 - 2*((k/2)%2 == 1));
-		yep = y+ep*(1 - 2*(((k+1)/2)%2 == 1));
+	// repeat for all footpoints, 4 for 2th order and 8 for 4th order
+	int k_total;
+	if (MAPUPDATE_ORDER == "4th") {
+		k_total = 8;
+	}
+	else k_total = 4;
+//    #pragma unroll(k_total)
+//	FOR(k, k_total)
+//	{
+	for (int k = 0; k<k_total; k++) {
+		// get position of footpoint, NE, SE, SW, NW
+		// xep = x+ep*(1 - 2*((k/2)%2 == 1));
+		// yep = y+ep*(1 - 2*(((k+1)/2)%2 == 1));
+		xep = x + (1 + k/4) * ep*(1 - 2*((k/2)%2));
+		yep = y + (1 + k/4) * ep*(1 - 2*(((k+1)/2)%2));
 		
 		xf = xep;
 		yf = yep;

@@ -42,7 +42,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	t0 = 0.0;
 
 	// time steps per second used by 4_nodes
-	ptype tmp_4nodes = 64;
+	ptype tmp_4nodes = 128;
 
 	/*
 	 *  Initial conditions
@@ -156,7 +156,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	}
 	else sim_name_addition = "_DEV_UNNOWN_";
 
-	simulationName = simulationName + sim_name_addition + "C" + std::to_string(grid_scale) + "_F" + std::to_string(fine_grid_scale) + "_" + std::to_string(tmp_4nodes).substr(0, std::to_string(tmp_4nodes).find(".")); //"vortex_shear_1000_4";
+	simulationName = simulationName + sim_name_addition + "C" + std::to_string(grid_scale) + "_F" + std::to_string(fine_grid_scale) + "_t" + std::to_string(tmp_4nodes).substr(0, std::to_string(tmp_4nodes).find(".")) + "_T" + std::to_string(tf).substr(0, std::to_string(tf).find(".")); //"vortex_shear_1000_4";
     simulationName = create_directory_structure(simulationName, NX_coarse, NX_fine, dt, tf, save_buffer_count, show_progress_at, iterMax, map_stack_length, inCompThreshold);
     Logger logger(simulationName);
     cout<<"Name of simulation : "<<simulationName<<endl;
@@ -291,8 +291,16 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	Host_ChiY = new ptype[4*Grid_coarse.N];							
 	cudaMalloc((void**)&Dev_ChiX, 4*Grid_coarse.sizeNReal);
 	cudaMalloc((void**)&Dev_ChiY, 4*Grid_coarse.sizeNReal);
-	cudaMalloc((void**)&Dev_ChiDualX, 4*Grid_coarse.sizeNReal);		
-	cudaMalloc((void**)&Dev_ChiDualY, 4*Grid_coarse.sizeNReal);		
+	// 4th order map update needs 8 stencil points
+	if (MAPUPDATE_ORDER == "4th") {
+		cudaMalloc((void**)&Dev_ChiDualX, 8*Grid_coarse.sizeNReal);
+		cudaMalloc((void**)&Dev_ChiDualY, 8*Grid_coarse.sizeNReal);
+	}
+	// assume 2th order if different or not defined, needs 4 stencil points
+	else {
+		cudaMalloc((void**)&Dev_ChiDualX, 4*Grid_coarse.sizeNReal);
+		cudaMalloc((void**)&Dev_ChiDualY, 4*Grid_coarse.sizeNReal);
+	}
 	
 	
 	/*******************************************************************
@@ -498,7 +506,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	*******************************************************************/
 
 	int count_mesure = 0;
-	int mes_size = tf*snapshots_per_second;
+	int mes_size = tf*snapshots_per_second + 1;
     ptype *Mesure;
     ptype *Mesure_fine;
     ptype incomp_error [iterMax+1];
@@ -709,9 +717,20 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 
 
     // Compute initial quantities (L2 norm)
-    Compute_Energy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[3*count_mesure], Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-	Compute_Enstrophy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[1 + 3*count_mesure], Dev_W_coarse, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-    Compute_Palinstrophy(&Grid_coarse, &Mesure[2 + 3*count_mesure], Dev_W_coarse, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, cufftPlan_coarse);
+	#ifndef sm_50
+		Compute_Energy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[3*count_mesure], Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+		Compute_Enstrophy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[1 + 3*count_mesure], Dev_W_coarse, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+	#else
+		cudaMemcpy(Host_Psi, Dev_Psi_real_previous, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+		cudaMemcpy(Host_W_coarse, Dev_W_coarse, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+		Compute_Energy_Host(&Mesure[3*count_mesure], Host_Psi, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+		Compute_Enstrophy_Host(&Mesure[1 + 3*count_mesure], Host_W_coarse, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+	#endif
+	Compute_Palinstrophy(&Grid_coarse, &Mesure[2 + 3*count_mesure], Dev_W_coarse, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, cufftPlan_coarse);
+
+//    Compute_Energy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[3*count_mesure], Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+//	Compute_Enstrophy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[1 + 3*count_mesure], Dev_W_coarse, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+//    Compute_Palinstrophy(&Grid_coarse, &Mesure[2 + 3*count_mesure], Dev_W_coarse, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, cufftPlan_coarse);
 
     //Compute_Energy<<<Grid_2048.blocksPerGrid,Grid_2048.threadsPerBlock>>>(&Mesure_fine[3*count_mesure], Dev_Psi_2048, Grid_2048.N, Grid_2048.NX, Grid_2048.NY, Grid_2048.h);
     Compute_Enstrophy<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(&Mesure_fine[1 + 3*count_mesure], Dev_W_fine, Grid_fine.N, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);
@@ -888,13 +907,15 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 				if(grad_chi_max < Host_w_max[i])
 					grad_chi_max = Host_w_max[i];
 			}
-			cout<<grad_chi_min<<" "<<loop_ctr<<endl;
 		}
 			
 		//resetting map and adding to stack
 		incomp_error[loop_ctr] = fmax(fabs(grad_chi_min - 1), fabs(grad_chi_max - 1));
-		if( ( fabs(grad_chi_min - 1) > inCompThreshold ) || ( fabs(grad_chi_max - 1) > inCompThreshold ) )
-		{
+		#ifdef skip_remapping  // switch to disable or enable remapping for convergence stuff
+			if ( false ) {
+		#else
+			if( incomp_error[loop_ctr] > inCompThreshold ) {
+		#endif
 			if(map_stack_ctr > map_stack_length*frac_mem_cpu_to_gpu*Nb_array_RAM)
 			{
 				cout<<"Stack Saturated... Exiting .. \n";
@@ -902,8 +923,8 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 			}
 			
 			#ifndef TIME_TESTING
-				printf("Refining Map... ctr = %d \t map_stack_ctr = %d ; %d ; %d \t gap = %d \t incomp_err = %e\n", loop_ctr, map_stack_ctr, stack_length_RAM, stack_length_Nb_array_RAM, loop_ctr - old_ctr, fmax(fabs(grad_chi_min - 1), fabs(grad_chi_max - 1)));
-				snprintf(logger.buffer, sizeof(logger.buffer), "Refining Map... ctr = %d \t map_stack_ctr = %d \t gap = %d \t incomp_err = %e", loop_ctr, map_stack_ctr, loop_ctr - old_ctr, fmax(fabs(grad_chi_min - 1), fabs(grad_chi_max - 1)));
+				printf("Refining Map... ctr = %d \t map_stack_ctr = %d ; %d ; %d \t gap = %d \t incomp_err = %e\n", loop_ctr, map_stack_ctr, stack_length_RAM, stack_length_Nb_array_RAM, loop_ctr - old_ctr, incomp_error[loop_ctr]);
+				snprintf(logger.buffer, sizeof(logger.buffer), "Refining Map... ctr = %d \t map_stack_ctr = %d \t gap = %d \t incomp_err = %e", loop_ctr, map_stack_ctr, loop_ctr - old_ctr, incomp_error[loop_ctr]);
 				logger.push();
 				old_ctr = loop_ctr;
 			#endif
@@ -1061,8 +1082,15 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 				save_ctr++;
 
                 //Mesure on the coarse grid
-                Compute_Energy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[3*count_mesure], Dev_Psi_real, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-				Compute_Enstrophy<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(&Mesure[1 + 3*count_mesure], Dev_W_coarse, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+				#ifndef sm_50
+					Compute_Energy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[3*count_mesure], Dev_Psi_real, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+					Compute_Enstrophy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[1 + 3*count_mesure], Dev_W_coarse, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+				#else
+					cudaMemcpy(Host_Psi, Dev_Psi_real, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+					cudaMemcpy(Host_W_coarse, Dev_W_coarse, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+					Compute_Energy_Host(&Mesure[3*count_mesure], Host_Psi, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+					Compute_Enstrophy_Host(&Mesure[1 + 3*count_mesure], Host_W_coarse, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+				#endif
 				Compute_Palinstrophy(&Grid_coarse, &Mesure[2 + 3*count_mesure], Dev_W_coarse, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, cufftPlan_coarse);
 
                 //Measure on the fine grid

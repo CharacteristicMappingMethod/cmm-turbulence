@@ -13,9 +13,9 @@
 
 
 __global__ void Compute_Energy(ptype *E, ptype *psi, int N, int NX, int NY, ptype h);
-
 __global__ void Compute_Enstrophy(ptype *Ens, ptype *W, int N, int NX, int NY, ptype h);
-
+void Compute_Energy_Host(ptype *E, ptype *psi, int N, int NX, int NY, ptype h);
+void Compute_Enstrophy_Host(ptype *Ens, ptype *W, int N, int NX, int NY, ptype h);
 void Compute_Palinstrophy(TCudaGrid2D *Grid_coarse, ptype *Pal, ptype *W_real, cuPtype *Dev_Complex, cuPtype *Dev_Hat, cuPtype *Dev_Hat_bis, cufftHandle cufftPlan_coarse);
 
 

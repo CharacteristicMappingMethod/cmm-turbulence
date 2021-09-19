@@ -31,16 +31,24 @@ using namespace std;
 	#define PI 		3.141592653589793238462643383279502884197169399375105820974944592307816406286208998628034825342117067
 	#define twoPI 	6.283185307179586476925286766559005768394338798750211641949889184615632812572417997256069650684234136
 	#define FOR(i, N)	for(int i=0;i<N;i++)
+
+	#define sm_50  // for Julius, because he has a shitty graphics card
+	// #define skip_remapping  // in case we want to skip the remapping for convergence purposes
+
+
 	//#define DISCRET
 
 	// "4_nodes"		"quadropole"		"three_vortices"		"single_shear_layer"		"two_votices"		"turbulence_gaussienne"
-    #define PROBLEM_CODE   "4_nodes"
+    #define PROBLEM_CODE   		"4_nodes"
 
 	//active le temps
 	//#define TIME_TESTING
 
     // #define PARTICLES
     // #define RKThree_PARTICLES
+
+	// define the order used for the mapupdate, "2th", "4th"
+	#define MAPUPDATE_ORDER		"4th"
 
     // Time integration, define by name, "RKThree", "ABTwo", "EulerExp"
 	#define TIME_INTEGRATION	"RKThree"

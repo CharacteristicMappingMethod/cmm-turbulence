@@ -37,7 +37,7 @@ void hermite_interpolation_test();			//test the hermite interpolation functional
 	__device__ ptype device_hermite_interpolate_dy(ptype *H, ptype x, ptype y, int NX, int NY, ptype h);
 	
 	__device__ void  device_hermite_interpolate_dx_dy(ptype *H, ptype x, ptype y, ptype *fx, ptype *fy, int NX, int NY, ptype h);	//used to obtain velocity from stream function
-	
+
 	__device__ void  device_diffeo_interpolate(ptype *Hx, ptype *Hy, ptype x, ptype y, ptype *x2,  ptype *y2, int NX, int NY, ptype h);	
 	__device__ ptype device_diffeo_grad(ptype *Hx, ptype *Hy, ptype x, ptype y, int NX, int NY, ptype h);	
 	

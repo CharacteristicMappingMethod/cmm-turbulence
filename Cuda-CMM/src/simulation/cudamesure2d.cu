@@ -17,9 +17,11 @@ __global__ void Compute_Energy(ptype *E, ptype *psi, int N, int NX, int NY, ptyp
 	int In = iY*NX + iX;
 
 	// atomicAdd defined for double at sm_60
-    // atomicAdd(E, 0.5*h * h * (psi[In + N] * psi[In + N] + psi[In + 2 * N] * psi[In + 2 * N]));
-    *E += 0.5*h * h * (psi[In + N] * psi[In + N] + psi[In + 2 * N] * psi[In + 2 * N]);
-
+	#ifndef sm_50
+    	atomicAdd(E, 0.5*h * h * (psi[In + N] * psi[In + N] + psi[In + 2 * N] * psi[In + 2 * N]));
+	#else
+    	*E += 0.5*h * h * (psi[In + N] * psi[In + N] + psi[In + 2 * N] * psi[In + 2 * N]);
+	#endif
 /*	int idx = threadIdx.x;
 	int stride_x = blockDim.x;
 
@@ -41,10 +43,11 @@ __global__ void Compute_Enstrophy(ptype *Ens, ptype *W, int N, int NX, int NY, p
 	int In = iY*NX + iX;
 
 	// atomicAdd defined for double at sm_60
-    // atomicAdd(Ens, 0.5 * h * h * (W[In] * W[In]));
-	*Ens += 0.5 * h * h * (W[In] * W[In]);
-
-
+	#ifndef sm_50
+    	atomicAdd(Ens, 0.5 * h * h * (W[In] * W[In]));
+	#else
+    	*Ens += 0.5 * h * h * (W[In] * W[In]);
+	#endif
 /*	int idx = threadIdx.x;
 	int stride_x = blockDim.x;
 
@@ -52,6 +55,19 @@ __global__ void Compute_Enstrophy(ptype *Ens, ptype *W, int N, int NX, int NY, p
 		atomicAdd(Ens, 0.5 * h * h * (W[i] * W[i]));
 	}
     */
+}
+
+
+// two functions for host, because julius' computer doesn't support atomics for doubles
+void Compute_Energy_Host(ptype *E, ptype *psi, int N, int NX, int NY, ptype h){
+	for(int i = 0; i < NX*NY; i+=1){
+    	*E += 0.5*h * h * (psi[i + N] * psi[i + N] + psi[i + 2 * N] * psi[i + 2 * N]);
+	}
+}
+void Compute_Enstrophy_Host(ptype *Ens, ptype *W, int N, int NX, int NY, ptype h){
+	for(int i = 0; i < NX*NY; i+=1){
+		*Ens += 0.5 * h * h * (W[i] * W[i]);
+	}
 }
 
 
@@ -75,7 +91,7 @@ void Compute_Palinstrophy(TCudaGrid2D *Grid_coarse, ptype *Pal, ptype *W_real, c
 
 
     for(int i = 0; i < Grid_coarse->N; i+=1){
-		*Pal = *Pal +  (Grid_coarse->h) * (Grid_coarse->h) * (Host_W_coarse_real_dx_dy[i] * Host_W_coarse_real_dx_dy[i] + Host_W_coarse_real_dx_dy[i + Grid_coarse->N] * Host_W_coarse_real_dx_dy[i + Grid_coarse->N]);
+		*Pal += (Grid_coarse->h) * (Grid_coarse->h) * (Host_W_coarse_real_dx_dy[i] * Host_W_coarse_real_dx_dy[i] + Host_W_coarse_real_dx_dy[i + Grid_coarse->N] * Host_W_coarse_real_dx_dy[i + Grid_coarse->N]);
 	}
 
 	*Pal = 0.5*(*Pal);
