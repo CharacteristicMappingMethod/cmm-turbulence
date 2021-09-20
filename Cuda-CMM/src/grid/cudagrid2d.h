@@ -39,7 +39,7 @@ using namespace std;
 	//#define DISCRET
 
 	// "4_nodes"		"quadropole"		"three_vortices"		"single_shear_layer"		"two_votices"		"turbulence_gaussienne"
-    #define PROBLEM_CODE   		"4_nodes"
+    // #define PROBLEM_CODE   		"4_nodes"
 
 	//active le temps
 	//#define TIME_TESTING
@@ -48,10 +48,10 @@ using namespace std;
     // #define RKThree_PARTICLES
 
 	// define the order used for the mapupdate, "2th", "4th"
-	#define MAPUPDATE_ORDER		"4th"
+	#define MAPUPDATE_ORDER		"2th"
 
-    // Time integration, define by name, "RKThree", "ABTwo", "EulerExp"
-	#define TIME_INTEGRATION	"RKThree"
+//    // Time integration, define by name, "RKThree", "ABTwo", "EulerExp"
+//	#define TIME_INTEGRATION	"RKThree"
 
 
 	extern ptype ep;

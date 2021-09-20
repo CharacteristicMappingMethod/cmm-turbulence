@@ -138,7 +138,7 @@ __global__ void kernel_incompressibility_check(ptype *ChiX, ptype *ChiY, ptype *
 }
 
 
-__global__ void kernel_advect_using_stream_hermite2(ptype *ChiX, ptype *ChiY, ptype *ChiDualX, ptype *ChiDualY, ptype *phi, ptype *phi_p, ptype *phi_p_p, int NXc, int NYc, ptype hc, ptype t, ptype dt, ptype ep)			// time cost
+__global__ void kernel_advect_using_stream_hermite2(ptype *ChiX, ptype *ChiY, ptype *ChiDualX, ptype *ChiDualY, ptype *phi, ptype *phi_p, ptype *phi_p_p, int NXc, int NYc, ptype hc, ptype t, ptype dt, ptype ep, int time_integration_num)			// time cost
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -154,23 +154,13 @@ __global__ void kernel_advect_using_stream_hermite2(ptype *ChiX, ptype *ChiY, pt
 	
 	long int N = NXc*NYc;
 	
-	//position
-	ptype x = iX*hc;
-	ptype y = iY*hc;
-	
-	//running through 4 neighbours (unrolled loops)
+	//running through neighbours (unrolled loops)
 	ptype xep, yep;
-	ptype phi_x, phi_y;
-	
+    ptype xf, yf;  // coordinates in loop
+	ptype xf_p, yf_p;  // variables used for fixed-point iteration in ABTwo
 	
 	ptype u, v, u_p, v_p, u_p_p, v_p_p;  // velocity at current and previous time steps
-	ptype k1_x, k1_y, k2_x, k2_y, k3_x, k3_y;  // different intermediate functions for RKThree
-	ptype l[6] = {3.0,-3.0,1,1.875,-1.25,0.375};  // coefficients for lagrangian time interpolation of velocity
-    ptype xf, yf;  // coordinates in loop
-    
-	ptype xf_p, yf_p;  // variables used for fixed-point iteration in ABTwo
-
-    //ptype l[6] = {L1(t+dt, t, t-dt, t-2*dt), L2(t+dt, t, t-dt, t-2*dt), L3(t+dt, t, t-dt, t-2*dt), L1(t+dt/2, t, t-dt, t-2*dt), L2(t+dt/2, t, t-dt, t-2*dt), L3(t+dt/2, t, t-dt, t-2*dt)}; Work but slow
+	ptype k1_x, k1_y, k2_x, k2_y; // different intermediate functions for RKThree
 
 	// repeat for all footpoints, 4 for 2th order and 8 for 4th order
 	int k_total;
@@ -178,103 +168,84 @@ __global__ void kernel_advect_using_stream_hermite2(ptype *ChiX, ptype *ChiY, pt
 		k_total = 8;
 	}
 	else k_total = 4;
-//    #pragma unroll(k_total)
-//	FOR(k, k_total)
+//    #pragma unroll(4)
+//	FOR(k, 4)
 //	{
 	for (int k = 0; k<k_total; k++) {
-		// get position of footpoint, NE, SE, SW, NW
-		// xep = x+ep*(1 - 2*((k/2)%2 == 1));
-		// yep = y+ep*(1 - 2*(((k+1)/2)%2 == 1));
-		xep = x + (1 + k/4) * ep*(1 - 2*((k/2)%2));
-		yep = y + (1 + k/4) * ep*(1 - 2*(((k+1)/2)%2));
+		// get position of footpoint, NE, SE, SW, NW, afterwards repeat one eps further away
+		xep = iX*hc + (1 + k/4) * ep*(1 - 2*((k/2)%2));
+		yep = iY*hc + (1 + k/4) * ep*(1 - 2*(((k+1)/2)%2));
 		
 		xf = xep;
 		yf = yep;
 
-        if (TIME_INTEGRATION == "EulerExp") {
-			device_hermite_interpolate_dx_dy(phi, xf, yf, &phi_x, &phi_y, NXc, NYc, hc);
-			u_p =  phi_y;
-			v_p = -phi_x;
+		switch (time_integration_num) {
+			case 0:  // EulerExp
+			{
+				device_hermite_interpolate_dx_dy_1(phi, xf, yf, &u, &v, NXc, NYc, hc);
+				xf = xep - dt * u;
+				yf = yep - dt * v;
+				break;
+			}
+			// Adam-Bashfords of order two, where a fixed point iteration with 10 iterations
+			case 1:  // ABTwo
+			{
+				xf_p = xep; yf_p = yep;
 
-			xf = xep - dt * u_p;
-			yf = yep - dt * v_p;
-        }
+				// fixed point iteration for xf,yf using previous foot points (self-correction)
+	            #pragma unroll 10
+	            FOR(ctr, 10)
+	            {
+					//step 1
+	                device_hermite_interpolate_dx_dy_1(phi_p, xf_p, yf_p, &u_p, &v_p, NXc, NYc, hc);
 
-		// Adam-Bashfords of order two, where a fixed point iteration with 10 iterations is utilized
-        else if (TIME_INTEGRATION == "ABTwo") {
-			xf_p = xep; yf_p = yep;
+	                xf_p = xf - dt * u_p;
+	                yf_p = yf - dt * v_p;
 
-			// fixed point iteration for xf,yf using previous foot points (self-correction)
-            #pragma unroll 10
-            FOR(ctr, 10)
-            {
-				//step 1
-                device_hermite_interpolate_dx_dy(phi_p, xf_p, yf_p, &phi_x, &phi_y, NXc, NYc, hc);
-                u_p =  phi_y; v_p = -phi_x;
+					//step 2
+	                device_hermite_interpolate_dx_dy_1(phi_p, xf_p, yf_p, &u_p, &v_p, NXc, NYc, hc);
+	                device_hermite_interpolate_dx_dy_1(phi, xf , yf, &u, &v, NXc, NYc, hc);
 
-                xf_p = xf - dt * u_p;
-                yf_p = yf - dt * v_p;
+	                xf = xep - dt * (1.5*u - 0.5*u_p);
+	                yf = yep - dt * (1.5*v - 0.5*v_p);
 
-				//step 2
-                device_hermite_interpolate_dx_dy(phi_p, xf_p, yf_p, &phi_x, &phi_y, NXc, NYc, hc);
-                u_p =  phi_y; v_p = -phi_x;
+	            }
+	            break;
+			}
+			// RKThree time step utilizing some intermediate steps
+			case 2:  // RKThree
+			{
+				// compute u_tilde(X,t_n+1)
+				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep, yep, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NXc, NYc, hc);
 
-                device_hermite_interpolate_dx_dy(phi, xf , yf, &phi_x, &phi_y, NXc, NYc, hc);
-                u =  phi_y; v = -phi_x;
+				// k1 = u_tilde(x,t_n+1) = 3*u_n - 3*u_n-1 + 1*u_n-2
+				k1_x = 3 * u + -3 * u_p + u_p_p;
+				k1_y = 3 * v + -3 * v_p + v_p_p;
 
-                xf = xep - dt * (1.5*u - 0.5*u_p);
-                yf = yep - dt * (1.5*v - 0.5*v_p);
+				// compute u_tilde(x - dt*k1/2, t_n+1 - dt/2)
+				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k1_x/2, yep - dt*k1_y/2, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NXc, NYc, hc);
 
-            }
+				//k2 = u_tilde(x - k1 dt/2, t_n+1 - dt/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
+				k2_x = 1.875 * u + -1.25 * u_p + 0.375 * u_p_p;
+				k2_y = 1.875 * v + -1.25 * v_p + 0.375 * v_p_p;
+
+				//compute u_tilde(x + dt * k1 - 2*dt*k2, t_n+1 - dt)
+				device_hermite_interpolate_dx_dy_1(phi, xep + dt*k1_x - 2*dt*k2_x, yep + dt*k1_y - 2*dt*k2_y, &u, &v, NXc, NYc, hc);
+
+				// k3 = u_tilde(x = k1 dt - 2 k2 dt, t_n) = u
+
+				// build all RK-steps together
+				xf = xep - dt * (k1_x + 4*k2_x + u)/6;
+				yf = yep - dt * (k1_y + 4*k2_y + v)/6;
+				break;
+			}
+			default:  // EulerExp on default
+			{
+				device_hermite_interpolate_dx_dy_1(phi, xf, yf, &u, &v, NXc, NYc, hc);
+				xf = xep - dt * u; yf = yep - dt * v;
+				break;
+			}
 		}
-
-		// RKThree time step utilizing some intermediate steps
-        else if (TIME_INTEGRATION == "RKThree") {
-			// compute u_tilde(X,t_n+1)
-			device_hermite_interpolate_dx_dy(phi_p_p, xep, yep, &phi_x, &phi_y, NXc, NYc, hc);
-			u_p_p = phi_y; v_p_p = -phi_x;
-
-			device_hermite_interpolate_dx_dy(phi_p, xep, yep, &phi_x, &phi_y, NXc, NYc, hc);
-			u_p = phi_y; v_p = -phi_x;
-
-			device_hermite_interpolate_dx_dy(phi, xep, yep, &phi_x, &phi_y, NXc, NYc, hc);
-			u = phi_y; v = -phi_x;
-
-			// k1 = u_tilde(x,t_n+1)
-			k1_x = l[0] * u + l[1] * u_p + l[2] * u_p_p;
-			k1_y = l[0] * v + l[1] * v_p + l[2] * v_p_p;
-
-			// compute u_tilde(x - dt*k1/2, t_n+1 - dt/2)
-			device_hermite_interpolate_dx_dy(phi_p_p, xep - dt*k1_x/2, yep - dt*k1_y/2, &phi_x, &phi_y, NXc, NYc, hc);
-			u_p_p = phi_y; v_p_p = -phi_x;
-
-			device_hermite_interpolate_dx_dy(phi_p, xep - dt*k1_x/2, yep - dt*k1_y/2, &phi_x, &phi_y, NXc, NYc, hc);
-			u_p = phi_y; v_p = -phi_x;
-
-			device_hermite_interpolate_dx_dy(phi, xep - dt*k1_x/2, yep - dt*k1_y/2, &phi_x, &phi_y, NXc, NYc, hc);
-			u = phi_y; v = -phi_x;
-
-			//k2 = u_tilde(x - k1 dt/2, t_n+1 - dt/2)
-			k2_x = l[3] * u + l[4]* u_p + l[5] * u_p_p;
-			k2_y = l[3] * v + l[4] * v_p + l[5] * v_p_p;
-
-			//compute u_tilde(x + dt * k1 - 2*dt*k2, t_n+1 - dt)
-			device_hermite_interpolate_dx_dy(phi, xep + dt*k1_x - 2*dt*k2_x, yep + dt*k1_y - 2*dt*k2_y , &phi_x, &phi_y, NXc, NYc, hc);
-			u = phi_y; v = -phi_x;
-
-			// k3 = u_tilde(x = k1 dt - 2 k2 dt, t_n)
-			k3_x = u;
-			k3_y = v;
-
-			xf = xep - dt * (k1_x + 4*k2_x + k3_x)/6;
-			yf = yep - dt * (k1_y + 4*k2_y + k3_y)/6;
-		}
-
-        // scheme name not known, do euler explicit to avoid errors (a bit cheeky, i know, but i dont know how to throw errors yet)
-        else {
-			device_hermite_interpolate_dx_dy(phi, xf, yf, &phi_x, &phi_y, NXc, NYc, hc);
-			u_p =  phi_y; v_p = -phi_x; xf = xep - dt * u_p; yf = yep - dt * v_p;
-        }
 
 		device_diffeo_interpolate(ChiX, ChiY, xf, yf, &ChiDualX[k*N+In], &ChiDualY[k*N+In], NXc, NYc, hc);
 	}
@@ -362,7 +333,7 @@ __global__ void kernel_complex_to_real_H(ptype *varR, cuPtype *varC, int NX, int
 *******************************************************************/
 
 
-__global__ void kernel_apply_map_stack_to_W(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ws, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, ptype *W_initial)
+__global__ void kernel_apply_map_stack_to_W(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ws, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, ptype *W_initial, int simulation_num)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -383,7 +354,7 @@ __global__ void kernel_apply_map_stack_to_W(ptype *ChiX_stack, ptype *ChiY_stack
 		device_diffeo_interpolate(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x, y, &x, &y, NXc, NYc, hc);		
 	
 	#ifndef DISCRET
-		ws[In] = device_initial_W(x, y);
+		ws[In] = device_initial_W(x, y, simulation_num);
 	#endif
 	
 	#ifdef DISCRET
@@ -394,7 +365,7 @@ __global__ void kernel_apply_map_stack_to_W(ptype *ChiX_stack, ptype *ChiY_stack
 }
 
 
-__global__ void kernel_apply_map_stack_to_W_custom(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ws, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, ptype xl, ptype xr, ptype yl, ptype yr, ptype *W_initial)		// Zoom
+__global__ void kernel_apply_map_stack_to_W_custom(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ws, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, ptype xl, ptype xr, ptype yl, ptype yr, ptype *W_initial, int simulation_num)		// Zoom
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -416,10 +387,10 @@ __global__ void kernel_apply_map_stack_to_W_custom(ptype *ChiX_stack, ptype *Chi
 	for(int k = stack_length - 1; k >= 0; k--)
 		device_diffeo_interpolate(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x, y, &x, &y, NXc, NYc, hc);
 		
-	ws[In] = device_initial_W(x, y); //device_initial_W_discret(x, y)
+	ws[In] = device_initial_W(x, y, simulation_num); //device_initial_W_discret(x, y)
 	
 	#ifndef DISCRET
-		ws[In] = device_initial_W(x, y);
+		ws[In] = device_initial_W(x, y, simulation_num);
 	#endif
 	
 	#ifdef DISCRET
@@ -453,7 +424,7 @@ void kernel_apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D 
 }*/
 
 
-void kernel_apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *Host_ChiX_stack_RAM_0, ptype *Host_ChiY_stack_RAM_0, ptype *Host_ChiX_stack_RAM_1, ptype *Host_ChiY_stack_RAM_1, ptype *Host_ChiX_stack_RAM_2, ptype *Host_ChiY_stack_RAM_2, ptype *Host_ChiX_stack_RAM_3, ptype *Host_ChiY_stack_RAM_3, ptype *W_real, cuPtype *Dev_Complex_fine, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, ptype *W_initial)
+void kernel_apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *Host_ChiX_stack_RAM_0, ptype *Host_ChiY_stack_RAM_0, ptype *Host_ChiX_stack_RAM_1, ptype *Host_ChiY_stack_RAM_1, ptype *Host_ChiX_stack_RAM_2, ptype *Host_ChiY_stack_RAM_2, ptype *Host_ChiX_stack_RAM_3, ptype *Host_ChiY_stack_RAM_3, ptype *W_real, cuPtype *Dev_Complex_fine, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, ptype *W_initial, int simulation_num)
 {
 	
 	kernel_apply_map_stack_to_W_part_1<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX, ChiY, Dev_Complex_fine, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h);
@@ -514,7 +485,7 @@ void kernel_apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D 
 		}
 	}
 	
-	kernel_apply_map_stack_to_W_part_3<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_real, Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, W_initial);
+	kernel_apply_map_stack_to_W_part_3<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_real, Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, W_initial, simulation_num);
 	
 }
 
@@ -558,7 +529,7 @@ __global__ void kernel_apply_map_stack_to_W_part_2(ptype *ChiX_stack, ptype *Chi
 	
 }
 
-__global__ void kernel_apply_map_stack_to_W_part_3(ptype *ws, cuPtype *x_y, int NXs, int NYs, ptype hs, ptype *W_initial)
+__global__ void kernel_apply_map_stack_to_W_part_3(ptype *ws, cuPtype *x_y, int NXs, int NYs, ptype hs, ptype *W_initial, int simulation_num)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -570,7 +541,7 @@ __global__ void kernel_apply_map_stack_to_W_part_3(ptype *ws, cuPtype *x_y, int 
 	int In = iY*NXs + iX;
 	
 	#ifndef DISCRET
-		ws[In] = device_initial_W(x_y[In].x, x_y[In].y);
+		ws[In] = device_initial_W(x_y[In].x, x_y[In].y, simulation_num);
 	#endif
 	
 	#ifdef DISCRET
@@ -580,7 +551,7 @@ __global__ void kernel_apply_map_stack_to_W_part_3(ptype *ws, cuPtype *x_y, int 
 }
 
 
-void kernel_apply_map_stack_to_W_custom_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *Host_ChiX_stack_RAM_0, ptype *Host_ChiY_stack_RAM_0, ptype *Host_ChiX_stack_RAM_1, ptype *Host_ChiY_stack_RAM_1, ptype *Host_ChiX_stack_RAM_2, ptype *Host_ChiY_stack_RAM_2, ptype *Host_ChiX_stack_RAM_3, ptype *Host_ChiY_stack_RAM_3, ptype *W_real, cuPtype *Dev_Complex_fine, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, ptype xl, ptype xr, ptype yl, ptype yr, ptype *W_initial)
+void kernel_apply_map_stack_to_W_custom_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *Host_ChiX_stack_RAM_0, ptype *Host_ChiY_stack_RAM_0, ptype *Host_ChiX_stack_RAM_1, ptype *Host_ChiY_stack_RAM_1, ptype *Host_ChiX_stack_RAM_2, ptype *Host_ChiY_stack_RAM_2, ptype *Host_ChiX_stack_RAM_3, ptype *Host_ChiY_stack_RAM_3, ptype *W_real, cuPtype *Dev_Complex_fine, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, ptype xl, ptype xr, ptype yl, ptype yr, ptype *W_initial, int simulation_num)
 {
 	
 	kernel_apply_map_stack_to_W_custom_part_1<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX, ChiY, Dev_Complex_fine, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, xl, xr, yl, yr);
@@ -641,7 +612,7 @@ void kernel_apply_map_stack_to_W_custom_part_All(TCudaGrid2D *Grid_coarse, TCuda
 		}
 	}
 	
-	kernel_apply_map_stack_to_W_part_3<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_real, Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, W_initial);
+	kernel_apply_map_stack_to_W_part_3<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_real, Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, W_initial, simulation_num);
 	
 }
 
@@ -715,7 +686,7 @@ __global__ void cut_off_scale(cuPtype *W, int NX)
 *******************************************************************/
 
 
-__global__ void kernel_compare_vorticity_with_initial(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *error, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs)
+__global__ void kernel_compare_vorticity_with_initial(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *error, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, int simulation_num)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -735,7 +706,7 @@ __global__ void kernel_compare_vorticity_with_initial(ptype *ChiX_stack, ptype *
 	for(int k = stack_length - 1; k >= 0; k--)
 		device_diffeo_interpolate(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x, y, &x, &y, NXc, NYc, hc);		
 	
-	error[In] = fabs(device_initial_W(x, y) - device_initial_W(iX*hs, iY*hs));
+	error[In] = fabs(device_initial_W(x, y, simulation_num) - device_initial_W(iX*hs, iY*hs, simulation_num));
 }
 
 
@@ -816,114 +787,228 @@ __global__ void kernel_normalize(cuPtype *F, int NX, int NY)
 *						 Initial condition						   *
 *******************************************************************/
 
-__device__ ptype device_initial_W(ptype x, ptype y)
+__device__ ptype device_initial_W(ptype x, ptype y, int simulation_num)
 {
 // "4_nodes"		"quadropole"		"three_vortices"		"single_shear_layer"		"two_votices"
 
-	if(PROBLEM_CODE == "4_nodes")
-	{
-		x = x - (x>0)*((int)(x/twoPI))*twoPI - (x<0)*((int)(x/twoPI)-1)*twoPI;
-		y = y - (y>0)*((int)(y/twoPI))*twoPI - (y<0)*((int)(y/twoPI)-1)*twoPI;
-		
-		return cos(x) + cos(y) + 0.6*cos(2*x) + 0.2*cos(3*x);
-	}
-	else if(PROBLEM_CODE == "quadropole")
-	{
-		ptype ret = 0;
-		for(int iy = -2; iy <= 2; iy++)
-			for(int ix = -2; ix <= 2; ix++)
-			{
-				ptype dx = x - PI/2 + ix * 2*PI; 
-				ptype dy = y - PI/2 + iy * 2*PI;
-				ptype A = 0.6258473;
-				ptype s = 0.5;
-				ptype B = A/(s*s*s*s) * (dx * dy) * (dx*dx + dy*dy - 6*s*s);
-				ptype D = (dx*dx + dy*dy)/(2*s*s);
-				ret += B * exp(-D);
-			}
-			return ret;
-	}
-	else if(PROBLEM_CODE == "two_votices")
-	{
-		ptype ret = 0;
-		for(int iy = -1; iy <= 1; iy++)
-			for(int ix = -1; ix <= 1; ix++)
-			{
-				ret += sin(0.5*(x + twoPI*ix))*sin(0.5*(x + twoPI*ix))*sin(0.5*((y + twoPI*iy) + twoPI*iy))*sin(0.5*((y + twoPI*iy) + twoPI*iy)) * (exp(-(((x + twoPI*ix) - PI)*((x + twoPI*ix) - PI) + ((y + twoPI*iy) - 0.33*twoPI)*((y + twoPI*iy) - 0.33*twoPI))*5) + 
-											exp(-(((x + twoPI*ix) - PI)*((x + twoPI*ix) - PI) + ((y + twoPI*iy) - 0.67*twoPI)*((y + twoPI*iy) - 0.67*twoPI))*5));		 //two votices of same size
-			}
-		return ret;
-	}
-	else if(PROBLEM_CODE == "three_vortices")
-	{
-		//three vortices
-		ptype ret = 0;
-		ptype LX = PI/2;
-		ptype LY = PI/(2.0*sqrt(2.0));
-		
-		for(int iy = -1; iy <= 1; iy++)
-			for(int ix = -1; ix <= 1; ix++)
-			{
-				ret += sin(0.5*(x + twoPI*ix))*sin(0.5*(x + twoPI*ix))*sin(0.5*((y + twoPI*iy) + twoPI*iy))*sin(0.5*((y + twoPI*iy) + twoPI*iy)) * 
-							(
-							+	exp(-(((x + twoPI*ix) - PI - LX)*((x + twoPI*ix) - PI - LX) + ((y + twoPI*iy) - PI)*((y + twoPI*iy) - PI))*5) 
-							+	exp(-(((x + twoPI*ix) - PI + LX)*((x + twoPI*ix) - PI + LX) + ((y + twoPI*iy) - PI)*((y + twoPI*iy) - PI))*5) 
-							-	exp(-(((x + twoPI*ix) - PI + LX)*((x + twoPI*ix) - PI + LX) + ((y + twoPI*iy) - PI - LY)*((y + twoPI*iy) - PI - LY))*5) 
-							);		 //two votices of same size
-			}
-		return ret;
-	}
-	else if(PROBLEM_CODE == "single_shear_layer")
-	{
-		//single shear layer
-		ptype delta = 50;
-		ptype delta2 = 0.01;
-		ptype ret = 0;
-		for(int iy = -1; iy <= 1; iy++)
-			for(int iy = -1; iy <= 1; iy++)
+//	ptype ret = 0;
+	switch (simulation_num) {
+		case 0:  // 4_nodes
+		{
+			x = x - (x>0)*((int)(x/twoPI))*twoPI - (x<0)*((int)(x/twoPI)-1)*twoPI;
+			y = y - (y>0)*((int)(y/twoPI))*twoPI - (y<0)*((int)(y/twoPI)-1)*twoPI;
+
+			return cos(x) + cos(y) + 0.6*cos(2*x) + 0.2*cos(3*x);
+			break;
+		}
+		case 1:  // quadropole
+		{
+			ptype ret = 0;
+			for(int iy = -2; iy <= 2; iy++)
+				for(int ix = -2; ix <= 2; ix++)
 				{
-					ret +=    (1 + delta2 * cos(2*x))  *    exp( - delta * (y - PI) * (y - PI) ); 
+					ptype dx = x - PI/2 + ix * 2*PI;
+					ptype dy = y - PI/2 + iy * 2*PI;
+					ptype A = 0.6258473;
+					ptype s = 0.5;
+					ptype B = A/(s*s*s*s) * (dx * dy) * (dx*dx + dy*dy - 6*s*s);
+					ptype D = (dx*dx + dy*dy)/(2*s*s);
+					ret += B * exp(-D);
 				}
-		ret /= 9;
-		return ret;
-	}
-	else if(PROBLEM_CODE == "turbulence_gaussienne")
-	{	
-		x = fmod(x, twoPI);
-		x = (x < 0)*(twoPI+x) + (x > 0)*(x);
-		y = fmod(y, twoPI);
-		y = (y < 0)*(twoPI+y) + (y > 0)*(y);
-		int NB_gaus = 8;		//NB_gaus = 6;sigma = 0.24;
-		ptype sigma = 0.2;
-		ptype ret = 0;
-		for(int mu_x = 0; mu_x < NB_gaus; mu_x++){
-			for(int mu_y = 0; mu_y < NB_gaus; mu_y++){
-				ret += 1/(twoPI*sigma*sigma)*exp(-((x-mu_x*twoPI/(NB_gaus-1))*(x-mu_x*twoPI/(NB_gaus-1))/(2*sigma*sigma)+(y-mu_y*twoPI/(NB_gaus-1))*(y-mu_y*twoPI/(NB_gaus-1))/(2*sigma*sigma))); 
-			}
+				return ret;
+			break;
 		}
-		for(int mu_x = 0; mu_x < NB_gaus-1; mu_x++){
-			for(int mu_y = 0; mu_y < NB_gaus-1; mu_y++){
-				curandState_t state_x;
-				curand_init((mu_x+1)*mu_y*mu_y, 0, 0, &state_x);
-				ptype RAND_gaus_x = ((ptype)(curand(&state_x)%1000)-500)/100000;
-				curandState_t state_y;
-				curand_init((mu_y+1)*mu_x*mu_x, 0, 0, &state_y);
-				ptype RAND_gaus_y = ((ptype)(curand(&state_y)%1000)-500)/100000;
-				ret -= 1/(twoPI*sigma*sigma)*exp(-((x-(2*mu_x+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_x)*(x-(2*mu_x+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_x)/(2*sigma*sigma)+(y-(2*mu_y+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_y)*(y-(2*mu_y+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_y)/(2*sigma*sigma))); 
-			}
+		case 2:  // two vortices
+		{
+			ptype ret = 0;
+			for(int iy = -1; iy <= 1; iy++)
+				for(int ix = -1; ix <= 1; ix++)
+				{
+					ret += sin(0.5*(x + twoPI*ix))*sin(0.5*(x + twoPI*ix))*sin(0.5*((y + twoPI*iy) + twoPI*iy))*sin(0.5*((y + twoPI*iy) + twoPI*iy)) * (exp(-(((x + twoPI*ix) - PI)*((x + twoPI*ix) - PI) + ((y + twoPI*iy) - 0.33*twoPI)*((y + twoPI*iy) - 0.33*twoPI))*5) +
+												exp(-(((x + twoPI*ix) - PI)*((x + twoPI*ix) - PI) + ((y + twoPI*iy) - 0.67*twoPI)*((y + twoPI*iy) - 0.67*twoPI))*5));		 //two votices of same size
+				}
+			return ret;
+			break;
 		}
-		//curandState_t state;
-		//curand_init(floor(y * 16384) * 16384 + floor(x * 16384), 0, 0, &state);
-		//ret *= 1+((ptype)(curand(&state)%1000)-500)/100000;
-		return ret - 0.008857380480028442;
+		case 3:  // three vortices
+		{
+			//three vortices
+			ptype ret = 0;
+			ptype LX = PI/2;
+			ptype LY = PI/(2.0*sqrt(2.0));
+
+			for(int iy = -1; iy <= 1; iy++)
+				for(int ix = -1; ix <= 1; ix++)
+				{
+					ret += sin(0.5*(x + twoPI*ix))*sin(0.5*(x + twoPI*ix))*sin(0.5*((y + twoPI*iy) + twoPI*iy))*sin(0.5*((y + twoPI*iy) + twoPI*iy)) *
+								(
+								+	exp(-(((x + twoPI*ix) - PI - LX)*((x + twoPI*ix) - PI - LX) + ((y + twoPI*iy) - PI)*((y + twoPI*iy) - PI))*5)
+								+	exp(-(((x + twoPI*ix) - PI + LX)*((x + twoPI*ix) - PI + LX) + ((y + twoPI*iy) - PI)*((y + twoPI*iy) - PI))*5)
+								-	exp(-(((x + twoPI*ix) - PI + LX)*((x + twoPI*ix) - PI + LX) + ((y + twoPI*iy) - PI - LY)*((y + twoPI*iy) - PI - LY))*5)
+								);		 //two votices of same size
+				}
+			return ret;
+			break;
+		}
+		case 4:  // single_shear_layer
+		{
+			//single shear layer
+			ptype delta = 50;
+			ptype delta2 = 0.01;
+			ptype ret = 0;
+			for(int iy = -1; iy <= 1; iy++)
+				for(int iy = -1; iy <= 1; iy++)
+					{
+						ret +=    (1 + delta2 * cos(2*x))  *    exp( - delta * (y - PI) * (y - PI) );
+					}
+			ret /= 9;
+			return ret;
+			break;
+		}
+		case 5:  // turbulence_gaussienne
+		{
+			x = fmod(x, twoPI);
+			x = (x < 0)*(twoPI+x) + (x > 0)*(x);
+			y = fmod(y, twoPI);
+			y = (y < 0)*(twoPI+y) + (y > 0)*(y);
+			int NB_gaus = 8;		//NB_gaus = 6;sigma = 0.24;
+			ptype sigma = 0.2;
+			ptype ret = 0;
+			for(int mu_x = 0; mu_x < NB_gaus; mu_x++){
+				for(int mu_y = 0; mu_y < NB_gaus; mu_y++){
+					ret += 1/(twoPI*sigma*sigma)*exp(-((x-mu_x*twoPI/(NB_gaus-1))*(x-mu_x*twoPI/(NB_gaus-1))/(2*sigma*sigma)+(y-mu_y*twoPI/(NB_gaus-1))*(y-mu_y*twoPI/(NB_gaus-1))/(2*sigma*sigma)));
+				}
+			}
+			for(int mu_x = 0; mu_x < NB_gaus-1; mu_x++){
+				for(int mu_y = 0; mu_y < NB_gaus-1; mu_y++){
+					curandState_t state_x;
+					curand_init((mu_x+1)*mu_y*mu_y, 0, 0, &state_x);
+					ptype RAND_gaus_x = ((ptype)(curand(&state_x)%1000)-500)/100000;
+					curandState_t state_y;
+					curand_init((mu_y+1)*mu_x*mu_x, 0, 0, &state_y);
+					ptype RAND_gaus_y = ((ptype)(curand(&state_y)%1000)-500)/100000;
+					ret -= 1/(twoPI*sigma*sigma)*exp(-((x-(2*mu_x+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_x)*(x-(2*mu_x+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_x)/(2*sigma*sigma)+(y-(2*mu_y+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_y)*(y-(2*mu_y+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_y)/(2*sigma*sigma)));
+				}
+			}
+			//curandState_t state;
+			//curand_init(floor(y * 16384) * 16384 + floor(x * 16384), 0, 0, &state);
+			//ret *= 1+((ptype)(curand(&state)%1000)-500)/100000;
+			return ret - 0.008857380480028442;
+			break;
+		}
+		default:  //default case goes to stationary
+		{
+			x = x - (x>0)*((int)(x/twoPI))*twoPI - (x<0)*((int)(x/twoPI)-1)*twoPI;
+			y = y - (y>0)*((int)(y/twoPI))*twoPI - (y<0)*((int)(y/twoPI)-1)*twoPI;
+
+			return cos(x)*cos(y);
+			break;
+		}
 	}
-	else	//default case goes to stationary
-	{
-		x = x - (x>0)*((int)(x/twoPI))*twoPI - (x<0)*((int)(x/twoPI)-1)*twoPI;
-		y = y - (y>0)*((int)(y/twoPI))*twoPI - (y<0)*((int)(y/twoPI)-1)*twoPI;
-		
-		return cos(x)*cos(y);
-	}
+//	if(simulation_num == 0)  // 4_nodes
+//	{
+//		x = x - (x>0)*((int)(x/twoPI))*twoPI - (x<0)*((int)(x/twoPI)-1)*twoPI;
+//		y = y - (y>0)*((int)(y/twoPI))*twoPI - (y<0)*((int)(y/twoPI)-1)*twoPI;
+//
+//		return cos(x) + cos(y) + 0.6*cos(2*x) + 0.2*cos(3*x);
+//	}
+//	else if(simulation_num == 1)  // quadropole
+//	{
+//		ptype ret = 0;
+//		for(int iy = -2; iy <= 2; iy++)
+//			for(int ix = -2; ix <= 2; ix++)
+//			{
+//				ptype dx = x - PI/2 + ix * 2*PI;
+//				ptype dy = y - PI/2 + iy * 2*PI;
+//				ptype A = 0.6258473;
+//				ptype s = 0.5;
+//				ptype B = A/(s*s*s*s) * (dx * dy) * (dx*dx + dy*dy - 6*s*s);
+//				ptype D = (dx*dx + dy*dy)/(2*s*s);
+//				ret += B * exp(-D);
+//			}
+//			return ret;
+//	}
+//	else if(simulation_num == 2)  // two vortices
+//	{
+//		ptype ret = 0;
+//		for(int iy = -1; iy <= 1; iy++)
+//			for(int ix = -1; ix <= 1; ix++)
+//			{
+//				ret += sin(0.5*(x + twoPI*ix))*sin(0.5*(x + twoPI*ix))*sin(0.5*((y + twoPI*iy) + twoPI*iy))*sin(0.5*((y + twoPI*iy) + twoPI*iy)) * (exp(-(((x + twoPI*ix) - PI)*((x + twoPI*ix) - PI) + ((y + twoPI*iy) - 0.33*twoPI)*((y + twoPI*iy) - 0.33*twoPI))*5) +
+//											exp(-(((x + twoPI*ix) - PI)*((x + twoPI*ix) - PI) + ((y + twoPI*iy) - 0.67*twoPI)*((y + twoPI*iy) - 0.67*twoPI))*5));		 //two votices of same size
+//			}
+//		return ret;
+//	}
+//	else if(simulation_num == 3)  // three vortices
+//	{
+//		//three vortices
+//		ptype ret = 0;
+//		ptype LX = PI/2;
+//		ptype LY = PI/(2.0*sqrt(2.0));
+//
+//		for(int iy = -1; iy <= 1; iy++)
+//			for(int ix = -1; ix <= 1; ix++)
+//			{
+//				ret += sin(0.5*(x + twoPI*ix))*sin(0.5*(x + twoPI*ix))*sin(0.5*((y + twoPI*iy) + twoPI*iy))*sin(0.5*((y + twoPI*iy) + twoPI*iy)) *
+//							(
+//							+	exp(-(((x + twoPI*ix) - PI - LX)*((x + twoPI*ix) - PI - LX) + ((y + twoPI*iy) - PI)*((y + twoPI*iy) - PI))*5)
+//							+	exp(-(((x + twoPI*ix) - PI + LX)*((x + twoPI*ix) - PI + LX) + ((y + twoPI*iy) - PI)*((y + twoPI*iy) - PI))*5)
+//							-	exp(-(((x + twoPI*ix) - PI + LX)*((x + twoPI*ix) - PI + LX) + ((y + twoPI*iy) - PI - LY)*((y + twoPI*iy) - PI - LY))*5)
+//							);		 //two votices of same size
+//			}
+//		return ret;
+//	}
+//	else if(simulation_num == 4)  // single_shear_layer
+//	{
+//		//single shear layer
+//		ptype delta = 50;
+//		ptype delta2 = 0.01;
+//		ptype ret = 0;
+//		for(int iy = -1; iy <= 1; iy++)
+//			for(int iy = -1; iy <= 1; iy++)
+//				{
+//					ret +=    (1 + delta2 * cos(2*x))  *    exp( - delta * (y - PI) * (y - PI) );
+//				}
+//		ret /= 9;
+//		return ret;
+//	}
+//	else if(simulation_num == 5)  // turbulence_gaussienne
+//	{
+//		x = fmod(x, twoPI);
+//		x = (x < 0)*(twoPI+x) + (x > 0)*(x);
+//		y = fmod(y, twoPI);
+//		y = (y < 0)*(twoPI+y) + (y > 0)*(y);
+//		int NB_gaus = 8;		//NB_gaus = 6;sigma = 0.24;
+//		ptype sigma = 0.2;
+//		ptype ret = 0;
+//		for(int mu_x = 0; mu_x < NB_gaus; mu_x++){
+//			for(int mu_y = 0; mu_y < NB_gaus; mu_y++){
+//				ret += 1/(twoPI*sigma*sigma)*exp(-((x-mu_x*twoPI/(NB_gaus-1))*(x-mu_x*twoPI/(NB_gaus-1))/(2*sigma*sigma)+(y-mu_y*twoPI/(NB_gaus-1))*(y-mu_y*twoPI/(NB_gaus-1))/(2*sigma*sigma)));
+//			}
+//		}
+//		for(int mu_x = 0; mu_x < NB_gaus-1; mu_x++){
+//			for(int mu_y = 0; mu_y < NB_gaus-1; mu_y++){
+//				curandState_t state_x;
+//				curand_init((mu_x+1)*mu_y*mu_y, 0, 0, &state_x);
+//				ptype RAND_gaus_x = ((ptype)(curand(&state_x)%1000)-500)/100000;
+//				curandState_t state_y;
+//				curand_init((mu_y+1)*mu_x*mu_x, 0, 0, &state_y);
+//				ptype RAND_gaus_y = ((ptype)(curand(&state_y)%1000)-500)/100000;
+//				ret -= 1/(twoPI*sigma*sigma)*exp(-((x-(2*mu_x+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_x)*(x-(2*mu_x+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_x)/(2*sigma*sigma)+(y-(2*mu_y+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_y)*(y-(2*mu_y+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_y)/(2*sigma*sigma)));
+//			}
+//		}
+//		//curandState_t state;
+//		//curand_init(floor(y * 16384) * 16384 + floor(x * 16384), 0, 0, &state);
+//		//ret *= 1+((ptype)(curand(&state)%1000)-500)/100000;
+//		return ret - 0.008857380480028442;
+//	}
+//	else	//default case goes to stationary
+//	{
+//		x = x - (x>0)*((int)(x/twoPI))*twoPI - (x<0)*((int)(x/twoPI)-1)*twoPI;
+//		y = y - (y>0)*((int)(y/twoPI))*twoPI - (y<0)*((int)(y/twoPI)-1)*twoPI;
+//
+//		return cos(x)*cos(y);
+//	}
 
 }
 
@@ -958,7 +1043,7 @@ __device__ ptype device_initial_W_discret(ptype x, ptype y, ptype *W_initial, in
 *******************************************************************/
 
 
-void Zoom(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX_stack, ptype *Dev_ChiY_stack, ptype *Host_ChiX_stack_RAM_0, ptype *Host_ChiY_stack_RAM_0, ptype *Host_ChiX_stack_RAM_1, ptype *Host_ChiY_stack_RAM_1, ptype *Host_ChiX_stack_RAM_2, ptype *Host_ChiY_stack_RAM_2, ptype *Host_ChiX_stack_RAM_3, ptype *Host_ChiY_stack_RAM_3, ptype *Dev_ChiX, ptype *Dev_ChiY, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, ptype *W_real, cufftHandle cufftPlan_fine, ptype *W_initial, cuPtype *Dev_Complex_fine, string simulationName, ptype L)
+void Zoom(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX_stack, ptype *Dev_ChiY_stack, ptype *Host_ChiX_stack_RAM_0, ptype *Host_ChiY_stack_RAM_0, ptype *Host_ChiX_stack_RAM_1, ptype *Host_ChiY_stack_RAM_1, ptype *Host_ChiX_stack_RAM_2, ptype *Host_ChiY_stack_RAM_2, ptype *Host_ChiX_stack_RAM_3, ptype *Host_ChiY_stack_RAM_3, ptype *Dev_ChiX, ptype *Dev_ChiY, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, ptype *W_real, cufftHandle cufftPlan_fine, ptype *W_initial, cuPtype *Dev_Complex_fine, string simulationName, int simulation_num, ptype L)
 {
 	ptype *ws;
 	ws = new ptype[Grid_fine->N];
@@ -988,7 +1073,7 @@ void Zoom(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX_stac
 		
 		
 		//kernel_apply_map_stack_to_W_custom<<<Gsf->blocksPerGrid, Gsf->threadsPerBlock>>>(devChiX_stack, devChiY_stack, devChiX, devChiY, devWs, stack_map_passed, Gc->NX, Gc->NY, Gc->h, Gsf->NX, Gsf->NY, Gsf->h, xMin*L, xMax*L, yMin*L, yMax*L, W_initial);	
-		kernel_apply_map_stack_to_W_custom_part_All(Grid_coarse, Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, W_real, Dev_Complex_fine, stack_length, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, mem_RAM, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, xMin*L, xMax*L, yMin*L, yMax*L, W_initial);
+		kernel_apply_map_stack_to_W_custom_part_All(Grid_coarse, Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, W_real, Dev_Complex_fine, stack_length, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, mem_RAM, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, xMin*L, xMax*L, yMin*L, yMax*L, W_initial, simulation_num);
 		
 		
 		cudaMemcpy(ws, W_real, Grid_fine->sizeNReal, cudaMemcpyDeviceToHost);

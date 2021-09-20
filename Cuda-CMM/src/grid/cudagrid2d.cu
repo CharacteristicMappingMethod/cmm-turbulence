@@ -2,7 +2,7 @@
 
 
 
-ptype ep = 1e-6;
+ptype ep = 1e-4;
 ptype epdx[4] = {ep, ep, -ep, -ep};
 ptype epdy[4] = {ep, -ep, -ep, ep};
 

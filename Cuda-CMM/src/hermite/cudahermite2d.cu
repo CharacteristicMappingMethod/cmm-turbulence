@@ -4,9 +4,22 @@
 /*******************************************************************
 *						  Hermite interpolation					   *
 *******************************************************************/
+// this computation is used very often, using it as a function greatly reduces code-redundancy
+__device__ ptype device_hermite_mult(ptype *H, ptype b[][4], int I[], long int N, ptype h) // @suppress("Type cannot be resolved")
+{
+	return     b[0][0]*(H[I[0]])
+			+  b[0][1]*(H[I[1]])
+			+  b[1][0]*(H[I[2]])
+			+  b[1][1]*(H[I[3]])
+
+			+ (b[0][2]* H[1*N+I[0]] + b[0][3]* H[1*N+I[1]] + b[1][2]* H[1*N+I[2]] + b[1][3]* H[1*N+I[3]]) * (h)
+			+ (b[2][0]* H[2*N+I[0]] + b[2][1]* H[2*N+I[1]] + b[3][0]* H[2*N+I[2]] + b[3][1]* H[2*N+I[3]]) * (h)
+	        + (b[2][2]* H[3*N+I[0]] + b[2][3]* H[3*N+I[1]] + b[3][2]* H[3*N+I[2]] + b[3][3]* H[3*N+I[3]]) * (h*h);
+}
 
 
-__device__ ptype device_hermite_interpolate(ptype *H, ptype x, ptype y, int NX, int NY, ptype h)
+
+__device__ ptype device_hermite_interpolate(ptype *H, ptype x, ptype y, int NX, int NY, ptype h) // @suppress("Type cannot be resolved")
 {
 	//cell index
 	int Ix0 = floor(x/h);
@@ -25,12 +38,9 @@ __device__ ptype device_hermite_interpolate(ptype *H, ptype x, ptype y, int NX, 
 	
 	Ix1 = (Ix1+100 * NX)%NX;
 	Iy1 = (Iy1+100 * NY)%NY;
-	
-	
-	int I00 = Iy0 * NX + Ix0;
-	int I10 = Iy0 * NX + Ix1;
-	int I01 = Iy1 * NX + Ix0;
-	int I11 = Iy1 * NX + Ix1;
+
+	// I00, I10, I01, I11 in Vector to shorten function calls
+	int I[4] = {Iy0 * NX + Ix0, Iy0 * NX + Ix1, Iy1 * NX + Ix0, Iy1 * NX + Ix1};
 	
 	
 	ptype bX[4] = {Hf(dx), Hf(1-dx), Hg(dx), -Hg(1-dx)};
@@ -43,17 +53,7 @@ __device__ ptype device_hermite_interpolate(ptype *H, ptype x, ptype y, int NX, 
 						bX[0]*bY[2], bX[1]*bY[2], bX[2]*bY[2], bX[3]*bY[2],
 						bX[0]*bY[3], bX[1]*bY[3], bX[2]*bY[3], bX[3]*bY[3]
 					};
-	
-	
-	return      + b[0][0]*(H[I00])
-				+ b[0][1]*(H[I10])
-				+ b[1][0]*(H[I01]) 
-				+ b[1][1]*(H[I11])
-				
-				+ (b[0][2]* H[1*N+I00]  + b[0][3]* H[1*N+I10]  + b[1][2]* H[1*N+I01]  + b[1][3]* H[1*N+I11])  * (h)
-				+ (b[2][0]* H[2*N+I00]  + b[2][1]* H[2*N+I10]  + b[3][0]* H[2*N+I01]  + b[3][1]* H[2*N+I11])  * (h)
-				+ (b[2][2]* H[3*N+I00]  + b[2][3]* H[3*N+I10]  + b[3][2]* H[3*N+I01]  + b[3][3]* H[3*N+I11])  * (h*h);	
-	
+	return device_hermite_mult(H, b, I, N, h);
 }
 
 
@@ -77,11 +77,8 @@ __device__ ptype device_hermite_interpolate_dx(ptype *H, ptype x, ptype y, int N
 	Ix1 = (Ix1+100 * NX)%NX;
 	Iy1 = (Iy1+100 * NY)%NY;
 	
-		
-	int I00 = Iy0 * NX + Ix0;
-	int I10 = Iy0 * NX + Ix1;
-	int I01 = Iy1 * NX + Ix0;
-	int I11 = Iy1 * NX + Ix1;
+	// I00, I10, I01, I11 in Vector to shorten function calls
+	int I[4] = {Iy0 * NX + Ix0, Iy0 * NX + Ix1, Iy1 * NX + Ix0, Iy1 * NX + Ix1};
 	
 	
 	ptype bX[4] = {Hfx(dx), -Hfx(1-dx), Hgx(dx), Hgx(1-dx)};
@@ -94,17 +91,7 @@ __device__ ptype device_hermite_interpolate_dx(ptype *H, ptype x, ptype y, int N
 						bX[0]*bY[2], bX[1]*bY[2], bX[2]*bY[2], bX[3]*bY[2],
 						bX[0]*bY[3], bX[1]*bY[3], bX[2]*bY[3], bX[3]*bY[3]
 					};
-	
-	
-	return		( + b[0][0]*(H[I00])
-				+ b[0][1]*(H[I10])
-				+ b[1][0]*(H[I01])
-				+ b[1][1]*(H[I11])
-				
-				+ (b[0][2]* H[1*N+I00] + b[0][3]* H[1*N+I10] + b[1][2]* H[1*N+I01] + b[1][3]* H[1*N+I11]) * (h)
-				+ (b[2][0]* H[2*N+I00] + b[2][1]* H[2*N+I10] + b[3][0]* H[2*N+I01] + b[3][1]* H[2*N+I11]) * (h)
-			        + (b[2][2]* H[3*N+I00] + b[2][3]* H[3*N+I10] + b[3][2]* H[3*N+I01] + b[3][3]* H[3*N+I11]) * (h*h) )/h;
-	
+	return device_hermite_mult(H, b, I, N, h)/h;
 }
 
 
@@ -128,11 +115,8 @@ __device__ ptype device_hermite_interpolate_dy(ptype *H, ptype x, ptype y, int N
 	Ix1 = (Ix1+100 * NX)%NX;
 	Iy1 = (Iy1+100 * NY)%NY;
 	
-	
-	int I00 = Iy0 * NX + Ix0;
-	int I10 = Iy0 * NX + Ix1;
-	int I01 = Iy1 * NX + Ix0;
-	int I11 = Iy1 * NX + Ix1;
+	// I00, I10, I01, I11 in Vector to shorten function calls
+	int I[4] = {Iy0 * NX + Ix0, Iy0 * NX + Ix1, Iy1 * NX + Ix0, Iy1 * NX + Ix1};
 	
 	
 	ptype bX[4] = {Hf(dx), Hf(1-dx), Hg(dx), -Hg(1-dx)};
@@ -145,24 +129,131 @@ __device__ ptype device_hermite_interpolate_dy(ptype *H, ptype x, ptype y, int N
 						bX[0]*bY[2], bX[1]*bY[2], bX[2]*bY[2], bX[3]*bY[2],
 						bX[0]*bY[3], bX[1]*bY[3], bX[2]*bY[3], bX[3]*bY[3]
 					};
-	
-	
-	return	( + b[0][0]*(H[I00])
-				+ b[0][1]*(H[I10])
-				+ b[1][0]*(H[I01])
-				+ b[1][1]*(H[I11])
-				
-				+ (b[0][2]* H[1*N+I00] + b[0][3]* H[1*N+I10] + b[1][2]* H[1*N+I01] + b[1][3]* H[1*N+I11]) * (h)
-				+ (b[2][0]* H[2*N+I00] + b[2][1]* H[2*N+I10] + b[3][0]* H[2*N+I01] + b[3][1]* H[2*N+I11]) * (h)
-		                + (b[2][2]* H[3*N+I00] + b[2][3]* H[3*N+I10] + b[3][2]* H[3*N+I01] + b[3][3]* H[3*N+I11]) * (h*h) )/h;
-	
+	return device_hermite_mult(H, b, I, N, h)/h;
 }
 
 
-__device__ void device_hermite_interpolate_dx_dy(ptype *H, ptype x, ptype y, ptype *fx, ptype *fy, int NX, int NY, ptype h)																					
+__device__ void device_hermite_interpolate_dx_dy(ptype *H, ptype x, ptype y, ptype *fx, ptype *fy, int NX, int NY, ptype h)
 {
 	*fx = device_hermite_interpolate_dx(H, x, y, NX, NY, h);
 	*fy = device_hermite_interpolate_dy(H, x, y, NX, NY, h);
+}
+
+
+// special function for map advection to compute dx and dy directly at the same positions
+__device__ void device_hermite_interpolate_dx_dy_1(ptype *H1, ptype x, ptype y, ptype *u1, ptype *v1, int NX, int NY, ptype h)
+{
+	// build up all needed positioning
+	//cell index
+	int Ix0 = floor(x/h);
+	int Iy0 = floor(y/h);
+	int Ix1 = Ix0 + 1;
+	int Iy1 = Iy0 + 1;
+
+	//dx, dy
+	ptype dx = x/h - Ix0;
+	ptype dy = y/h - Iy0;
+
+	long int N = NX*NY;
+
+	Ix0 = (Ix0+100 * NX)%NX;
+	Iy0 = (Iy0+100 * NY)%NY;
+
+	Ix1 = (Ix1+100 * NX)%NX;
+	Iy1 = (Iy1+100 * NY)%NY;
+
+	// I00, I10, I01, I11 in Vector to shorten function calls
+	int I[4] = {Iy0 * NX + Ix0, Iy0 * NX + Ix1, Iy1 * NX + Ix0, Iy1 * NX + Ix1};
+
+	// computing all dx-interpolations, giving -v
+	{
+		ptype bX[4] = {Hfx(dx), -Hfx(1-dx), Hgx(dx), Hgx(1-dx)};
+		ptype bY[4] = {Hf(dy), Hf(1-dy), Hg(dy), -Hg(1-dy)};
+
+
+		ptype b[4][4] = {
+							bX[0]*bY[0], bX[1]*bY[0], bX[2]*bY[0], bX[3]*bY[0],
+							bX[0]*bY[1], bX[1]*bY[1], bX[2]*bY[1], bX[3]*bY[1],
+							bX[0]*bY[2], bX[1]*bY[2], bX[2]*bY[2], bX[3]*bY[2],
+							bX[0]*bY[3], bX[1]*bY[3], bX[2]*bY[3], bX[3]*bY[3]
+						};
+		*v1 =  -device_hermite_mult(H1, b, I, N, h)/h;
+
+	}
+	// compute all dy-interpolations, giving u
+	{
+		ptype bX[4] = {Hf(dx), Hf(1-dx), Hg(dx), -Hg(1-dx)};
+		ptype bY[4] = {Hfx(dy), -Hfx(1-dy), Hgx(dy), Hgx(1-dy)};
+
+
+		ptype b[4][4] = {
+							bX[0]*bY[0], bX[1]*bY[0], bX[2]*bY[0], bX[3]*bY[0],
+							bX[0]*bY[1], bX[1]*bY[1], bX[2]*bY[1], bX[3]*bY[1],
+							bX[0]*bY[2], bX[1]*bY[2], bX[2]*bY[2], bX[3]*bY[2],
+							bX[0]*bY[3], bX[1]*bY[3], bX[2]*bY[3], bX[3]*bY[3]
+						};
+		*u1 = 	device_hermite_mult(H1, b, I, N, h)/h;
+	}
+}
+
+
+// make it easier for RKthree, avoid redundant operations, naming is set to u and v to avoid confusion
+__device__ void  device_hermite_interpolate_dx_dy_3(ptype *H1, ptype *H2, ptype *H3, ptype x, ptype y, ptype *u1, ptype *v1, ptype *u2, ptype *v2, ptype *u3, ptype *v3, int NX, int NY, ptype h)
+{
+	// build up all needed positioning
+	//cell index
+	int Ix0 = floor(x/h);
+	int Iy0 = floor(y/h);
+	int Ix1 = Ix0 + 1;
+	int Iy1 = Iy0 + 1;
+
+	//dx, dy
+	ptype dx = x/h - Ix0;
+	ptype dy = y/h - Iy0;
+
+	long int N = NX*NY;
+
+	Ix0 = (Ix0+100 * NX)%NX;
+	Iy0 = (Iy0+100 * NY)%NY;
+
+	Ix1 = (Ix1+100 * NX)%NX;
+	Iy1 = (Iy1+100 * NY)%NY;
+
+	// I00, I10, I01, I11 in Vector to shorten function calls
+	int I[4] = {Iy0 * NX + Ix0, Iy0 * NX + Ix1, Iy1 * NX + Ix0, Iy1 * NX + Ix1};
+
+	// computing all dx-interpolations, giving -v
+	{
+		ptype bX[4] = {Hfx(dx), -Hfx(1-dx), Hgx(dx), Hgx(1-dx)};
+		ptype bY[4] = {Hf(dy), Hf(1-dy), Hg(dy), -Hg(1-dy)};
+	
+	
+		ptype b[4][4] = {
+							bX[0]*bY[0], bX[1]*bY[0], bX[2]*bY[0], bX[3]*bY[0],
+							bX[0]*bY[1], bX[1]*bY[1], bX[2]*bY[1], bX[3]*bY[1],
+							bX[0]*bY[2], bX[1]*bY[2], bX[2]*bY[2], bX[3]*bY[2],
+							bX[0]*bY[3], bX[1]*bY[3], bX[2]*bY[3], bX[3]*bY[3]
+						};
+		*v1 = -device_hermite_mult(H1, b, I, N, h)/h;
+		*v2 = -device_hermite_mult(H2, b, I, N, h)/h;
+		*v3 = -device_hermite_mult(H3, b, I, N, h)/h;
+	}
+	// compute all dy-interpolations, giving u
+	{
+		ptype bX[4] = {Hf(dx), Hf(1-dx), Hg(dx), -Hg(1-dx)};
+		ptype bY[4] = {Hfx(dy), -Hfx(1-dy), Hgx(dy), Hgx(1-dy)};
+	
+	
+		ptype b[4][4] = {
+							bX[0]*bY[0], bX[1]*bY[0], bX[2]*bY[0], bX[3]*bY[0],
+							bX[0]*bY[1], bX[1]*bY[1], bX[2]*bY[1], bX[3]*bY[1],
+							bX[0]*bY[2], bX[1]*bY[2], bX[2]*bY[2], bX[3]*bY[2],
+							bX[0]*bY[3], bX[1]*bY[3], bX[2]*bY[3], bX[3]*bY[3]
+						};
+		*u1 = 	device_hermite_mult(H1, b, I, N, h)/h;
+		*u2 = 	device_hermite_mult(H2, b, I, N, h)/h;
+		*u3 = 	device_hermite_mult(H3, b, I, N, h)/h;
+	}
 }
 
 

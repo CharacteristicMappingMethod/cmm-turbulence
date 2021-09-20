@@ -7,7 +7,7 @@ struct stat st = {0};
 
 
 
-void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, double final_time_override, double time_step_factor)
+void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale, string time_integration, double final_time_override, double time_step_factor)
 {
 	
 	/*******************************************************************
@@ -22,6 +22,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	ptype t0, dt, tf;													// time - initial, step, final
 	int iterMax;														// maximum iteration count
 	string simulationName;												// name of the simulation: files get stored in the directory of this name
+	int simulation_num;													// needed for activation in device code
 	int snapshots_per_second;
 	int save_buffer_count;												// iterations after which files should be saved
 	int map_stack_length;												// this parameter is set to avoide memory overflow on GPU
@@ -35,24 +36,15 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	double ref_coarse_grid = 128;										// ref value to be compared for stack copzing to cpu, height still unclear
 	
 	//initialization of parameters
-	simulationName = problem_name;
+	simulationName = intial_condition;
 	LX = twoPI;	
 	NX_coarse = NY_coarse = grid_scale;
 	NX_fine = NY_fine = fine_grid_scale;
 	t0 = 0.0;
 
 	// time steps per second used by 4_nodes
-	ptype tmp_4nodes = 128;
+	ptype tmp_4nodes = 64;
 
-	/*
-	 *  Initial conditions
-	 *  "4_nodes" 				-	flow containing exactly 4 fourier modes with two vortices
-	 *  "quadropole"			-	???
-	 *  "three_vortices"		-	???
-	 *  "single_shear_layer"	-	shear layer problem forming helmholtz-instabilities, merging into two vortices which then merges into one big vortex
-	 *  "two_vortices"			-	???
-	 *  "turbulence_gaussienne"	-	???
-	 */
 	// "4_nodes"		"quadropole"		"three_vortices"		"single_shear_layer"		"two_votices"
 	if(simulationName == "4_nodes")
 	{
@@ -60,20 +52,31 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 		snapshots_per_second = 1;
 		dt = 1.0/ tmp_4nodes;//(NX_coarse * grid_by_time);
 		tf = 1;
+		simulation_num = 0;  // unique identifier of this simulation for device
 	}
 	else if(simulationName == "quadropole")
 	{
 		grid_by_time = 8.0;
 		snapshots_per_second = 20;
 		dt = 1.0/(NX_coarse * grid_by_time);
-		tf = 50;		
+		tf = 50;
+		simulation_num = 1;  // unique identifier of this simulation for device
+	}
+	else if(simulationName == "two_votices")
+	{
+		grid_by_time = 8.0;
+		snapshots_per_second = 1;
+		dt = 1.0/(NX_coarse * grid_by_time);
+		tf = 10;
+		simulation_num = 2;  // unique identifier of this simulation for device
 	}
 	else if(simulationName == "three_vortices")
 	{
 		grid_by_time = 8.0;
 		snapshots_per_second = 10;
 		dt = 1.0/(NX_coarse * grid_by_time);
-		tf = 100;		
+		tf = 100;
+		simulation_num = 3;  // unique identifier of this simulation for device
 	}
 	else if(simulationName == "single_shear_layer")
 	{
@@ -81,26 +84,22 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 		snapshots_per_second = 1;
 		dt = 1.0/(NX_coarse * grid_by_time);
 		tf = 50; //50;//0.5;//100;//300;//
-	}
-	else if(simulationName == "two_votices")
-	{
-		grid_by_time = 8.0;
-		snapshots_per_second = 1;
-		dt = 1.0/(NX_coarse * grid_by_time);
-		tf = 10;		
+		simulation_num = 4;  // unique identifier of this simulation for device
 	}
 	else if(simulationName == "turbulence_gaussienne")
 	{
 		grid_by_time = 1.953125;
 		snapshots_per_second = 2;
 		dt = 1.0/(NX_coarse * grid_by_time);
-		tf = 50;		
+		tf = 50;
+		simulation_num = 5;  // unique identifier of this simulation for device
 	}
 	else 
 	{
 		cout<<"Unexpected problem name specified\n";
 		return;
 	}
+	const int simulation_num_c = simulation_num;  // now declare it as const, can lead to some improvements
 	
 	
 	//parameter overrides
@@ -145,19 +144,26 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	
 	// create naming for folder structure, dependent on time integration
 	string sim_name_addition;
-	if (TIME_INTEGRATION == "EulerExp") {
+	int time_integration_num;
+	if (time_integration == "EulerExp") {
 		sim_name_addition = "_DEV_EulExp_";
+		time_integration_num = 0;
 	}
-	else if (TIME_INTEGRATION == "ABTwo") {
+	else if (time_integration == "ABTwo") {
 		sim_name_addition = "_DEV_AB2_";
+		time_integration_num = 1;
 	}
-	else if (TIME_INTEGRATION == "RKThree") {
+	else if (time_integration == "RKThree") {
 		sim_name_addition = "_ULYSSE_";
+		time_integration_num = 2;
 	}
-	else sim_name_addition = "_DEV_UNNOWN_";
+	else {
+		sim_name_addition = "_DEV_UNNOWN_";
+		time_integration_num = 0;
+	}
 
 	simulationName = simulationName + sim_name_addition + "C" + std::to_string(grid_scale) + "_F" + std::to_string(fine_grid_scale) + "_t" + std::to_string(tmp_4nodes).substr(0, std::to_string(tmp_4nodes).find(".")) + "_T" + std::to_string(tf).substr(0, std::to_string(tf).find(".")); //"vortex_shear_1000_4";
-    simulationName = create_directory_structure(simulationName, NX_coarse, NX_fine, dt, tf, save_buffer_count, show_progress_at, iterMax, map_stack_length, inCompThreshold);
+    simulationName = create_directory_structure(simulationName, NX_coarse, NX_fine, dt, tf, save_buffer_count, show_progress_at, iterMax, map_stack_length, inCompThreshold, time_integration);
     Logger logger(simulationName);
     cout<<"Name of simulation : "<<simulationName<<endl;
 	
@@ -626,7 +632,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	//cudaDeviceSynchronize();
 	
 	//setting initial conditions
-	translate_initial_condition_through_map_stack(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_ChiX, Dev_ChiY, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Dev_W_fine, Dev_W_H_fine_real, cufftPlan_fine, Dev_W_H_initial, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
+	translate_initial_condition_through_map_stack(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_ChiX, Dev_ChiY, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Dev_W_fine, Dev_W_H_fine_real, cufftPlan_fine, Dev_W_H_initial, simulation_num_c, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
 	
 	//in step 1, Psi_p stays the same old one
 
@@ -657,7 +663,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	writeAllRealToBinaryFile(Grid_coarse.N, Host_W_coarse, simulationName, "vorticity_coarse/w_coarse_0");
     cudaDeviceSynchronize();
 
-    kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_2048, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_2048, Dev_Complex_fine_2048, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_2048.NX, Grid_2048.NY, Grid_2048.h, Dev_W_H_initial);
+    kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_2048, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_2048, Dev_Complex_fine_2048, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_2048.NX, Grid_2048.NY, Grid_2048.h, Dev_W_H_initial, simulation_num_c);
     cudaMemcpy(Host_2048_4, Dev_W_2048, Grid_2048.sizeNReal, cudaMemcpyDeviceToHost);
     writeAllRealToBinaryFile(Grid_2048.N, Host_2048_4, simulationName, "vorticity_fine/w_1024_0");
 
@@ -672,7 +678,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 
     // They're everywhere ! need function
 
-    kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_2048, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_2048, Dev_Complex_fine_2048, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_2048.NX, Grid_2048.NY, Grid_2048.h, Dev_W_H_initial);
+    kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_2048, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_2048, Dev_Complex_fine_2048, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_2048.NX, Grid_2048.NY, Grid_2048.h, Dev_W_H_initial, simulation_num_c);
 	cudaMemcpy(Host_2048_4, Dev_W_2048, Grid_2048.sizeNReal, cudaMemcpyDeviceToHost);
 	writeAllRealToBinaryFile(Grid_2048.N, Host_2048_4, simulationName, "w_2048_0");
 
@@ -849,7 +855,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
             }
         #endif
 
-        kernel_advect_using_stream_hermite2<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Dev_ChiDualX, Dev_ChiDualY, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, t, dt, ep);	// time cost
+        kernel_advect_using_stream_hermite2<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Dev_ChiDualX, Dev_ChiDualY, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, t, dt, ep, time_integration_num);	// time cost
 
         //kernel_advect_using_stream_hermite2<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Dev_ChiDualX, Dev_ChiDualY, Dev_Psi_2048, Dev_Psi_2048_previous, Dev_Psi_2048_previous_p, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, t, dt, ep);	// time cost
         kernel_update_map_from_dual<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock, 0, streams[0]>>>(Dev_ChiX, Dev_ChiY, Dev_ChiDualX, Dev_ChiDualY, Grid_coarse.NX, Grid_coarse.NY, ep);
@@ -930,7 +936,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 			#endif
 			
 			//adjusting initial conditions
-			translate_initial_condition_through_map_stack(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_ChiX, Dev_ChiY, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Dev_W_fine, Dev_W_H_fine_real, cufftPlan_fine, Dev_W_H_initial, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
+			translate_initial_condition_through_map_stack(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_ChiX, Dev_ChiY, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Dev_W_fine, Dev_W_H_fine_real, cufftPlan_fine, Dev_W_H_initial, simulation_num_c, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
 			
 			
 			if (map_stack_ctr%map_stack_length == 0){
@@ -1012,7 +1018,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 
 
            if(loop_ctr == 110 || loop_ctr == 126){
-                kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_2048, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_2048, Dev_Complex_fine_2048, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_2048.NX, Grid_2048.NY, Grid_2048.h, Dev_W_H_initial);
+                kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_2048, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_2048, Dev_Complex_fine_2048, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_2048.NX, Grid_2048.NY, Grid_2048.h, Dev_W_H_initial, simulation_num_c);
                 cudaMemcpy(Host_2048_4, Dev_W_2048, Grid_2048.sizeNReal, cudaMemcpyDeviceToHost);
                 writeAllRealToBinaryFile(Grid_2048.N, Host_2048_4, simulationName, "vorticity_fine/w_1024_" + std::to_string(loop_ctr));
 
@@ -1058,11 +1064,11 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 
                 #endif
 				if (save_ctr%1==0){
-					kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_fine, Dev_Complex_fine, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h, Dev_W_H_initial);
+					kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_fine, Dev_Complex_fine, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h, Dev_W_H_initial, simulation_num_c);
                     cudaMemcpy(Host_W_fine, Dev_W_fine, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
                     writeAllRealToBinaryFile(Grid_fine.N, Host_W_fine, simulationName, "vorticity_fine/w_fine_" + ss.str());
 
-                    kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_2048, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_2048, Dev_Complex_fine_2048, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_2048.NX, Grid_2048.NY, Grid_2048.h, Dev_W_H_initial);
+                    kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_2048, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_2048, Dev_Complex_fine_2048, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_2048.NX, Grid_2048.NY, Grid_2048.h, Dev_W_H_initial, simulation_num_c);
                     cudaMemcpy(Host_2048_4, Dev_W_2048, Grid_2048.sizeNReal, cudaMemcpyDeviceToHost);
                     writeAllRealToBinaryFile(Grid_2048.N, Host_2048_4, simulationName, "vorticity_fine/w_1024_" + ss.str());
 
@@ -1141,7 +1147,7 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 	*						 Save final step						   *
 	*******************************************************************/
 	
-	kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_fine, Dev_Complex_fine, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h, Dev_W_H_initial);
+	kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_fine, Dev_Complex_fine, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h, Dev_W_H_initial, simulation_num_c);
 	cudaMemcpy(Host_W_fine, Dev_W_fine, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
 	writeAllRealToBinaryFile(Grid_fine.N, Host_W_fine, simulationName, "w_fine_final");
 	writeAllRealToBinaryFile(4*Grid_coarse.N, Host_Psi, simulationName, "Psi_final");
@@ -1304,11 +1310,11 @@ void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, dou
 *							 Remapping							   *
 *******************************************************************/
 
-void translate_initial_condition_through_map_stack(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX_stack, ptype *Dev_ChiY_stack, ptype *Host_ChiX_stack_RAM_0, ptype *Host_ChiY_stack_RAM_0, ptype *Host_ChiX_stack_RAM_1, ptype *Host_ChiY_stack_RAM_1, ptype *Host_ChiX_stack_RAM_2, ptype *Host_ChiY_stack_RAM_2, ptype *Host_ChiX_stack_RAM_3, ptype *Host_ChiY_stack_RAM_3, ptype *Dev_ChiX, ptype *Dev_ChiY, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, ptype *W_real, ptype *W_H_real, cufftHandle cufftPlan_fine, ptype *W_initial, cuPtype *Dev_Complex_fine, cuPtype *Dev_Hat_fine, cuPtype *Dev_Hat_fine_bis)
+void translate_initial_condition_through_map_stack(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX_stack, ptype *Dev_ChiY_stack, ptype *Host_ChiX_stack_RAM_0, ptype *Host_ChiY_stack_RAM_0, ptype *Host_ChiX_stack_RAM_1, ptype *Host_ChiY_stack_RAM_1, ptype *Host_ChiX_stack_RAM_2, ptype *Host_ChiY_stack_RAM_2, ptype *Host_ChiX_stack_RAM_3, ptype *Host_ChiY_stack_RAM_3, ptype *Dev_ChiX, ptype *Dev_ChiY, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, ptype *W_real, ptype *W_H_real, cufftHandle cufftPlan_fine, ptype *W_initial, int simulation_num_c, cuPtype *Dev_Complex_fine, cuPtype *Dev_Hat_fine, cuPtype *Dev_Hat_fine_bis)
 {
 	
 	// Vorticity on coarse grid to vorticity on fine grid
-	kernel_apply_map_stack_to_W_part_All(Grid_coarse, Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, W_real, Dev_Complex_fine, stack_length, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, mem_RAM, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, W_initial);
+	kernel_apply_map_stack_to_W_part_All(Grid_coarse, Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, W_real, Dev_Complex_fine, stack_length, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, mem_RAM, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, W_initial, simulation_num_c);
 	//kernel_apply_map_stack_to_W<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, W_real, stack_length, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, W_initial);
 	
 	kernel_real_to_complex<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_real, Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY);
@@ -1384,7 +1390,7 @@ void evaulate_stream_hermite(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, p
 *				     Creation of storage files					   *
 *******************************************************************/
 
-string create_directory_structure(string simulationName, int NX_coarse, int NX_fine, double dt, double T, int save_buffer_count, int show_progress_at, int iterMax, int map_stack_length, double inCompThreshold)
+string create_directory_structure(string simulationName, int NX_coarse, int NX_fine, double dt, double T, int save_buffer_count, int show_progress_at, int iterMax, int map_stack_length, double inCompThreshold, string time_integration)
 {
 	if (stat("data", &st) == -1) 
 	{
@@ -1414,13 +1420,13 @@ string create_directory_structure(string simulationName, int NX_coarse, int NX_f
 	else
 	{
         file<<"Simulation name \t\t:"<<simulationName<<endl;
-        if (TIME_INTEGRATION == "RKThree") {
+        if (time_integration == "RKThree") {
         	file<<"Time integration : Runge Kutta 3"<<endl;
         }
-        else if (TIME_INTEGRATION == "ABTwo") {
+        else if (time_integration == "ABTwo") {
         	file<<"Time integration : Adam Bashfords 2"<<endl;
         }
-        else if (TIME_INTEGRATION == "EulExp") {
+        else if (time_integration == "EulExp") {
         	file<<"Time integration : Euler explicit"<<endl;
         }
         else file<<"Time integration : Euler explicit"<<endl;
