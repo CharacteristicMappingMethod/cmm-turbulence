@@ -28,7 +28,7 @@ This code is developed to be built and run on Linux machines. In addition, an in
    - Check grid_scale and fine_grid_scale in Cuda-CMM/src/main2d.cpp to work with your GPU memory, the memory usage can be tested while the code is running with the command 'nvidia-smi'
    - Change mem_index in Cuda-CMM/src/simulation/cudaeuler2d.cu to a suitable number for your GPU memory. This value defines the amount of remappings to be saved on the GPU in MB and should only account for a fraction of the actual memory to give more space to other variables.
    - Change mem_ram in Cuda-CMM/src/simulation/cudaeuler2d.cu to match your CPU memory in MB. This value can be chosen arbitrarily high in comparison to your machines CPU RAM.
-   - Set the initial condition in Cuda-CMM/src/main2d.cpp and Cuda-CMM/src/grid/cudagrid2d.h
+   - Set the initial condition in Cuda-CMM/src/main2d.cpp
 
    Makefile:
    - Change the -arch flag in the make-file to match your GPU architecture. This specifies the name of the NVIDIA GPU architecture that the CUDA files will be compiled for. Further information regarding the architecture can be found at "https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#gpu-feature-list". Choose a version matching your architecture name.
