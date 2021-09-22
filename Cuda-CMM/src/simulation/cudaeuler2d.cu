@@ -315,16 +315,17 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	Host_ChiY = new ptype[4*Grid_coarse.N];							
 	cudaMalloc((void**)&Dev_ChiX, 4*Grid_coarse.sizeNReal);
 	cudaMalloc((void**)&Dev_ChiY, 4*Grid_coarse.sizeNReal);
-	// 4th order map update needs 8 stencil points
-	if (map_update_order == "4th") {
+	// 5th order map update needs 12 stencil points
+	if (map_update_num_c == 2) {
 		cudaMalloc((void**)&Dev_ChiDualX, 12*Grid_coarse.sizeNReal);
 		cudaMalloc((void**)&Dev_ChiDualY, 12*Grid_coarse.sizeNReal);
 	}
-	else if (map_update_order == "3rd") {
+	// 4th order map update needs 8 stencil points
+	else if (map_update_num_c == 1) {
 		cudaMalloc((void**)&Dev_ChiDualX, 8*Grid_coarse.sizeNReal);
 		cudaMalloc((void**)&Dev_ChiDualY, 8*Grid_coarse.sizeNReal);
 	}
-	// assume 2th order if different or not defined, needs 4 stencil points
+	// assume 3rd order if different or not defined, needs 4 stencil points
 	else {
 		cudaMalloc((void**)&Dev_ChiDualX, 4*Grid_coarse.sizeNReal);
 		cudaMalloc((void**)&Dev_ChiDualY, 4*Grid_coarse.sizeNReal);
@@ -939,6 +940,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 			
 		//resetting map and adding to stack
 		incomp_error[loop_ctr] = fmax(fabs(grad_chi_min - 1), fabs(grad_chi_max - 1));
+		cout<<"Step : "<<loop_ctr<<" , Incomp Error : "<<incomp_error[loop_ctr]<<endl;
 		#ifdef skip_remapping  // switch to disable or enable remapping for convergence stuff
 			if ( false ) {
 		#else

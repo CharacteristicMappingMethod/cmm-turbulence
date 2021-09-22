@@ -43,12 +43,12 @@ __global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, 
 		double c13 = +1.0/(40.0);  // 0th order, outer points
 		double c12 = -3.0/(20.0);  // 0th order, middle points
 		double c11 = +3.0/(8.0);  // 0th order, inner points
-		double c23 = 29.0/(252.0);  // 1th order, outer points
-		double c22 = 67.0/(504.0);  // 1th order, middle points
-		double c21 = -11.0/(252.0);  // 1th order, inner points
-		double c33 = +251.0/(6288.0);  // 1th order cross, outer points
+		double c23 = -11.0/(252.0);  // 1th order, outer points
+		double c22 = +67.0/(504.0);  // 1th order, middle points
+		double c21 = +29.0/(252.0);  // 1th order, inner points
+		double c33 = -41.0/(2096.0);  // 1th order cross, outer points
 		double c32 = +607.0/(6288.0);  // 1th order cross, middle points
-		double c31 = -41.0/(2096.0);  // 1th order cross, inner points
+		double c31 = +251.0/(6288.0);  // 1th order cross, inner points
 
 		// chi values - normal central average of order 5 with stencil 1/40 - 3/20 3/8 3/8 -3/20 1/40
 		ChiX[    In] = ( (X[ 0*N+In] + X[ 1*N+In] + X[ 2*N+In] + X[ 3*N+In])*c11 )
