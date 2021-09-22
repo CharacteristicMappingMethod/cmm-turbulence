@@ -7,7 +7,7 @@ struct stat st = {0};
 
 
 
-void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale, string time_integration, double final_time_override, double time_step_factor)
+void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale, string time_integration, string map_update_order, double final_time_override, double time_step_factor)
 {
 	
 	/*******************************************************************
@@ -101,6 +101,20 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	}
 	const int simulation_num_c = simulation_num;  // now declare it as const, can lead to some improvements
 	
+	// create int for map_udate_order to simplify loops
+	int map_update_num;
+	if (map_update_order == "2nd") {
+		map_update_num = 0;
+	}
+	if (map_update_order == "3rd") {
+		map_update_num = 1;
+	}
+	if (map_update_order == "4th") {
+		map_update_num = 2;
+	}
+	else map_update_num = 0;
+	const int map_update_num_c = map_update_num;  // now declare it as const, can lead to some improvements
+
 	
 	//parameter overrides
 	if(final_time_override > 0)
@@ -154,8 +168,12 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 		time_integration_num = 1;
 	}
 	else if (time_integration == "RKThree") {
-		sim_name_addition = "_ULYSSE_";
+		sim_name_addition = "_RK3_";
 		time_integration_num = 2;
+	}
+	else if (time_integration == "RKFour") {
+		sim_name_addition = "_RK4_";
+		time_integration_num = 3;
 	}
 	else {
 		sim_name_addition = "_DEV_UNNOWN_";
@@ -298,7 +316,11 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	cudaMalloc((void**)&Dev_ChiX, 4*Grid_coarse.sizeNReal);
 	cudaMalloc((void**)&Dev_ChiY, 4*Grid_coarse.sizeNReal);
 	// 4th order map update needs 8 stencil points
-	if (MAPUPDATE_ORDER == "4th") {
+	if (map_update_order == "4th") {
+		cudaMalloc((void**)&Dev_ChiDualX, 12*Grid_coarse.sizeNReal);
+		cudaMalloc((void**)&Dev_ChiDualY, 12*Grid_coarse.sizeNReal);
+	}
+	else if (map_update_order == "3rd") {
 		cudaMalloc((void**)&Dev_ChiDualX, 8*Grid_coarse.sizeNReal);
 		cudaMalloc((void**)&Dev_ChiDualY, 8*Grid_coarse.sizeNReal);
 	}
@@ -425,7 +447,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	
 	ptype grad_chi_min, grad_chi_max;
 	
-	int grad_block = 1, grad_thread = 1024; // settings for min/max function, maximum threads and just one block
+	int grad_block = 32, grad_thread = 1024; // settings for min/max function, maximum threads and just one block
 	ptype *Host_w_min, *Host_w_max;
 	ptype *Dev_w_min, *Dev_w_max;
 	Host_w_min = new ptype[grad_block*grad_thread];
@@ -855,10 +877,10 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
             }
         #endif
 
-        kernel_advect_using_stream_hermite2<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Dev_ChiDualX, Dev_ChiDualY, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, t, dt, ep, time_integration_num);	// time cost
+        kernel_advect_using_stream_hermite2<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Dev_ChiDualX, Dev_ChiDualY, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, t, dt, ep, time_integration_num, map_update_num_c);	// time cost
 
         //kernel_advect_using_stream_hermite2<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Dev_ChiDualX, Dev_ChiDualY, Dev_Psi_2048, Dev_Psi_2048_previous, Dev_Psi_2048_previous_p, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, t, dt, ep);	// time cost
-        kernel_update_map_from_dual<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock, 0, streams[0]>>>(Dev_ChiX, Dev_ChiY, Dev_ChiDualX, Dev_ChiDualY, Grid_coarse.NX, Grid_coarse.NY, ep);
+        kernel_update_map_from_dual<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock, 0, streams[0]>>>(Dev_ChiX, Dev_ChiY, Dev_ChiDualX, Dev_ChiDualY, Grid_coarse.NX, Grid_coarse.NY, ep, map_update_num_c);
 
 
        /* #ifdef RKThree_PARTICLES
@@ -1420,14 +1442,17 @@ string create_directory_structure(string simulationName, int NX_coarse, int NX_f
 	else
 	{
         file<<"Simulation name \t\t:"<<simulationName<<endl;
-        if (time_integration == "RKThree") {
-        	file<<"Time integration : Runge Kutta 3"<<endl;
+        if (time_integration == "EulExp") {
+        	file<<"Time integration : Euler explicit"<<endl;
         }
         else if (time_integration == "ABTwo") {
         	file<<"Time integration : Adam Bashfords 2"<<endl;
         }
-        else if (time_integration == "EulExp") {
-        	file<<"Time integration : Euler explicit"<<endl;
+        else if (time_integration == "RKThree") {
+        	file<<"Time integration : Runge Kutta 3"<<endl;
+        }
+        else if (time_integration == "RKFour") {
+        	file<<"Time integration : Runge Kutta 4"<<endl;
         }
         else file<<"Time integration : Euler explicit"<<endl;
 

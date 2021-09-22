@@ -25,7 +25,7 @@ __global__ void kernel_init_diffeo(ptype *ChiX, ptype *ChiY, int NX, int NY, pty
 }
 
 
-__global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, ptype *Y, int NX, int NY, ptype ep)																												
+__global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, ptype *Y, int NX, int NY, ptype ep, int map_update_order_num)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -38,34 +38,79 @@ __global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, 
 	long int N = NX*NY;
 	
 	// 4th order interpolation
-	if (MAPUPDATE_ORDER == "4th") {
+	if (map_update_order_num == 2) {
 		// 4th order values, some negated to keep the stencil signs similar to 2th order
+		double c13 = +1.0/(40.0);  // 0th order, outer points
+		double c12 = -3.0/(20.0);  // 0th order, middle points
+		double c11 = +3.0/(8.0);  // 0th order, inner points
+		double c23 = 29.0/(252.0);  // 1th order, outer points
+		double c22 = 67.0/(504.0);  // 1th order, middle points
+		double c21 = -11.0/(252.0);  // 1th order, inner points
+		double c33 = +251.0/(6288.0);  // 1th order cross, outer points
+		double c32 = +607.0/(6288.0);  // 1th order cross, middle points
+		double c31 = -41.0/(2096.0);  // 1th order cross, inner points
+
+		// chi values - normal central average of order 3 with stencil -1/6 2/3 2/3 -1/6
+		ChiX[    In] = ( (X[ 0*N+In] + X[ 1*N+In] + X[ 2*N+In] + X[ 3*N+In])*c11 )
+					 + ( (X[ 4*N+In] + X[ 5*N+In] + X[ 6*N+In] + X[ 7*N+In])*c12 )
+					 + ( (X[ 8*N+In] + X[ 9*N+In] + X[10*N+In] + X[11*N+In])*c13 );
+		ChiY[    In] = ( (Y[ 0*N+In] + Y[ 1*N+In] + Y[ 2*N+In] + Y[ 3*N+In])*c11 )
+					 + ( (Y[ 4*N+In] + Y[ 5*N+In] + Y[ 6*N+In] + Y[ 7*N+In])*c12 )
+				     + ( (Y[ 8*N+In] + Y[ 9*N+In] + Y[10*N+In] + Y[11*N+In])*c13 );
+
+		// chi grad x - central differences of order 3 with stencil -1/12 8/12 -8/12 1/12, averaged over two sides
+		ChiX[1*N+In] = (( (X[0*N+In] + X[1*N+In] - X[ 2*N+In] - X[ 3*N+In])*c21 )
+				     +  ( (X[4*N+In] + X[5*N+In] - X[ 6*N+In] - X[ 7*N+In])*c22 )
+				     +  ( (X[8*N+In] + X[9*N+In] - X[10*N+In] - X[11*N+In])*c23 ))/ep;
+		ChiY[1*N+In] = (( (Y[0*N+In] + Y[1*N+In] - Y[ 2*N+In] - Y[ 3*N+In])*c21 )
+				     +  ( (Y[4*N+In] + Y[5*N+In] - Y[ 6*N+In] - Y[ 7*N+In])*c22 )
+					 +  ( (Y[8*N+In] + Y[9*N+In] - Y[10*N+In] - Y[11*N+In])*c23 ))/ep;
+
+		// chi grad y - central differences of order 3 with stencil -1/12 8/12 -8/12 1/12, averaged over two sides
+		ChiX[2*N+In] = (( (X[0*N+In] - X[1*N+In] - X[ 2*N+In] + X[ 3*N+In])*c21 )
+				     +  ( (X[4*N+In] - X[5*N+In] - X[ 6*N+In] + X[ 7*N+In])*c22 )
+					 +  ( (X[8*N+In] - X[9*N+In] - X[10*N+In] + X[11*N+In])*c23 ))/ep;
+		ChiY[2*N+In] = (( (Y[0*N+In] - Y[1*N+In] - Y[ 2*N+In] + Y[ 3*N+In])*c21 )
+				     +  ( (Y[4*N+In] - Y[5*N+In] - Y[ 6*N+In] + Y[ 7*N+In])*c22 )
+					 +  ( (Y[8*N+In] - Y[9*N+In] - Y[10*N+In] + Y[11*N+In])*c23 ))/ep;
+
+		// chi grad x y - cross central differences of order 3 with stencil -1/17 1/68 -1/68 1/17
+		ChiX[3*N+In] = (( (X[0*N+In] - X[1*N+In] + X[ 2*N+In] - X[ 3*N+In])*c31 )
+				     +  ( (X[4*N+In] - X[5*N+In] + X[ 6*N+In] - X[ 7*N+In])*c32 )
+					 +  ( (X[8*N+In] - X[9*N+In] + X[10*N+In] - X[11*N+In])*c33 ))/ep/ep;
+		ChiY[3*N+In] = (( (Y[0*N+In] - Y[1*N+In] + Y[ 2*N+In] - Y[ 3*N+In])*c31 )
+				     +  ( (Y[4*N+In] - Y[5*N+In] + Y[ 6*N+In] - Y[ 7*N+In])*c32 )
+					 +  ( (Y[8*N+In] - Y[9*N+In] + Y[10*N+In] - Y[11*N+In])*c33 ))/ep/ep;
+	}
+	// 3rd order interpolation
+	if (map_update_order_num == 1) {
+		// 3rd order values, some negated to keep the stencil signs similar to 2th order
 		double c12 = -1.0/(12.0);  // 0th order, outer points
 		double c11 = +1.0/(3.0);  // 0th order, inner points
 		double c22 = -1.0/(24.0);  // 1th order, outer points
 		double c21 = +1.0/(3.0);  // 1th order, inner points
-		double c32 = -1.0/(24.0);  // 1th order cross, outer points
-		double c31 = +1.0/(3.0);  // 1th order cross, inner points
+		double c32 = +1.0/(17.0);  // 1th order cross, outer points
+		double c31 = +1.0/(68.0);  // 1th order cross, inner points
 
-		// chi values - normal central average of order 4 with stencil -1/6 2/3 2/3 -1/6
+		// chi values - normal central average of order 3 with stencil -1/6 2/3 2/3 -1/6
 		ChiX[    In] = ( (X[0*N+In] + X[1*N+In] + X[2*N+In] + X[3*N+In])*c11 )
 					 + ( (X[4*N+In] + X[5*N+In] + X[6*N+In] + X[7*N+In])*c12 );
 		ChiY[    In] = ( (Y[0*N+In] + Y[1*N+In] + Y[2*N+In] + Y[3*N+In])*c11 )
 					 + ( (Y[4*N+In] + Y[5*N+In] + Y[6*N+In] + Y[7*N+In])*c12 );
 
-		// chi grad x - central differences of order 4 with stencil -1/12 8/12 -8/12 1/12
+		// chi grad x - central differences of order 3 with stencil -1/12 8/12 -8/12 1/12, averaged over two sides
 		ChiX[1*N+In] = (( (X[0*N+In] + X[1*N+In] - X[2*N+In] - X[3*N+In])*c21 )
 					 +  ( (X[4*N+In] + X[5*N+In] - X[6*N+In] - X[7*N+In])*c22 ))/ep;
 		ChiY[1*N+In] = (( (Y[0*N+In] + Y[1*N+In] - Y[2*N+In] - Y[3*N+In])*c21 )
 					 +  ( (Y[4*N+In] + Y[5*N+In] - Y[6*N+In] - Y[7*N+In])*c22 ))/ep;
 
-		// chi grad y - central differences of order 4 with stencil -1/12 8/12 -8/12 1/12
+		// chi grad y - central differences of order 3 with stencil -1/12 8/12 -8/12 1/12, averaged over two sides
 		ChiX[2*N+In] = (( (X[0*N+In] - X[1*N+In] - X[2*N+In] + X[3*N+In])*c21 )
 					 +  ( (X[4*N+In] - X[5*N+In] - X[6*N+In] + X[7*N+In])*c22 ))/ep;
 		ChiY[2*N+In] = (( (Y[0*N+In] - Y[1*N+In] - Y[2*N+In] + Y[3*N+In])*c21 )
 					 +  ( (Y[4*N+In] - Y[5*N+In] - Y[6*N+In] + Y[7*N+In])*c22 ))/ep;
 
-		// chi grad x y - cross central differences of order 4 with stencil -1/12 8/12 -8/12 1/12
+		// chi grad x y - cross central differences of order 3 with stencil -1/17 1/68 -1/68 1/17
 		ChiX[3*N+In] = (( (X[0*N+In] - X[1*N+In] + X[2*N+In] - X[3*N+In])*c31 )
 					 +  ( (X[4*N+In] - X[5*N+In] + X[6*N+In] - X[7*N+In])*c32 ))/ep/ep;
 		ChiY[3*N+In] = (( (Y[0*N+In] - Y[1*N+In] + Y[2*N+In] - Y[3*N+In])*c31 )
@@ -138,7 +183,7 @@ __global__ void kernel_incompressibility_check(ptype *ChiX, ptype *ChiY, ptype *
 }
 
 
-__global__ void kernel_advect_using_stream_hermite2(ptype *ChiX, ptype *ChiY, ptype *ChiDualX, ptype *ChiDualY, ptype *phi, ptype *phi_p, ptype *phi_p_p, int NXc, int NYc, ptype hc, ptype t, ptype dt, ptype ep, int time_integration_num)			// time cost
+__global__ void kernel_advect_using_stream_hermite2(ptype *ChiX, ptype *ChiY, ptype *ChiDualX, ptype *ChiDualY, ptype *phi, ptype *phi_p, ptype *phi_p_p, int NXc, int NYc, ptype hc, ptype t, ptype dt, ptype ep, int time_integration_num, int map_update_order_num)			// time cost
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -160,11 +205,14 @@ __global__ void kernel_advect_using_stream_hermite2(ptype *ChiX, ptype *ChiY, pt
 	ptype xf_p, yf_p;  // variables used for fixed-point iteration in ABTwo
 	
 	ptype u, v, u_p, v_p, u_p_p, v_p_p;  // velocity at current and previous time steps
-	ptype k1_x, k1_y, k2_x, k2_y; // different intermediate functions for RKThree
+	ptype k1_x, k1_y, k2_x, k2_y, k3_x, k3_y; // different intermediate functions for RKThree
 
 	// repeat for all footpoints, 4 for 2th order and 8 for 4th order
 	int k_total;
-	if (MAPUPDATE_ORDER == "4th") {
+	if (map_update_order_num == 2) {
+		k_total = 12;
+	}
+	else if (map_update_order_num == 1) {
 		k_total = 8;
 	}
 	else k_total = 4;
@@ -172,7 +220,8 @@ __global__ void kernel_advect_using_stream_hermite2(ptype *ChiX, ptype *ChiY, pt
 //	FOR(k, 4)
 //	{
 	for (int k = 0; k<k_total; k++) {
-		// get position of footpoint, NE, SE, SW, NW, afterwards repeat one eps further away
+		// get position of footpoint, NE, SE, SW, NW
+		// for 4th order repeat with first x + eps and then once more with  y + eps to get all 12 points
 		xep = iX*hc + (1 + k/4) * ep*(1 - 2*((k/2)%2));
 		yep = iY*hc + (1 + k/4) * ep*(1 - 2*(((k+1)/2)%2));
 		
@@ -237,6 +286,40 @@ __global__ void kernel_advect_using_stream_hermite2(ptype *ChiX, ptype *ChiY, pt
 				// build all RK-steps together
 				xf = xep - dt * (k1_x + 4*k2_x + u)/6;
 				yf = yep - dt * (k1_y + 4*k2_y + v)/6;
+				break;
+			}
+			// RKFour time step utilizing some intermediate steps
+			case 3:  // RKFour
+			{
+				// compute u_tilde(X,t_n+1)
+				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep, yep, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NXc, NYc, hc);
+
+				// k1 = u_tilde(x,t_n+1) = 3*u_n - 3*u_n-1 + 1*u_n-2
+				k1_x = 3 * u + -3 * u_p + u_p_p;
+				k1_y = 3 * v + -3 * v_p + v_p_p;
+
+				// compute u_tilde(x - dt*k1/2, t_n+1 - dt/2)
+				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k1_x/2, yep - dt*k1_y/2, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NXc, NYc, hc);
+
+				//k2 = u_tilde(x - k1 dt/2, t_n+1 - dt/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
+				k2_x = 1.875 * u + -1.25 * u_p + 0.375 * u_p_p;
+				k2_y = 1.875 * v + -1.25 * v_p + 0.375 * v_p_p;
+
+				// compute u_tilde(x - dt*k2/2, t_n+1 - dt/2)
+				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k2_x/2, yep - dt*k2_y/2, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NXc, NYc, hc);
+
+				//k2 = u_tilde(x - k2 dt/2, t_n+1 - dt/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
+				k3_x = 1.875 * u + -1.25 * u_p + 0.375 * u_p_p;
+				k3_y = 1.875 * v + -1.25 * v_p + 0.375 * v_p_p;
+
+				//compute u_tilde(x - dt*k3, t_n+1 - dt)
+				device_hermite_interpolate_dx_dy_1(phi, xep - dt*k3_x, yep - dt*k3_y, &u, &v, NXc, NYc, hc);
+
+				// k3 = u_tilde(x - k3 dt, t_n) = u
+
+				// build all RK-steps together
+				xf = xep - dt * (k1_x + 2*k2_x + 2*k3_x + u)/6;
+				yf = yep - dt * (k1_y + 2*k2_y + 2*k3_y + v)/6;
 				break;
 			}
 			default:  // EulerExp on default
