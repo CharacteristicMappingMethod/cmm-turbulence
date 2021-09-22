@@ -37,9 +37,9 @@ __global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, 
 	int In = iY*NX + iX;	
 	long int N = NX*NY;
 	
-	// 4th order interpolation
+	// 5th order interpolation
 	if (map_update_order_num == 2) {
-		// 4th order values, some negated to keep the stencil signs similar to 2th order
+		// 5th order values, some negated to keep the stencil signs similar to 3rd order
 		double c13 = +1.0/(40.0);  // 0th order, outer points
 		double c12 = -3.0/(20.0);  // 0th order, middle points
 		double c11 = +3.0/(8.0);  // 0th order, inner points
@@ -50,7 +50,7 @@ __global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, 
 		double c32 = +607.0/(6288.0);  // 1th order cross, middle points
 		double c31 = -41.0/(2096.0);  // 1th order cross, inner points
 
-		// chi values - normal central average of order 3 with stencil -1/6 2/3 2/3 -1/6
+		// chi values - normal central average of order 5 with stencil 1/40 - 3/20 3/8 3/8 -3/20 1/40
 		ChiX[    In] = ( (X[ 0*N+In] + X[ 1*N+In] + X[ 2*N+In] + X[ 3*N+In])*c11 )
 					 + ( (X[ 4*N+In] + X[ 5*N+In] + X[ 6*N+In] + X[ 7*N+In])*c12 )
 					 + ( (X[ 8*N+In] + X[ 9*N+In] + X[10*N+In] + X[11*N+In])*c13 );
@@ -58,7 +58,7 @@ __global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, 
 					 + ( (Y[ 4*N+In] + Y[ 5*N+In] + Y[ 6*N+In] + Y[ 7*N+In])*c12 )
 				     + ( (Y[ 8*N+In] + Y[ 9*N+In] + Y[10*N+In] + Y[11*N+In])*c13 );
 
-		// chi grad x - central differences of order 3 with stencil -1/12 8/12 -8/12 1/12, averaged over two sides
+		// chi grad x - central differences of order 5 with stencil -29/252 -67/504 29/252 -11/252 67/504 29/252
 		ChiX[1*N+In] = (( (X[0*N+In] + X[1*N+In] - X[ 2*N+In] - X[ 3*N+In])*c21 )
 				     +  ( (X[4*N+In] + X[5*N+In] - X[ 6*N+In] - X[ 7*N+In])*c22 )
 				     +  ( (X[8*N+In] + X[9*N+In] - X[10*N+In] - X[11*N+In])*c23 ))/ep;
@@ -66,7 +66,7 @@ __global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, 
 				     +  ( (Y[4*N+In] + Y[5*N+In] - Y[ 6*N+In] - Y[ 7*N+In])*c22 )
 					 +  ( (Y[8*N+In] + Y[9*N+In] - Y[10*N+In] - Y[11*N+In])*c23 ))/ep;
 
-		// chi grad y - central differences of order 3 with stencil -1/12 8/12 -8/12 1/12, averaged over two sides
+		// chi grad y - central differences of order 5 with stencil -29/252 -67/504 29/252 -11/252 67/504 29/252
 		ChiX[2*N+In] = (( (X[0*N+In] - X[1*N+In] - X[ 2*N+In] + X[ 3*N+In])*c21 )
 				     +  ( (X[4*N+In] - X[5*N+In] - X[ 6*N+In] + X[ 7*N+In])*c22 )
 					 +  ( (X[8*N+In] - X[9*N+In] - X[10*N+In] + X[11*N+In])*c23 ))/ep;
@@ -74,7 +74,7 @@ __global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, 
 				     +  ( (Y[4*N+In] - Y[5*N+In] - Y[ 6*N+In] + Y[ 7*N+In])*c22 )
 					 +  ( (Y[8*N+In] - Y[9*N+In] - Y[10*N+In] + Y[11*N+In])*c23 ))/ep;
 
-		// chi grad x y - cross central differences of order 3 with stencil -1/17 1/68 -1/68 1/17
+		// chi grad x y - cross central differences of order 5 with stencil -251/6288 -607/6288 +41/2096 -41/2096 607/6288 251/6288
 		ChiX[3*N+In] = (( (X[0*N+In] - X[1*N+In] + X[ 2*N+In] - X[ 3*N+In])*c31 )
 				     +  ( (X[4*N+In] - X[5*N+In] + X[ 6*N+In] - X[ 7*N+In])*c32 )
 					 +  ( (X[8*N+In] - X[9*N+In] + X[10*N+In] - X[11*N+In])*c33 ))/ep/ep;
@@ -82,9 +82,9 @@ __global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, 
 				     +  ( (Y[4*N+In] - Y[5*N+In] + Y[ 6*N+In] - Y[ 7*N+In])*c32 )
 					 +  ( (Y[8*N+In] - Y[9*N+In] + Y[10*N+In] - Y[11*N+In])*c33 ))/ep/ep;
 	}
-	// 3rd order interpolation
+	// 4th order interpolation
 	if (map_update_order_num == 1) {
-		// 3rd order values, some negated to keep the stencil signs similar to 2th order
+		// 4th order values, some negated to keep the stencil signs similar to 3th order
 		double c12 = -1.0/(12.0);  // 0th order, outer points
 		double c11 = +1.0/(3.0);  // 0th order, inner points
 		double c22 = -1.0/(24.0);  // 1th order, outer points
@@ -92,49 +92,49 @@ __global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, 
 		double c32 = +1.0/(17.0);  // 1th order cross, outer points
 		double c31 = +1.0/(68.0);  // 1th order cross, inner points
 
-		// chi values - normal central average of order 3 with stencil -1/6 2/3 2/3 -1/6
+		// chi values - normal central average of order 4 with stencil -1/6 2/3 2/3 -1/6
 		ChiX[    In] = ( (X[0*N+In] + X[1*N+In] + X[2*N+In] + X[3*N+In])*c11 )
 					 + ( (X[4*N+In] + X[5*N+In] + X[6*N+In] + X[7*N+In])*c12 );
 		ChiY[    In] = ( (Y[0*N+In] + Y[1*N+In] + Y[2*N+In] + Y[3*N+In])*c11 )
 					 + ( (Y[4*N+In] + Y[5*N+In] + Y[6*N+In] + Y[7*N+In])*c12 );
 
-		// chi grad x - central differences of order 3 with stencil -1/12 8/12 -8/12 1/12, averaged over two sides
+		// chi grad x - central differences of order 4 with stencil -1/24 1/3 -1/3 1/24, averaged over two sides
 		ChiX[1*N+In] = (( (X[0*N+In] + X[1*N+In] - X[2*N+In] - X[3*N+In])*c21 )
 					 +  ( (X[4*N+In] + X[5*N+In] - X[6*N+In] - X[7*N+In])*c22 ))/ep;
 		ChiY[1*N+In] = (( (Y[0*N+In] + Y[1*N+In] - Y[2*N+In] - Y[3*N+In])*c21 )
 					 +  ( (Y[4*N+In] + Y[5*N+In] - Y[6*N+In] - Y[7*N+In])*c22 ))/ep;
 
-		// chi grad y - central differences of order 3 with stencil -1/12 8/12 -8/12 1/12, averaged over two sides
+		// chi grad y - central differences of order 4 with stencil -1/24 1/3 -1/3 1/24, averaged over two sides
 		ChiX[2*N+In] = (( (X[0*N+In] - X[1*N+In] - X[2*N+In] + X[3*N+In])*c21 )
 					 +  ( (X[4*N+In] - X[5*N+In] - X[6*N+In] + X[7*N+In])*c22 ))/ep;
 		ChiY[2*N+In] = (( (Y[0*N+In] - Y[1*N+In] - Y[2*N+In] + Y[3*N+In])*c21 )
 					 +  ( (Y[4*N+In] - Y[5*N+In] - Y[6*N+In] + Y[7*N+In])*c22 ))/ep;
 
-		// chi grad x y - cross central differences of order 3 with stencil -1/17 1/68 -1/68 1/17
+		// chi grad x y - cross central differences of order 4 with stencil -1/17 1/68 -1/68 1/17
 		ChiX[3*N+In] = (( (X[0*N+In] - X[1*N+In] + X[2*N+In] - X[3*N+In])*c31 )
 					 +  ( (X[4*N+In] - X[5*N+In] + X[6*N+In] - X[7*N+In])*c32 ))/ep/ep;
 		ChiY[3*N+In] = (( (Y[0*N+In] - Y[1*N+In] + Y[2*N+In] - Y[3*N+In])*c31 )
 					 +  ( (Y[4*N+In] - Y[5*N+In] + Y[6*N+In] - Y[7*N+In])*c32 ))/ep/ep;
 	}
-	// 2th order interpolation
+	// 3rd order interpolation
 	else {
 		double c1 = 1.0/(4.0);
 		double c2 = 1.0/(4.0*ep);
 		double c3 = 1.0/(4.0*ep*ep);
 
-		// chi values - normal central average of order 2 with stencil 1/2 1/2
+		// chi values - normal central average of order 3 with stencil 1/2 1/2
 		ChiX[    In] = ( (X[0*N+In] + X[1*N+In] + X[2*N+In] + X[3*N+In])*c1 );
 		ChiY[    In] = ( (Y[0*N+In] + Y[1*N+In] + Y[2*N+In] + Y[3*N+In])*c1 );
 
-		// chi grad x - central differences of order 2 with stencil -1/2 1/2
+		// chi grad x - central differences of order 3 with stencil -1/2 1/2
 		ChiX[1*N+In] = ( (X[0*N+In] + X[1*N+In] - X[2*N+In] - X[3*N+In])*c2 );
 		ChiY[1*N+In] = ( (Y[0*N+In] + Y[1*N+In] - Y[2*N+In] - Y[3*N+In])*c2 );
 
-		// chi grad y - central differences of order 2 with stencil -1/2 1/2
+		// chi grad y - central differences of order 3 with stencil -1/2 1/2
 		ChiX[2*N+In] = ( (X[0*N+In] - X[1*N+In] - X[2*N+In] + X[3*N+In])*c2 );
 		ChiY[2*N+In] = ( (Y[0*N+In] - Y[1*N+In] - Y[2*N+In] + Y[3*N+In])*c2 );
 
-		// chi grad x y - central differences of order 2 with stencil -1/2 1/2
+		// chi grad x y - central differences of order 3 with stencil -1/2 1/2
 		ChiX[3*N+In] = ( (X[0*N+In] - X[1*N+In] + X[2*N+In] - X[3*N+In])*c3 );
 		ChiY[3*N+In] = ( (Y[0*N+In] - Y[1*N+In] + Y[2*N+In] - Y[3*N+In])*c3 );
 	}
@@ -207,7 +207,7 @@ __global__ void kernel_advect_using_stream_hermite2(ptype *ChiX, ptype *ChiY, pt
 	ptype u, v, u_p, v_p, u_p_p, v_p_p;  // velocity at current and previous time steps
 	ptype k1_x, k1_y, k2_x, k2_y, k3_x, k3_y; // different intermediate functions for RKThree
 
-	// repeat for all footpoints, 4 for 2th order and 8 for 4th order
+	// repeat for all footpoints, 4 for 3th order, 8 for 4th order and 12 for 5th order
 	int k_total;
 	if (map_update_order_num == 2) {
 		k_total = 12;
@@ -221,7 +221,7 @@ __global__ void kernel_advect_using_stream_hermite2(ptype *ChiX, ptype *ChiY, pt
 //	{
 	for (int k = 0; k<k_total; k++) {
 		// get position of footpoint, NE, SE, SW, NW
-		// for 4th order repeat with first x + eps and then once more with  y + eps to get all 12 points
+		// for higher orders repeat cross shape stencil with more points
 		xep = iX*hc + (1 + k/4) * ep*(1 - 2*((k/2)%2));
 		yep = iY*hc + (1 + k/4) * ep*(1 - 2*(((k+1)/2)%2));
 		

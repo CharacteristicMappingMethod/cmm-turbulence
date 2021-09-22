@@ -103,13 +103,13 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	
 	// create int for map_udate_order to simplify loops
 	int map_update_num;
-	if (map_update_order == "2nd") {
+	if (map_update_order == "3rd") {
 		map_update_num = 0;
 	}
-	if (map_update_order == "3rd") {
+	if (map_update_order == "4th") {
 		map_update_num = 1;
 	}
-	if (map_update_order == "4th") {
+	if (map_update_order == "5th") {
 		map_update_num = 2;
 	}
 	else map_update_num = 0;
