@@ -29,7 +29,7 @@ Nvidia Cuda and other packages
    Checking initial conditions:
    - Check grid_scale and fine_grid_scale in /src/main2d.cpp to work with your GPU memory
    - Change mem_index in /src/simulation/cudaeuler2d.cu to work with your GPU memory
-   - Set the initial condition in /src/main2d.cpp and ??? (I forgot the second position)
+   - Set the initial condition in /src/main2d.cpp and /src/grid/cudagrid2d.h 
 
    Makefile:
    - Change the -arch flag in the make-file to match your GPU architecture. This specifies the name of the NVIDIA GPU architecture that the CUDA files will be compiled for.
