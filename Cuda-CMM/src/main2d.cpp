@@ -53,14 +53,17 @@ int main(int argc, char *args[])
 	 */
 	string initial_condition = "4_nodes";
 
-	// Time integration, define by name, "RKThree", "ABTwo", "EulerExp"
-	string time_integration = "RKThree";
+	// Time integration, define by name, "RKThree", "ABTwo", "EulerExp", "RKFour"
+	string time_integration = "RKFour";
 
-	// mapupdate order, "3rd", "4th", "5th"
-	string map_update_order = "4th";
+	// mapupdate order, "2nd", "3rd", "4th"
+	string map_update_order = "3rd";
+
+	// mollification settings, stencil size, 0, 4, 8
+	int molly_stencil = 4;
 
 	// main function
-	cuda_euler_2d(initial_condition, grid_scale, fine_grid_scale, time_integration, map_update_order);						//make sure to change the problem code in the cudagrid2d.h
+	cuda_euler_2d(initial_condition, grid_scale, fine_grid_scale, time_integration, map_update_order, molly_stencil);						//make sure to change the problem code in the cudagrid2d.h
 	
 	//Zoom_load_frame("vortex_shear_1000_4", grid_scale, fine_grid_scale, "final");
 	

@@ -7,7 +7,7 @@ struct stat st = {0};
 
 
 
-void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale, string time_integration, string map_update_order, double final_time_override, double time_step_factor)
+void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale, string time_integration, string map_update_order, int molly_stencil, double final_time_override, double time_step_factor)
 {
 	
 	/*******************************************************************
@@ -51,7 +51,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 		grid_by_time = 1.0;
 		snapshots_per_second = 1;
 		dt = 1.0/ tmp_4nodes;//(NX_coarse * grid_by_time);
-		tf = 1;
+		tf = 4;
 		simulation_num = 0;  // unique identifier of this simulation for device
 	}
 	else if(simulationName == "quadropole")
@@ -103,13 +103,13 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	
 	// create int for map_udate_order to simplify loops
 	int map_update_num;
-	if (map_update_order == "3rd") {
+	if (map_update_order == "2nd") {
 		map_update_num = 0;
 	}
-	if (map_update_order == "4th") {
+	if (map_update_order == "3rd") {
 		map_update_num = 1;
 	}
-	if (map_update_order == "5th") {
+	if (map_update_order == "4th") {
 		map_update_num = 2;
 	}
 	else map_update_num = 0;
@@ -659,7 +659,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	
 	//in step 1, Psi_p stays the same old one
 
-    evaulate_stream_hermite(&Grid_coarse, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real_previous, cufftPlan_coarse, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
+    evaulate_stream_hermite(&Grid_coarse, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real_previous, cufftPlan_coarse, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, molly_stencil);
 
 
     //evaulate_stream_hermite(&Grid_2048, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_2048, Dev_Psi_2048_previous, cufftPlan_2048, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
@@ -847,7 +847,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 			dt = tf - t;
 
 		// compute stream hermite from vorticity
-		evaulate_stream_hermite(&Grid_coarse, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufftPlan_coarse, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
+		evaulate_stream_hermite(&Grid_coarse, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufftPlan_coarse, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, molly_stencil);
 
         //evaulate_stream_hermite(&Grid_2048, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_2048, Dev_Psi_2048_previous, cufftPlan_2048, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
 
@@ -1275,6 +1275,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	*						 Freeing memory							   *
 	*******************************************************************/
 	
+	cudaFree(Dev_W_H_initial);
 	
 	// Trash variable
 	cudaFree(Dev_Complex_fine);
@@ -1286,8 +1287,8 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	delete [] Host_ChiY;
 	cudaFree(Dev_ChiX);
 	cudaFree(Dev_ChiY);
-	//cudaFree(Dev_ChiDualX);
-	//cudaFree(Dev_ChiDualY);
+	cudaFree(Dev_ChiDualX);
+	cudaFree(Dev_ChiDualY);
 	
 	// Chi_stack
 	delete [] Host_ChiX_stack_RAM_0;
@@ -1308,11 +1309,19 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	cudaFree(Dev_W_fine);
 	cudaFree(Dev_W_H_fine_real);
 	
+	#ifdef DISCRET
+		cudaFree(Dev_W_H_Initial);
+	#endif
+
 	// Psi
 	delete [] Host_Psi;
 	cudaFree(Dev_Psi_real);
 	cudaFree(Dev_Psi_real_previous);
+	cudaFree(Dev_Psi_real_previous_p);
 	
+	cudaFree(Dev_w_min);
+	cudaFree(Dev_w_max);
+
 	// CuFFT plans
 	cufftDestroy(cufftPlan_coarse);
 	cufftDestroy(cufftPlan_fine);
@@ -1324,8 +1333,16 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	    delete [] Host_particles_pos_fine_dt;
 	    cudaFree(Dev_particles_pos);
         cudaFree(Dev_particles_vel);
+	    cudaFree(Dev_particles_pos_1);
+        cudaFree(Dev_particles_vel_1);
+	    cudaFree(Dev_particles_pos_2);
+        cudaFree(Dev_particles_vel_2);
         cudaFree(Dev_particles_pos_fine_dt);
 	#endif
+
+    cudaFree(Mesure);
+    cudaFree(Mesure_fine);
+
 	cout<<"Finished; Last Cuda Error : "<<cudaError<<endl;
 }
 
@@ -1377,11 +1394,11 @@ void translate_initial_condition_through_map_stack(TCudaGrid2D *Grid_coarse, TCu
 *						 Computation of Psi						   *
 *******************************************************************/
 	
-void evaulate_stream_hermite(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX, ptype *Dev_ChiY, ptype *Dev_W_H_fine_real, ptype *W_real, ptype *Psi_real, cufftHandle cufftPlan_coarse, cuPtype *Dev_Complex_coarse, cuPtype *Dev_Hat_coarse, cuPtype *Dev_Hat_coarse_bis)
+void evaulate_stream_hermite(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX, ptype *Dev_ChiY, ptype *Dev_W_H_fine_real, ptype *W_real, ptype *Psi_real, cufftHandle cufftPlan_coarse, cuPtype *Dev_Complex_coarse, cuPtype *Dev_Hat_coarse, cuPtype *Dev_Hat_coarse_bis, int molly_stencil)
 {
 	
 	// Obtaining stream function at time t 
-	kernel_apply_map_and_sample_from_hermite<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, W_real, Dev_W_H_fine_real, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h); 
+	kernel_apply_map_and_sample_from_hermite<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, W_real, Dev_W_H_fine_real, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, molly_stencil);
 	kernel_real_to_complex<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(W_real, Dev_Complex_coarse, Grid_coarse->NX, Grid_coarse->NY);
 	cufftExecZ2Z(cufftPlan_coarse, Dev_Complex_coarse, Dev_Hat_coarse_bis, CUFFT_FORWARD);	
 	kernel_normalize<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Hat_coarse_bis, Grid_coarse->NX, Grid_coarse->NY);

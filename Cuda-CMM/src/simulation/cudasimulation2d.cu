@@ -37,9 +37,9 @@ __global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, 
 	int In = iY*NX + iX;	
 	long int N = NX*NY;
 	
-	// 5th order interpolation
+	// 4th order interpolation
 	if (map_update_order_num == 2) {
-		// 5th order values, some negated to keep the stencil signs similar to 3rd order
+		// 4th order values, some negated to keep the stencil signs similar to 2nd order
 		double c13 = +1.0/(40.0);  // 0th order, outer points
 		double c12 = -3.0/(20.0);  // 0th order, middle points
 		double c11 = +3.0/(8.0);  // 0th order, inner points
@@ -58,7 +58,7 @@ __global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, 
 					 + ( (Y[ 4*N+In] + Y[ 5*N+In] + Y[ 6*N+In] + Y[ 7*N+In])*c12 )
 				     + ( (Y[ 8*N+In] + Y[ 9*N+In] + Y[10*N+In] + Y[11*N+In])*c13 );
 
-		// chi grad x - central differences of order 5 with stencil -29/252 -67/504 29/252 -11/252 67/504 29/252
+		// chi grad x - central differences of order 4 with stencil -29/252 -67/504 29/252 -11/252 67/504 29/252
 		ChiX[1*N+In] = (( (X[0*N+In] + X[1*N+In] - X[ 2*N+In] - X[ 3*N+In])*c21 )
 				     +  ( (X[4*N+In] + X[5*N+In] - X[ 6*N+In] - X[ 7*N+In])*c22 )
 				     +  ( (X[8*N+In] + X[9*N+In] - X[10*N+In] - X[11*N+In])*c23 ))/ep;
@@ -66,7 +66,7 @@ __global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, 
 				     +  ( (Y[4*N+In] + Y[5*N+In] - Y[ 6*N+In] - Y[ 7*N+In])*c22 )
 					 +  ( (Y[8*N+In] + Y[9*N+In] - Y[10*N+In] - Y[11*N+In])*c23 ))/ep;
 
-		// chi grad y - central differences of order 5 with stencil -29/252 -67/504 29/252 -11/252 67/504 29/252
+		// chi grad y - central differences of order 4 with stencil -29/252 -67/504 29/252 -11/252 67/504 29/252
 		ChiX[2*N+In] = (( (X[0*N+In] - X[1*N+In] - X[ 2*N+In] + X[ 3*N+In])*c21 )
 				     +  ( (X[4*N+In] - X[5*N+In] - X[ 6*N+In] + X[ 7*N+In])*c22 )
 					 +  ( (X[8*N+In] - X[9*N+In] - X[10*N+In] + X[11*N+In])*c23 ))/ep;
@@ -74,7 +74,7 @@ __global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, 
 				     +  ( (Y[4*N+In] - Y[5*N+In] - Y[ 6*N+In] + Y[ 7*N+In])*c22 )
 					 +  ( (Y[8*N+In] - Y[9*N+In] - Y[10*N+In] + Y[11*N+In])*c23 ))/ep;
 
-		// chi grad x y - cross central differences of order 5 with stencil -251/6288 -607/6288 +41/2096 -41/2096 607/6288 251/6288
+		// chi grad x y - cross central differences of order 4 with stencil -251/6288 -607/6288 +41/2096 -41/2096 607/6288 251/6288
 		ChiX[3*N+In] = (( (X[0*N+In] - X[1*N+In] + X[ 2*N+In] - X[ 3*N+In])*c31 )
 				     +  ( (X[4*N+In] - X[5*N+In] + X[ 6*N+In] - X[ 7*N+In])*c32 )
 					 +  ( (X[8*N+In] - X[9*N+In] + X[10*N+In] - X[11*N+In])*c33 ))/ep/ep;
@@ -82,9 +82,9 @@ __global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, 
 				     +  ( (Y[4*N+In] - Y[5*N+In] + Y[ 6*N+In] - Y[ 7*N+In])*c32 )
 					 +  ( (Y[8*N+In] - Y[9*N+In] + Y[10*N+In] - Y[11*N+In])*c33 ))/ep/ep;
 	}
-	// 4th order interpolation
+	// 3rd order interpolation
 	if (map_update_order_num == 1) {
-		// 4th order values, some negated to keep the stencil signs similar to 3th order
+		// 3rd order values, some negated to keep the stencil signs similar to 2nd order
 		double c12 = -1.0/(12.0);  // 0th order, outer points
 		double c11 = +1.0/(3.0);  // 0th order, inner points
 		double c22 = -1.0/(24.0);  // 1th order, outer points
@@ -98,43 +98,43 @@ __global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, 
 		ChiY[    In] = ( (Y[0*N+In] + Y[1*N+In] + Y[2*N+In] + Y[3*N+In])*c11 )
 					 + ( (Y[4*N+In] + Y[5*N+In] + Y[6*N+In] + Y[7*N+In])*c12 );
 
-		// chi grad x - central differences of order 4 with stencil -1/24 1/3 -1/3 1/24, averaged over two sides
+		// chi grad x - central differences of order 3 with stencil -1/24 1/3 -1/3 1/24, averaged over two sides
 		ChiX[1*N+In] = (( (X[0*N+In] + X[1*N+In] - X[2*N+In] - X[3*N+In])*c21 )
 					 +  ( (X[4*N+In] + X[5*N+In] - X[6*N+In] - X[7*N+In])*c22 ))/ep;
 		ChiY[1*N+In] = (( (Y[0*N+In] + Y[1*N+In] - Y[2*N+In] - Y[3*N+In])*c21 )
 					 +  ( (Y[4*N+In] + Y[5*N+In] - Y[6*N+In] - Y[7*N+In])*c22 ))/ep;
 
-		// chi grad y - central differences of order 4 with stencil -1/24 1/3 -1/3 1/24, averaged over two sides
+		// chi grad y - central differences of order 3 with stencil -1/24 1/3 -1/3 1/24, averaged over two sides
 		ChiX[2*N+In] = (( (X[0*N+In] - X[1*N+In] - X[2*N+In] + X[3*N+In])*c21 )
 					 +  ( (X[4*N+In] - X[5*N+In] - X[6*N+In] + X[7*N+In])*c22 ))/ep;
 		ChiY[2*N+In] = (( (Y[0*N+In] - Y[1*N+In] - Y[2*N+In] + Y[3*N+In])*c21 )
 					 +  ( (Y[4*N+In] - Y[5*N+In] - Y[6*N+In] + Y[7*N+In])*c22 ))/ep;
 
-		// chi grad x y - cross central differences of order 4 with stencil -1/17 1/68 -1/68 1/17
+		// chi grad x y - cross central differences of order 3 with stencil -1/17 1/68 -1/68 1/17
 		ChiX[3*N+In] = (( (X[0*N+In] - X[1*N+In] + X[2*N+In] - X[3*N+In])*c31 )
 					 +  ( (X[4*N+In] - X[5*N+In] + X[6*N+In] - X[7*N+In])*c32 ))/ep/ep;
 		ChiY[3*N+In] = (( (Y[0*N+In] - Y[1*N+In] + Y[2*N+In] - Y[3*N+In])*c31 )
 					 +  ( (Y[4*N+In] - Y[5*N+In] + Y[6*N+In] - Y[7*N+In])*c32 ))/ep/ep;
 	}
-	// 3rd order interpolation
+	// 2nd order interpolation
 	else {
 		double c1 = 1.0/(4.0);
 		double c2 = 1.0/(4.0*ep);
 		double c3 = 1.0/(4.0*ep*ep);
 
-		// chi values - normal central average of order 3 with stencil 1/2 1/2
+		// chi values - normal central average of order 2 with stencil 1/2 1/2
 		ChiX[    In] = ( (X[0*N+In] + X[1*N+In] + X[2*N+In] + X[3*N+In])*c1 );
 		ChiY[    In] = ( (Y[0*N+In] + Y[1*N+In] + Y[2*N+In] + Y[3*N+In])*c1 );
 
-		// chi grad x - central differences of order 3 with stencil -1/2 1/2
+		// chi grad x - central differences of order 2 with stencil -1/2 1/2
 		ChiX[1*N+In] = ( (X[0*N+In] + X[1*N+In] - X[2*N+In] - X[3*N+In])*c2 );
 		ChiY[1*N+In] = ( (Y[0*N+In] + Y[1*N+In] - Y[2*N+In] - Y[3*N+In])*c2 );
 
-		// chi grad y - central differences of order 3 with stencil -1/2 1/2
+		// chi grad y - central differences of order 2 with stencil -1/2 1/2
 		ChiX[2*N+In] = ( (X[0*N+In] - X[1*N+In] - X[2*N+In] + X[3*N+In])*c2 );
 		ChiY[2*N+In] = ( (Y[0*N+In] - Y[1*N+In] - Y[2*N+In] + Y[3*N+In])*c2 );
 
-		// chi grad x y - central differences of order 3 with stencil -1/2 1/2
+		// chi grad x y - central differences of order 2 with stencil -1/2 1/2
 		ChiX[3*N+In] = ( (X[0*N+In] - X[1*N+In] + X[2*N+In] - X[3*N+In])*c3 );
 		ChiY[3*N+In] = ( (Y[0*N+In] - Y[1*N+In] + Y[2*N+In] - Y[3*N+In])*c3 );
 	}
@@ -793,33 +793,65 @@ __global__ void kernel_compare_vorticity_with_initial(ptype *ChiX_stack, ptype *
 }
 
 
-
-
-__global__ void kernel_apply_map_and_sample_from_hermite(ptype *ChiX, ptype *ChiY, ptype *fs, ptype *H, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, int NXh, int NYh, ptype hh)
+// apply mollifier
+__global__ void kernel_apply_map_and_sample_from_hermite(ptype *ChiX, ptype *ChiY, ptype *fs, ptype *H, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, int NXh, int NYh, ptype hh, int molly_stencil)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-    /*int NX = 128; //Dans l'interpolation remettre NXc Nyc hc
-    int NY = 128;
-    ptype h = twoPI/(float)NX;*/
 
 	if(iX >= NXs || iY >= NYs)
 		return;
-	
-	int In = iY*NXs + iX;	
-	
+
+	int In = iY*NXs + iX;
+
 	//position
 	ptype x = iX*hs;
 	ptype y = iY*hs;
-	
+
+	// mollification to act as a lowpass filter
 	ptype x2, y2;
-	
-	device_diffeo_interpolate(ChiX, ChiY, x, y, &x2, &y2, NXc, NYc, hc);
-	
-	
-	fs[In] = device_hermite_interpolate(H, x2, y2, NXh, NYh, hh);
-	
+	/*                                      0  1/6  0
+	 * mollifier of order 1 using stencil  1/6 1/3 1/6
+	 * using 4 neighbouring points			0  1/6  0
+	 */
+	if (molly_stencil == 4) {
+		// compute main points
+		device_diffeo_interpolate(ChiX, ChiY, x, y, &x2, &y2, NXc, NYc, hc);
+		ptype moll_add = device_hermite_interpolate(H, x2, y2, NXh, NYh, hh)/3.0;  // other values will be added on here
+		for (int i_molly = 0; i_molly < 4; i_molly++) {
+			// choose 4 points in between the grid: W, E, S, N
+			ptype x2 = x + hs/2*((i_molly/2+1)%2) * (-1 + 2*(i_molly%2));  // -1 +1  0  0
+			ptype y2 = y + hs/2*((i_molly/2  )%2) * (-1 + 2*(i_molly%2));  //  0  0 -1 +1
+
+			device_diffeo_interpolate(ChiX, ChiY, x2, y2, &x2, &y2, NXc, NYc, hc);
+			moll_add += device_hermite_interpolate(H, x2, y2, NXh, NYh, hh)/6.0;
+		}
+		fs[In] = moll_add;
+	}
+	/*                                     1/16 2/16 1/16
+	 * mollifier of order 1 using stencil  2/16 4/16 2/16
+	 * using 8 neighbouring points		   1/16 2/16 1/16
+	 */
+	else if (molly_stencil == 8) {
+//		ptype moll_fac[9] = {1/16, 2/16, 1/16, 2/16, 4/16, 2/16, 1/16, 2/16, 1/16};  // molly factor for all points, chosen randomly
+		// compute main points
+		ptype moll_add = 0;  // other values will be added on here
+		for (int i_molly = 0; i_molly < 9; i_molly++) {
+			// choose 9 points in between the grid: SW, S, SE, W, C, E, NW, N, NE
+			ptype x2 = x + hs*(-1 + i_molly%3)/2;
+			ptype y2 = y + hs*(-1 + i_molly/3)/2;
+
+			device_diffeo_interpolate(ChiX, ChiY, x2, y2, &x2, &y2, NXc, NYc, hc);
+			moll_add += (1 + (i_molly%3)%2) * (1 + (i_molly/3)%2) * device_hermite_interpolate(H, x2, y2, NXh, NYh, hh)/16.0;
+		}
+		fs[In] = moll_add;
+	}
+	// else, assume no mollification
+	else {
+		device_diffeo_interpolate(ChiX, ChiY, x, y, &x2, &y2, NXc, NYc, hc);
+		fs[In] = device_hermite_interpolate(H, x2, y2, NXh, NYh, hh);
+	}
 }
 
 
@@ -988,110 +1020,6 @@ __device__ ptype device_initial_W(ptype x, ptype y, int simulation_num)
 			break;
 		}
 	}
-//	if(simulation_num == 0)  // 4_nodes
-//	{
-//		x = x - (x>0)*((int)(x/twoPI))*twoPI - (x<0)*((int)(x/twoPI)-1)*twoPI;
-//		y = y - (y>0)*((int)(y/twoPI))*twoPI - (y<0)*((int)(y/twoPI)-1)*twoPI;
-//
-//		return cos(x) + cos(y) + 0.6*cos(2*x) + 0.2*cos(3*x);
-//	}
-//	else if(simulation_num == 1)  // quadropole
-//	{
-//		ptype ret = 0;
-//		for(int iy = -2; iy <= 2; iy++)
-//			for(int ix = -2; ix <= 2; ix++)
-//			{
-//				ptype dx = x - PI/2 + ix * 2*PI;
-//				ptype dy = y - PI/2 + iy * 2*PI;
-//				ptype A = 0.6258473;
-//				ptype s = 0.5;
-//				ptype B = A/(s*s*s*s) * (dx * dy) * (dx*dx + dy*dy - 6*s*s);
-//				ptype D = (dx*dx + dy*dy)/(2*s*s);
-//				ret += B * exp(-D);
-//			}
-//			return ret;
-//	}
-//	else if(simulation_num == 2)  // two vortices
-//	{
-//		ptype ret = 0;
-//		for(int iy = -1; iy <= 1; iy++)
-//			for(int ix = -1; ix <= 1; ix++)
-//			{
-//				ret += sin(0.5*(x + twoPI*ix))*sin(0.5*(x + twoPI*ix))*sin(0.5*((y + twoPI*iy) + twoPI*iy))*sin(0.5*((y + twoPI*iy) + twoPI*iy)) * (exp(-(((x + twoPI*ix) - PI)*((x + twoPI*ix) - PI) + ((y + twoPI*iy) - 0.33*twoPI)*((y + twoPI*iy) - 0.33*twoPI))*5) +
-//											exp(-(((x + twoPI*ix) - PI)*((x + twoPI*ix) - PI) + ((y + twoPI*iy) - 0.67*twoPI)*((y + twoPI*iy) - 0.67*twoPI))*5));		 //two votices of same size
-//			}
-//		return ret;
-//	}
-//	else if(simulation_num == 3)  // three vortices
-//	{
-//		//three vortices
-//		ptype ret = 0;
-//		ptype LX = PI/2;
-//		ptype LY = PI/(2.0*sqrt(2.0));
-//
-//		for(int iy = -1; iy <= 1; iy++)
-//			for(int ix = -1; ix <= 1; ix++)
-//			{
-//				ret += sin(0.5*(x + twoPI*ix))*sin(0.5*(x + twoPI*ix))*sin(0.5*((y + twoPI*iy) + twoPI*iy))*sin(0.5*((y + twoPI*iy) + twoPI*iy)) *
-//							(
-//							+	exp(-(((x + twoPI*ix) - PI - LX)*((x + twoPI*ix) - PI - LX) + ((y + twoPI*iy) - PI)*((y + twoPI*iy) - PI))*5)
-//							+	exp(-(((x + twoPI*ix) - PI + LX)*((x + twoPI*ix) - PI + LX) + ((y + twoPI*iy) - PI)*((y + twoPI*iy) - PI))*5)
-//							-	exp(-(((x + twoPI*ix) - PI + LX)*((x + twoPI*ix) - PI + LX) + ((y + twoPI*iy) - PI - LY)*((y + twoPI*iy) - PI - LY))*5)
-//							);		 //two votices of same size
-//			}
-//		return ret;
-//	}
-//	else if(simulation_num == 4)  // single_shear_layer
-//	{
-//		//single shear layer
-//		ptype delta = 50;
-//		ptype delta2 = 0.01;
-//		ptype ret = 0;
-//		for(int iy = -1; iy <= 1; iy++)
-//			for(int iy = -1; iy <= 1; iy++)
-//				{
-//					ret +=    (1 + delta2 * cos(2*x))  *    exp( - delta * (y - PI) * (y - PI) );
-//				}
-//		ret /= 9;
-//		return ret;
-//	}
-//	else if(simulation_num == 5)  // turbulence_gaussienne
-//	{
-//		x = fmod(x, twoPI);
-//		x = (x < 0)*(twoPI+x) + (x > 0)*(x);
-//		y = fmod(y, twoPI);
-//		y = (y < 0)*(twoPI+y) + (y > 0)*(y);
-//		int NB_gaus = 8;		//NB_gaus = 6;sigma = 0.24;
-//		ptype sigma = 0.2;
-//		ptype ret = 0;
-//		for(int mu_x = 0; mu_x < NB_gaus; mu_x++){
-//			for(int mu_y = 0; mu_y < NB_gaus; mu_y++){
-//				ret += 1/(twoPI*sigma*sigma)*exp(-((x-mu_x*twoPI/(NB_gaus-1))*(x-mu_x*twoPI/(NB_gaus-1))/(2*sigma*sigma)+(y-mu_y*twoPI/(NB_gaus-1))*(y-mu_y*twoPI/(NB_gaus-1))/(2*sigma*sigma)));
-//			}
-//		}
-//		for(int mu_x = 0; mu_x < NB_gaus-1; mu_x++){
-//			for(int mu_y = 0; mu_y < NB_gaus-1; mu_y++){
-//				curandState_t state_x;
-//				curand_init((mu_x+1)*mu_y*mu_y, 0, 0, &state_x);
-//				ptype RAND_gaus_x = ((ptype)(curand(&state_x)%1000)-500)/100000;
-//				curandState_t state_y;
-//				curand_init((mu_y+1)*mu_x*mu_x, 0, 0, &state_y);
-//				ptype RAND_gaus_y = ((ptype)(curand(&state_y)%1000)-500)/100000;
-//				ret -= 1/(twoPI*sigma*sigma)*exp(-((x-(2*mu_x+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_x)*(x-(2*mu_x+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_x)/(2*sigma*sigma)+(y-(2*mu_y+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_y)*(y-(2*mu_y+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_y)/(2*sigma*sigma)));
-//			}
-//		}
-//		//curandState_t state;
-//		//curand_init(floor(y * 16384) * 16384 + floor(x * 16384), 0, 0, &state);
-//		//ret *= 1+((ptype)(curand(&state)%1000)-500)/100000;
-//		return ret - 0.008857380480028442;
-//	}
-//	else	//default case goes to stationary
-//	{
-//		x = x - (x>0)*((int)(x/twoPI))*twoPI - (x<0)*((int)(x/twoPI)-1)*twoPI;
-//		y = y - (y>0)*((int)(y/twoPI))*twoPI - (y<0)*((int)(y/twoPI)-1)*twoPI;
-//
-//		return cos(x)*cos(y);
-//	}
 
 }
 
