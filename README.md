@@ -33,8 +33,8 @@ Nvidia Cuda and other packages
 
    Makefile:
    - Change the -arch flag in the make-file to match your GPU architecture. This specifies the name of the NVIDIA GPU architecture that the CUDA files will be compiled for.
-   - compile the code in a shell by changing into it and running 'make'
-     check for further errors, if not listed, please provide them as an issue right with the given error stack
+   - Compile the code in a shell by changing into it and running 'make'
+     check for further errors, if not listed, please provide them as an issue right with the given error stack.
    
    Running the code:
    - Run the code in a shell by executing 'SimulationCuda2d.out'
