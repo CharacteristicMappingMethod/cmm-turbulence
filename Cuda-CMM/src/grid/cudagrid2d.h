@@ -45,7 +45,6 @@ using namespace std;
     // #define RKThree_PARTICLES
 
 	extern ptype ep;
-	extern ptype epdx[4], epdy[4];
 
 	enum color_map_choice
 	{

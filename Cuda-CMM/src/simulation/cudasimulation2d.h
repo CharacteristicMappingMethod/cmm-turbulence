@@ -19,7 +19,6 @@ void recompute_output_files();	//read binary files storing diffeos and recompute
 	
 	//map operations
 	__global__ void kernel_init_diffeo(ptype *ChiX, ptype *ChiY, int NX, int NY, ptype h);
-	__global__ void kernel_update_map_from_dual(ptype *ChiX, ptype *ChiY, ptype *X, ptype *Y, int NX, int NY, ptype ep, int map_update_order_num);
 	__global__ void kernel_incompressibility_check(ptype *ChiX, ptype *ChiY, ptype *gradChi, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs);	//to improve
 	__global__ void kernel_compute_total_grid_Chi(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *gradChi, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs);
 	__global__ void kernel_compute_enstropy_increase_rate_factors(ptype *w, ptype *phi, ptype *div1, ptype *div2, int NXc, int NYc, ptype hc, ptype ep);
@@ -27,8 +26,7 @@ void recompute_output_files();	//read binary files storing diffeos and recompute
 	
 	//map advection 
 	__global__ void kernel_advect_using_velocity_function(ptype *ChiX, ptype *ChiY, ptype *ChiDualX, ptype *ChiDualY, int NXc, int NYc, ptype hc, ptype t, ptype dt, ptype ep);
-	__global__ void kernel_advect_using_stream_hermite(ptype *ChiX, ptype *ChiY, ptype *ChiDualX, ptype *ChiDualY, ptype *phi, int NXc, int NYc, ptype hc, ptype t, ptype dt, ptype ep);
-	__global__ void kernel_advect_using_stream_hermite2(ptype *ChiX, ptype *ChiY, ptype *ChiDualX, ptype *ChiDualY, ptype *phi, ptype *phi_p, ptype *phi_p_p, int NXc, int NYc, ptype hc, ptype t, ptype dt, ptype ep, int time_integration_num, int map_update_order_num);
+	__global__ void kernel_advect_using_stream_hermite(ptype *ChiX, ptype *ChiY, ptype *Chi_new_X, ptype *Chi_new_Y, ptype *phi, ptype *phi_p, ptype *phi_p_p, int NXc, int NYc, ptype hc, ptype t, ptype dt, ptype ep, int time_integration_num, int map_update_order_num);
 	
 	
 	//variable type conversion
@@ -43,7 +41,6 @@ void recompute_output_files();	//read binary files storing diffeos and recompute
 	__global__ void kernel_apply_map_stack_to_W(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ws, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, ptype *W_initial, int simulation_num);	//apply map on passed coarse grid to vorticiy field on sample grid
 	__global__ void kernel_apply_map_stack_to_W_custom(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ws, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, ptype xl, ptype xr, ptype yl, ptype yr, ptype *W_initial, int simulation_num);
 	__global__ void kernel_apply_map_and_sample_from_hermite(ptype *ChiX, ptype *ChiY, ptype *fs, ptype *H, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, int NXh, int NYh, ptype hh, int molly_stencil);	//apply map and sample function from passed hermite
-//	__global__ void kernel_apply_map_and_sample_from_hermite_molly(ptype *ChiX, ptype *ChiY, ptype *fs, ptype *H, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, int NXh, int NYh, ptype hh);	//apply map and sample function from passed hermite
 	__global__ void kernel_compare_map_stack_with_identity(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *error, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs);	
 	__global__ void kernel_compare_vorticity_with_initial(ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *error, int stack_length, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs, int simulation_num);
 	
@@ -72,7 +69,8 @@ void recompute_output_files();	//read binary files storing diffeos and recompute
 	
 	void Zoom(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX_stack, ptype *Dev_ChiY_stack, ptype *Host_ChiX_stack_RAM_0, ptype *Host_ChiY_stack_RAM_0, ptype *Host_ChiX_stack_RAM_1, ptype *Host_ChiY_stack_RAM_1, ptype *Host_ChiX_stack_RAM_2, ptype *Host_ChiY_stack_RAM_2, ptype *Host_ChiX_stack_RAM_3, ptype *Host_ChiY_stack_RAM_3, ptype *Dev_ChiX, ptype *Dev_ChiY, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, ptype *W_real, cufftHandle cufftPlan_fine, ptype *W_initial, cuPtype *Dev_Complex_fine, string simulationName, int simulation_num, ptype L);
 	__global__ void upsample(ptype *ChiX, ptype *ChiY, ptype *ChiX_2048, ptype *ChiY_2048, int NXc, int NYc, ptype hc, int NXs, int NYs, ptype hs);
-	
+    void Psi_upsampling(TCudaGrid2D *Grid_2048, ptype *Dev_W_2048, cuPtype *Dev_Complex_fine_2048, cuPtype *Dev_Hat_fine_bis_2048, cuPtype *Dev_Hat_fine_2048, ptype *Dev_Psi_2048, cufftHandle cufftPlan_2048);
+
 	
 	
 	

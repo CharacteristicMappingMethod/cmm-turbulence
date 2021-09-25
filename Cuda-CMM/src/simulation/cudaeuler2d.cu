@@ -51,7 +51,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 		grid_by_time = 1.0;
 		snapshots_per_second = 1;
 		dt = 1.0/ tmp_4nodes;//(NX_coarse * grid_by_time);
-		tf = 4;
+		tf = 1;
 		simulation_num = 0;  // unique identifier of this simulation for device
 	}
 	else if(simulationName == "quadropole")
@@ -304,32 +304,19 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	*							  Chi								   *
 	* 	Chi is an array that contains Chi, x1-derivative,		       *
 	* 	x2-derivative and x1x2-derivative   					       *
-	*	ChiDual is an array that contains values of Chi NE, SE, SW, NW *
+	*	Chi_new holds the new Chi values during the map advection      *
 	* 																   *
 	*******************************************************************/
 	
 	ptype *Host_ChiX, *Host_ChiY;
-	ptype *Dev_ChiX, *Dev_ChiY, *Dev_ChiDualX, *Dev_ChiDualY;
+	ptype *Dev_ChiX, *Dev_ChiY, *Dev_Chi_new_X, *Dev_Chi_new_Y;
 	
 	Host_ChiX = new ptype[4*Grid_coarse.N];
 	Host_ChiY = new ptype[4*Grid_coarse.N];							
 	cudaMalloc((void**)&Dev_ChiX, 4*Grid_coarse.sizeNReal);
 	cudaMalloc((void**)&Dev_ChiY, 4*Grid_coarse.sizeNReal);
-	// 5th order map update needs 12 stencil points
-	if (map_update_num_c == 2) {
-		cudaMalloc((void**)&Dev_ChiDualX, 12*Grid_coarse.sizeNReal);
-		cudaMalloc((void**)&Dev_ChiDualY, 12*Grid_coarse.sizeNReal);
-	}
-	// 4th order map update needs 8 stencil points
-	else if (map_update_num_c == 1) {
-		cudaMalloc((void**)&Dev_ChiDualX, 8*Grid_coarse.sizeNReal);
-		cudaMalloc((void**)&Dev_ChiDualY, 8*Grid_coarse.sizeNReal);
-	}
-	// assume 3rd order if different or not defined, needs 4 stencil points
-	else {
-		cudaMalloc((void**)&Dev_ChiDualX, 4*Grid_coarse.sizeNReal);
-		cudaMalloc((void**)&Dev_ChiDualY, 4*Grid_coarse.sizeNReal);
-	}
+	cudaMalloc((void**)&Dev_Chi_new_X, 4*Grid_coarse.sizeNReal);
+	cudaMalloc((void**)&Dev_Chi_new_Y, 4*Grid_coarse.sizeNReal);
 	
 	
 	/*******************************************************************
@@ -461,73 +448,40 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	*							 Particles							   *
 	*******************************************************************/
 	
-    #ifdef PARTICLES
+	#ifdef PARTICLES
 
-	   	// int Nb_Tau_p = 21;
-		// ptype Tau_p[Nb_Tau_p] = {0.0, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.125, 0.15, 0.25, 0.5, 0.75, 1, 2, 5, 13};
-	   	int Nb_Tau_p = 1;
-		ptype Tau_p[Nb_Tau_p] = {0.0};
-		int Nb_particles = 1024 * 8; //64; // *512 ;
-        int particle_thread =  256 /*pow(2, 10);*/, particle_block = Nb_particles / particle_thread; // 128 ;
-        printf("Nb_particles : %d\n", Nb_particles);
-        ptype *Host_particles_pos ,*Dev_particles_pos, *Host_particles_vel ,*Dev_particles_vel;
-        Host_particles_pos = new ptype[2*Nb_particles*Nb_Tau_p];
-        Host_particles_vel = new ptype[2*Nb_particles*Nb_Tau_p];
-        cudaMalloc((void**) &Dev_particles_pos, 2*Nb_particles*Nb_Tau_p*sizeof(ptype));
-        cudaMalloc((void**) &Dev_particles_vel, 2*Nb_particles*Nb_Tau_p*sizeof(ptype));
+		// initialize all memory
+		int Nb_Tau_p = 21;
+		ptype Tau_p[Nb_Tau_p] = {0.0, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.125, 0.15, 0.25, 0.5, 0.75, 1, 2, 5, 13};
+		int Nb_particles = 1024 * 512; //64; // *512 ;
+		int particle_thread =  256;
+		int particle_block = Nb_particles / particle_thread;
+		printf("Nb_particles : %d\n", Nb_particles);
+		ptype *Host_particles_pos ,*Dev_particles_pos, *Host_particles_vel ,*Dev_particles_vel;
+		Host_particles_pos = new ptype[2*Nb_particles*Nb_Tau_p];
+		Host_particles_vel = new ptype[2*Nb_particles*Nb_Tau_p];
+		cudaMalloc((void**) &Dev_particles_pos, 2*Nb_particles*Nb_Tau_p*sizeof(ptype));
+		cudaMalloc((void**) &Dev_particles_vel, 2*Nb_particles*Nb_Tau_p*sizeof(ptype));
 
-        ptype *Dev_particles_pos_1, *Dev_particles_vel_1,*Dev_particles_pos_2, *Dev_particles_vel_2;
-        cudaMalloc((void**) &Dev_particles_pos_1, 2*Nb_particles*Nb_Tau_p*sizeof(ptype));
-        cudaMalloc((void**) &Dev_particles_vel_1, 2*Nb_particles*Nb_Tau_p*sizeof(ptype));
-        cudaMalloc((void**) &Dev_particles_pos_2, 2*Nb_particles*Nb_Tau_p*sizeof(ptype));
-        cudaMalloc((void**) &Dev_particles_vel_2, 2*Nb_particles*Nb_Tau_p*sizeof(ptype));
+		// create initial positions from random distribution
+		curandGenerator_t prng;
+		curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_DEFAULT);
+		curandGenerateUniformDouble(prng, Dev_particles_pos, 2*Nb_particles*Nb_Tau_p);
 
+		// copy all starting positions onto the other tau values
+		for(int index_tau_p = 1; index_tau_p < Nb_Tau_p; index_tau_p+=1)
+			cudaMemcpy(&Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_pos[0], 2*Nb_particles*sizeof(ptype), cudaMemcpyDeviceToDevice);
 
+		// particles where every time step the position will be saved
+		int Nb_fine_dt_particles = 1000;
+		int freq_fine_dt_particles = save_buffer_count; // redundant
+		int prod_fine_dt_particles = Nb_fine_dt_particles * freq_fine_dt_particles;
+		ptype *Dev_particles_pos_fine_dt, *Host_particles_pos_fine_dt;
 
-       /* #ifdef RKThree_PARTICLES
-            ptype *Dev_particles_vel_previous, *Dev_particles_vel_previous_p;
-            cudaMalloc((void**) &Dev_particles_vel_previous, 2*Nb_particles*Nb_Tau_p*sizeof(ptype)); // Might be too big to carry around three instant of the velocity
-            cudaMalloc((void**) &Dev_particles_vel_previous_p, 2*Nb_particles*Nb_Tau_p*sizeof(ptype)); // with Nb_particles = 1024*512, these 3 arrays take ~503MB on the graphics card
-        #endif*/
+		Host_particles_pos_fine_dt = new ptype[2*prod_fine_dt_particles];
+		cudaMalloc((void**) &Dev_particles_pos_fine_dt, 2*prod_fine_dt_particles*sizeof(ptype));
 
-        curandGenerator_t prng;
-        curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_DEFAULT);
-        curandGenerateUniformDouble(prng, Dev_particles_pos, 2*Nb_particles*Nb_Tau_p);
-
-        cudaMemcpy(Dev_particles_pos_1, Dev_particles_pos, 2*Nb_particles*Nb_Tau_p, cudaMemcpyDeviceToDevice);
-        cudaDeviceSynchronize();
-        cudaMemcpy(Dev_particles_pos_2, Dev_particles_pos, 2*Nb_particles*Nb_Tau_p, cudaMemcpyDeviceToDevice);
-
-        for(int index_tau_p = 1; index_tau_p < Nb_Tau_p; index_tau_p+=1)
-            cudaMemcpy(&Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_pos[0], 2*Nb_particles*sizeof(ptype), cudaMemcpyDeviceToDevice);
-
-        int Nb_fine_dt_particles = 1000;
-        int freq_fine_dt_particles = save_buffer_count; // redundant
-        int prod_fine_dt_particles = Nb_fine_dt_particles * freq_fine_dt_particles;
-        ptype *Dev_particles_pos_fine_dt, *Host_particles_pos_fine_dt;
-
-        Host_particles_pos_fine_dt = new ptype[2*prod_fine_dt_particles];
-        cudaMalloc((void**) &Dev_particles_pos_fine_dt, 2*prod_fine_dt_particles*sizeof(ptype));
-
-       /* Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-        Rescale<<<particle_block, particle_thread>>>(Nb_particles, twoPI, Dev_particles_pos);
-        #pragma unroll Nb_Tau_p - 1
-        for(int index_tau_p = 1; index_tau_p < Nb_Tau_p; index_tau_p+=1){
-            Rescale<<<particle_block, particle_thread>>>(Nb_particles, twoPI, &Dev_particles_pos[2*Nb_particles*index_tau_p]);
-            //Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], Dev_Psi_real, Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-            Particle_advect_iner_ini<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-
-            #ifndef RKThree_PARTICLES
-                Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
-            #else
-                //Particle_advect_iner_ini<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel_previous[2*Nb_particles*index_tau_p], Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-                //Particle_advect_iner_ini<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel_previous_p[2*Nb_particles*index_tau_p], Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-
-               // Particle_advect_inertia_RK3<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
-            #endif
-        }*/
-
-    #endif
+	#endif
 
 
 	/*******************************************************************
@@ -535,7 +489,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	*******************************************************************/
 
 	int count_mesure = 0;
-	int mes_size = tf*snapshots_per_second + 1;
+	int mes_size = tf*snapshots_per_second + 2;  // add initial and last step
     ptype *Mesure;
     ptype *Mesure_fine;
     ptype incomp_error [iterMax+1];
@@ -544,8 +498,8 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 
 
     // File organization : Might be moved
-    std::string fi, element[4] = {"particles", "vorticity_coarse", "vorticity_fine", "Stream_function"};
-    for(int i = 0; i<4; i+=1){
+    std::string fi, element[5] = {"particles", "vorticity_coarse", "vorticity_fine", "Stream_function", "vorticity_fine_lagrangian"};
+    for(int i = 0; i<5; i+=1){
         fi = "data/" + simulationName + "/all_save_data/" + element[i];
         mkdir(fi.c_str(), 0700);
     }
@@ -558,8 +512,6 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
             mkdir(fi.c_str(), 0700);
         }
     #endif
-        fi = "data/" + simulationName + "/all_save_data/vorticity_fine_lagrangian";
-        mkdir(fi.c_str(), 0700);
 
 
     // Laplacian
@@ -741,72 +693,48 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	cudaMemcpy(Host_2048_4, Dev_ChiY, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
 	writeAllRealToBinaryFile(Grid_coarse.N, Host_2048_4, simulationName, "ChiY_0");
 
-
-
-
-
-    // Compute initial quantities (L2 norm)
+	//Mesure for the first step
 	#ifndef sm_50
-		Compute_Energy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[3*count_mesure], Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+		// coarse grid
+		Compute_Energy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[3*count_mesure], Dev_Psi_real, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
 		Compute_Enstrophy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[1 + 3*count_mesure], Dev_W_coarse, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+		// fine grid
+		//Compute_Energy<<<Grid_2048.blocksPerGrid,Grid_2048.threadsPerBlock>>>(&Mesure_fine[3*count_mesure], Dev_Psi_2048, Grid_2048.N, Grid_2048.NX, Grid_2048.NY, Grid_2048.h);
+		Compute_Enstrophy<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(&Mesure_fine[1 + 3*count_mesure], Dev_W_fine, Grid_fine.N, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);
 	#else
-		cudaMemcpy(Host_Psi, Dev_Psi_real_previous, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+		// coarse grid
+		cudaMemcpy(Host_Psi, Dev_Psi_real, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
 		cudaMemcpy(Host_W_coarse, Dev_W_coarse, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
 		Compute_Energy_Host(&Mesure[3*count_mesure], Host_Psi, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
 		Compute_Enstrophy_Host(&Mesure[1 + 3*count_mesure], Host_W_coarse, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+		// fine grid
+		// missing
 	#endif
+	// palinstrophy is computed on Host
 	Compute_Palinstrophy(&Grid_coarse, &Mesure[2 + 3*count_mesure], Dev_W_coarse, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, cufftPlan_coarse);
-
-//    Compute_Energy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[3*count_mesure], Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-//	Compute_Enstrophy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[1 + 3*count_mesure], Dev_W_coarse, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-//    Compute_Palinstrophy(&Grid_coarse, &Mesure[2 + 3*count_mesure], Dev_W_coarse, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, cufftPlan_coarse);
-
-    //Compute_Energy<<<Grid_2048.blocksPerGrid,Grid_2048.threadsPerBlock>>>(&Mesure_fine[3*count_mesure], Dev_Psi_2048, Grid_2048.N, Grid_2048.NX, Grid_2048.NY, Grid_2048.h);
-    Compute_Enstrophy<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(&Mesure_fine[1 + 3*count_mesure], Dev_W_fine, Grid_fine.N, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);
-    Compute_Palinstrophy(&Grid_fine, &Mesure_fine[2 + 3*count_mesure], Dev_W_fine, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, cufftPlan_fine);
+	Compute_Palinstrophy(&Grid_fine, &Mesure_fine[2 + 3*count_mesure], Dev_W_fine, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, cufftPlan_fine);
 
     count_mesure+=1;
 
-    #ifdef PARTICLES
+	#ifdef PARTICLES
 
-        // Particles initialization
-        Rescale<<<particle_block, particle_thread>>>(Nb_particles, twoPI, Dev_particles_pos);
-        Rescale<<<particle_block, particle_thread>>>(Nb_particles, twoPI, Dev_particles_pos_1);
-        Rescale<<<particle_block, particle_thread>>>(Nb_particles, twoPI, Dev_particles_pos_2);
+		// Particles initialization
+		Rescale<<<particle_block, particle_thread>>>(Nb_particles, twoPI, Dev_particles_pos);
+		Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
 
-        Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-        Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt/2, Dev_particles_pos_1, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-        Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt/4, Dev_particles_pos_2, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+		#pragma unroll Nb_Tau_p - 1
+		for(int index_tau_p = 1; index_tau_p < Nb_Tau_p; index_tau_p+=1){
+			Rescale<<<particle_block, particle_thread>>>(Nb_particles, twoPI, &Dev_particles_pos[2*Nb_particles*index_tau_p]);
+			Particle_advect_iner_ini<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+			#ifndef RKThree_PARTICLES
+				Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real_previous, Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
+				// Deux fois Dev_psi_real_previous car Dev_Psi_real n'est pas encore initialisé                                                                                                                ^^           ^^
 
-        //Rescale<<<particle_block, particle_thread>>>(Nb_particles, twoPI, Dev_particles_pos);
-        #pragma unroll Nb_Tau_p - 1
-        for(int index_tau_p = 1; index_tau_p < Nb_Tau_p; index_tau_p+=1){
-            Rescale<<<particle_block, particle_thread>>>(Nb_particles, twoPI, &Dev_particles_pos[2*Nb_particles*index_tau_p]);
-            Rescale<<<particle_block, particle_thread>>>(Nb_particles, twoPI, &Dev_particles_pos_1[2*Nb_particles*index_tau_p]);
-            Rescale<<<particle_block, particle_thread>>>(Nb_particles, twoPI, &Dev_particles_pos_2[2*Nb_particles*index_tau_p]);
-
-            //Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], Dev_Psi_real, Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-            Particle_advect_iner_ini<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-            Particle_advect_iner_ini<<<particle_block, particle_thread>>>(Nb_particles, dt/2, &Dev_particles_pos_1[2*Nb_particles*index_tau_p], &Dev_particles_vel_1[2*Nb_particles*index_tau_p], Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-            Particle_advect_iner_ini<<<particle_block, particle_thread>>>(Nb_particles, dt/4, &Dev_particles_pos_2[2*Nb_particles*index_tau_p], &Dev_particles_vel_2[2*Nb_particles*index_tau_p], Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-
-            #ifndef RKThree_PARTICLES
-                Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real_previous, Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
-                Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt/2, &Dev_particles_pos_1[2*Nb_particles*index_tau_p], &Dev_particles_vel_1[2*Nb_particles*index_tau_p], Dev_Psi_real_previous, Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
-                Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt/4, &Dev_particles_pos_2[2*Nb_particles*index_tau_p], &Dev_particles_vel_2[2*Nb_particles*index_tau_p], Dev_Psi_real_previous, Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
-
-                // Deux fois Dev_psi_real_previous car Dev_Psi_real n'est pas encore initialisé                                                                                                                ^^           ^^
-            #else
-                //Particle_advect_iner_ini<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel_previous[2*Nb_particles*index_tau_p], Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-                //Particle_advect_iner_ini<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel_previous_p[2*Nb_particles*index_tau_p], Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-
-                Particle_advect_inertia_RK3<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
-                Particle_advect_inertia_RK3<<<particle_block, particle_thread>>>(Nb_particles, dt/2, &Dev_particles_pos_1[2*Nb_particles*index_tau_p], &Dev_particles_vel_1[2*Nb_particles*index_tau_p], Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
-                Particle_advect_inertia_RK3<<<particle_block, particle_thread>>>(Nb_particles, dt/4, &Dev_particles_pos_2[2*Nb_particles*index_tau_p], &Dev_particles_vel_2[2*Nb_particles*index_tau_p], Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
-
-            #endif
-            }
-    #endif
+			#else
+				Particle_advect_inertia_RK3<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
+			#endif
+			}
+	#endif
 
 
 
@@ -853,36 +781,25 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 
 
 		// Particles advection
-        #ifdef PARTICLES
-            Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-            cudaMemcpy(&Dev_particles_pos_fine_dt[(loop_ctr * Nb_fine_dt_particles * 2) % (2*prod_fine_dt_particles)], Dev_particles_pos, 2*Nb_fine_dt_particles*sizeof(ptype), cudaMemcpyDeviceToDevice);
-            cudaDeviceSynchronize();
-            Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt/2, Dev_particles_pos_1, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-            cudaDeviceSynchronize();
-            Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt/4, Dev_particles_pos_2, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+		#ifdef PARTICLES
+			Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+			cudaMemcpy(&Dev_particles_pos_fine_dt[(loop_ctr * Nb_fine_dt_particles * 2) % (2*prod_fine_dt_particles)], Dev_particles_pos, 2*Nb_fine_dt_particles*sizeof(ptype), cudaMemcpyDeviceToDevice);
+			#pragma unroll Nb_Tau_p - 1
+			for(int index_tau_p = 1; index_tau_p < Nb_Tau_p; index_tau_p+=1){
+				#ifndef RKThree_PARTICLES
+					 Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
+				#else
+					 Particle_advect_inertia_RK3<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
+				#endif
 
-            #pragma unroll Nb_Tau_p - 1
-            for(int index_tau_p = 1; index_tau_p < Nb_Tau_p; index_tau_p+=1){
-                #ifndef RKThree_PARTICLES
-                     Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
-                     Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt/2, &Dev_particles_pos_1[2*Nb_particles*index_tau_p], &Dev_particles_vel_1[2*Nb_particles*index_tau_p], Dev_Psi_real, Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
-                     Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt/4, &Dev_particles_pos_2[2*Nb_particles*index_tau_p], &Dev_particles_vel_2[2*Nb_particles*index_tau_p], Dev_Psi_real, Dev_Psi_real_previous, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
+			}
+		#endif
 
-                #else
-                    Particle_advect_inertia_RK3<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
-                    Particle_advect_inertia_RK3<<<particle_block, particle_thread>>>(Nb_particles, dt/2, &Dev_particles_pos_1[2*Nb_particles*index_tau_p], &Dev_particles_vel_1[2*Nb_particles*index_tau_p], Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
-                    Particle_advect_inertia_RK3<<<particle_block, particle_thread>>>(Nb_particles, dt/4, &Dev_particles_pos_2[2*Nb_particles*index_tau_p], &Dev_particles_vel_2[2*Nb_particles*index_tau_p], Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Tau_p[index_tau_p]);
-
-                #endif
-
-            }
-        #endif
-
-        kernel_advect_using_stream_hermite2<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Dev_ChiDualX, Dev_ChiDualY, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, t, dt, ep, time_integration_num, map_update_num_c);	// time cost
-
-        //kernel_advect_using_stream_hermite2<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Dev_ChiDualX, Dev_ChiDualY, Dev_Psi_2048, Dev_Psi_2048_previous, Dev_Psi_2048_previous_p, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, t, dt, ep);	// time cost
-        kernel_update_map_from_dual<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock, 0, streams[0]>>>(Dev_ChiX, Dev_ChiY, Dev_ChiDualX, Dev_ChiDualY, Grid_coarse.NX, Grid_coarse.NY, ep, map_update_num_c);
-
+		// map advection
+		kernel_advect_using_stream_hermite<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Dev_Chi_new_X, Dev_Chi_new_Y, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, t, dt, ep, time_integration_num, map_update_num_c);	// time cost
+		// copy new map values onto the existing map
+		cudaMemcpy(Dev_ChiX, Dev_Chi_new_X, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice);
+		cudaMemcpy(Dev_ChiY, Dev_Chi_new_Y, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice);
 
        /* #ifdef RKThree_PARTICLES
             // copy particles velocity to previous instance
@@ -1041,12 +958,12 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 
 
 
-           if(loop_ctr == 110 || loop_ctr == 126){
-                kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_2048, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_2048, Dev_Complex_fine_2048, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_2048.NX, Grid_2048.NY, Grid_2048.h, Dev_W_H_initial, simulation_num_c);
-                cudaMemcpy(Host_2048_4, Dev_W_2048, Grid_2048.sizeNReal, cudaMemcpyDeviceToHost);
-                writeAllRealToBinaryFile(Grid_2048.N, Host_2048_4, simulationName, "vorticity_fine/w_1024_" + std::to_string(loop_ctr));
-
-            }
+//           if(loop_ctr == 110 || loop_ctr == 126){  // For validation of the code with the JCP paer : Spectrum at time t~=3.5, t~=4
+//                kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_2048, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_2048, Dev_Complex_fine_2048, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_2048.NX, Grid_2048.NY, Grid_2048.h, Dev_W_H_initial, simulation_num_c);
+//                cudaMemcpy(Host_2048_4, Dev_W_2048, Grid_2048.sizeNReal, cudaMemcpyDeviceToHost);
+//                writeAllRealToBinaryFile(Grid_2048.N, Host_2048_4, simulationName, "vorticity_fine/w_1024_" + std::to_string(loop_ctr));
+//
+//            }
 
 			if( loop_ctr % save_buffer_count == 0 )
 			{
@@ -1111,21 +1028,25 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	            */
 				save_ctr++;
 
-                //Mesure on the coarse grid
+                //Mesure
 				#ifndef sm_50
+					// coarse grid
 					Compute_Energy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[3*count_mesure], Dev_Psi_real, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
 					Compute_Enstrophy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[1 + 3*count_mesure], Dev_W_coarse, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+					// fine grid
+	                //Compute_Energy<<<Grid_2048.blocksPerGrid,Grid_2048.threadsPerBlock>>>(&Mesure_fine[3*count_mesure], Dev_Psi_2048, Grid_2048.N, Grid_2048.NX, Grid_2048.NY, Grid_2048.h);
+	                Compute_Enstrophy<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(&Mesure_fine[1 + 3*count_mesure], Dev_W_fine, Grid_fine.N, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);
 				#else
+	                // coarse grid
 					cudaMemcpy(Host_Psi, Dev_Psi_real, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
 					cudaMemcpy(Host_W_coarse, Dev_W_coarse, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
 					Compute_Energy_Host(&Mesure[3*count_mesure], Host_Psi, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
 					Compute_Enstrophy_Host(&Mesure[1 + 3*count_mesure], Host_W_coarse, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+					// fine grid
+					// missing
 				#endif
+				// palinstrophy is computed on Host
 				Compute_Palinstrophy(&Grid_coarse, &Mesure[2 + 3*count_mesure], Dev_W_coarse, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, cufftPlan_coarse);
-
-                //Measure on the fine grid
-                //Compute_Energy<<<Grid_2048.blocksPerGrid,Grid_2048.threadsPerBlock>>>(&Mesure_fine[3*count_mesure], Dev_Psi_2048, Grid_2048.N, Grid_2048.NX, Grid_2048.NY, Grid_2048.h);
-                Compute_Enstrophy<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(&Mesure_fine[1 + 3*count_mesure], Dev_W_fine, Grid_fine.N, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);
                 Compute_Palinstrophy(&Grid_fine, &Mesure_fine[2 + 3*count_mesure], Dev_W_fine, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, cufftPlan_fine);
 
 				count_mesure+=1;
@@ -1178,8 +1099,32 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
     #ifdef PARTICLES
         writeAllRealToBinaryFile(2*Nb_particles, Host_particles_pos, simulationName, "particles_pos_final");
     #endif
+
+	//Mesure for the final step
+	#ifndef sm_50
+		// coarse grid
+		Compute_Energy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[3*count_mesure], Dev_Psi_real, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+		Compute_Enstrophy<<<Grid_coarse.blocksPerGrid,Grid_coarse.threadsPerBlock>>>(&Mesure[1 + 3*count_mesure], Dev_W_coarse, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+		// fine grid
+		//Compute_Energy<<<Grid_2048.blocksPerGrid,Grid_2048.threadsPerBlock>>>(&Mesure_fine[3*count_mesure], Dev_Psi_2048, Grid_2048.N, Grid_2048.NX, Grid_2048.NY, Grid_2048.h);
+		Compute_Enstrophy<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(&Mesure_fine[1 + 3*count_mesure], Dev_W_fine, Grid_fine.N, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);
+	#else
+		// coarse grid
+		cudaMemcpy(Host_Psi, Dev_Psi_real, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+		cudaMemcpy(Host_W_coarse, Dev_W_coarse, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+		Compute_Energy_Host(&Mesure[3*count_mesure], Host_Psi, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+		Compute_Enstrophy_Host(&Mesure[1 + 3*count_mesure], Host_W_coarse, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+		// fine grid
+		// missing
+	#endif
+	// palinstrophy is computed on Host
+	Compute_Palinstrophy(&Grid_coarse, &Mesure[2 + 3*count_mesure], Dev_W_coarse, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, cufftPlan_coarse);
+	Compute_Palinstrophy(&Grid_fine, &Mesure_fine[2 + 3*count_mesure], Dev_W_fine, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, cufftPlan_fine);
+
 	writeAllRealToBinaryFile(3*mes_size, Mesure, simulationName, "Mesure");
 	writeAllRealToBinaryFile(3*mes_size, Mesure_fine, simulationName, "Mesure_fine");
+
+    // save imcomp error
 	writeAllRealToBinaryFile(iterMax, incomp_error, simulationName, "Incompressibility_check");
 	
 	
@@ -1287,8 +1232,8 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	delete [] Host_ChiY;
 	cudaFree(Dev_ChiX);
 	cudaFree(Dev_ChiY);
-	cudaFree(Dev_ChiDualX);
-	cudaFree(Dev_ChiDualY);
+	cudaFree(Dev_Chi_new_X);
+	cudaFree(Dev_Chi_new_Y);
 	
 	// Chi_stack
 	delete [] Host_ChiX_stack_RAM_0;
