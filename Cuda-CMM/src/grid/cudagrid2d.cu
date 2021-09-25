@@ -2,7 +2,7 @@
 
 
 
-ptype ep = 1e-4;
+double ep = 1e-4;
 
 
 
@@ -43,7 +43,7 @@ void Logger::push()
 }
 
 
-TCudaGrid2D::TCudaGrid2D(int NX, int NY, ptype xRange)
+TCudaGrid2D::TCudaGrid2D(int NX, int NY, double xRange)
 {
 	this->NX = NX;
 	this->NY = NY;
@@ -51,8 +51,8 @@ TCudaGrid2D::TCudaGrid2D(int NX, int NY, ptype xRange)
 	this->h = xRange/(float)NX;
 	
 	N = NX*NY;
-	this->sizeNReal = sizeof(ptype)*N;
-	this->sizeNComplex = sizeof(cuPtype)*N;	
+	this->sizeNReal = sizeof(double)*N;
+	this->sizeNComplex = sizeof(cufftDoubleComplex)*N;
 
 
 			//block & grid
@@ -72,12 +72,12 @@ TCudaGrid2D::TCudaGrid2D(int NX, int NY, ptype xRange)
 }
 
 
-void get_max_min(TCudaGrid2D *G, ptype *var, ptype *min, ptype *max)
+void get_max_min(TCudaGrid2D *G, double *var, double *min, double *max)
 {
 	//calculating max and min
-	ptype var_min, var_max;
+	double var_min, var_max;
 	
-		FOR(i, G->N)
+		for(int i=0; i<G->N; i++)
 		{
 			if(i==0)
 			{
@@ -97,7 +97,7 @@ void get_max_min(TCudaGrid2D *G, ptype *var, ptype *min, ptype *max)
 }
 
 
-void Host_get_max_min(int len, ptype *Var_min, ptype *Var_max, ptype min, ptype max)
+void Host_get_max_min(int len, double *Var_min, double *Var_max, double min, double max)
 {
 	//calculating max and min
 
@@ -116,7 +116,7 @@ void Host_get_max_min(int len, ptype *Var_min, ptype *Var_max, ptype min, ptype 
 }
 
 
-__global__ void Dev_get_max_min(int len, ptype *var, ptype *min, ptype *max)
+__global__ void Dev_get_max_min(int len, double *var, double *min, double *max)
 {
     
 	int In = threadIdx.x + blockDim.x * blockIdx.x;
@@ -124,7 +124,7 @@ __global__ void Dev_get_max_min(int len, ptype *var, ptype *min, ptype *max)
 	
 	int pos = len / Di * In, step_pos = len / Di;
 	//calculating max and min
-	ptype var_min, var_max;
+	double var_min, var_max;
 
 	var_min = var[pos];
 	var_max = var[pos];
@@ -149,7 +149,7 @@ __global__ void Dev_get_max_min(int len, ptype *var, ptype *min, ptype *max)
 *******************************************************************/
 
 
-__global__ void kernel_fft_lap(cuPtype *AOut, cuPtype *BOut, int NX, int NY, ptype h)						// Laplace operator in Fourier space
+__global__ void kernel_fft_lap(cufftDoubleComplex *AOut, cufftDoubleComplex *BOut, int NX, int NY, double h)						// Laplace operator in Fourier space
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -166,18 +166,18 @@ __global__ void kernel_fft_lap(cuPtype *AOut, cuPtype *BOut, int NX, int NY, pty
 	
 	int In = iY*NX + iX;	
 	
-	ptype kx = twoPI/(h*NX) * (iX - (iX>NX/2)*NX);						// twoPI/(h*NX) = 1 
-	ptype ky = twoPI/(h*NY) * (iY - (iY>NY/2)*NY);
-	ptype k2 = kx*kx + ky*ky;
+	double kx = twoPI/(h*NX) * (iX - (iX>NX/2)*NX);						// twoPI/(h*NX) = 1
+	double ky = twoPI/(h*NY) * (iY - (iY>NY/2)*NY);
+	double k2 = kx*kx + ky*ky;
 	
-	ptype x = -AOut[In].x * k2;
-	ptype y = -AOut[In].y * k2;
+	double x = -AOut[In].x * k2;
+	double y = -AOut[In].y * k2;
 	
 	BOut[In].x = x;	
 	BOut[In].y = y;	
 }
 
-__global__ void kernel_fft_iLap(cuPtype *AOut, cuPtype *BOut, int NX, int NY, ptype h)						// Inverse laplace operator in Fourier space
+__global__ void kernel_fft_iLap(cufftDoubleComplex *AOut, cufftDoubleComplex *BOut, int NX, int NY, double h)						// Inverse laplace operator in Fourier space
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -194,18 +194,18 @@ __global__ void kernel_fft_iLap(cuPtype *AOut, cuPtype *BOut, int NX, int NY, pt
 	
 	int In = iY*NX + iX;	
 	
-	ptype kx = twoPI/(h*NX) * (iX - (iX>NX/2)*NX);						// twoPI/(h*NX) = twoPI/(twoPI/NX*NX) = 1 
-	ptype ky = twoPI/(h*NY) * (iY - (iY>NY/2)*NY);
-	ptype k2 = kx*kx + ky*ky;
+	double kx = twoPI/(h*NX) * (iX - (iX>NX/2)*NX);						// twoPI/(h*NX) = twoPI/(twoPI/NX*NX) = 1
+	double ky = twoPI/(h*NY) * (iY - (iY>NY/2)*NY);
+	double k2 = kx*kx + ky*ky;
 	
-	ptype x = -AOut[In].x / k2;
-	ptype y = -AOut[In].y / k2;
+	double x = -AOut[In].x / k2;
+	double y = -AOut[In].y / k2;
 	
 	BOut[In].x = x;	
 	BOut[In].y = y;	
 }
 
-__global__ void kernel_fft_dx(cuPtype *AOut, cuPtype *BOut, int NX, int NY, ptype h)						// x derivative in Fourier space
+__global__ void kernel_fft_dx(cufftDoubleComplex *AOut, cufftDoubleComplex *BOut, int NX, int NY, double h)						// x derivative in Fourier space
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -216,16 +216,16 @@ __global__ void kernel_fft_dx(cuPtype *AOut, cuPtype *BOut, int NX, int NY, ptyp
 	
 	int In = iY*NX + iX;	
 	
-	ptype kx = twoPI/(h*NX) * (iX - (iX>NX/2)*NX);
+	double kx = twoPI/(h*NX) * (iX - (iX>NX/2)*NX);
 	
-	ptype x = -AOut[In].y * kx;
-	ptype y =  AOut[In].x * kx;
+	double x = -AOut[In].y * kx;
+	double y =  AOut[In].x * kx;
 	
 	BOut[In].x = x;	
 	BOut[In].y = y;	
 }
 
-__global__ void kernel_fft_dy(cuPtype *AOut, cuPtype *BOut, int NX, int NY, ptype h)						// y derivative in Fourier space
+__global__ void kernel_fft_dy(cufftDoubleComplex *AOut, cufftDoubleComplex *BOut, int NX, int NY, double h)						// y derivative in Fourier space
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -236,10 +236,10 @@ __global__ void kernel_fft_dy(cuPtype *AOut, cuPtype *BOut, int NX, int NY, ptyp
 	
 	int In = iY*NX + iX;	
 	
-	ptype ky = twoPI/(h*NY) * (iY - (iY>NY/2)*NY);
+	double ky = twoPI/(h*NY) * (iY - (iY>NY/2)*NY);
 	
-	ptype x = -AOut[In].y * ky;
-	ptype y =  AOut[In].x * ky;
+	double x = -AOut[In].y * ky;
+	double y =  AOut[In].x * ky;
 	
 	BOut[In].x = x;	
 	BOut[In].y = y;	
@@ -264,7 +264,7 @@ const std::string currentDateTime() {
 *******************************************************************/
 
 
-void writeRealToFile(TCudaGrid2D *G, ptype *var, string fileName)
+void writeRealToFile(TCudaGrid2D *G, double *var, string fileName)
 {
 	fileName = "data/" + fileName + ".csv";
 	ofstream file(fileName.c_str(), ios::out);
@@ -277,9 +277,9 @@ void writeRealToFile(TCudaGrid2D *G, ptype *var, string fileName)
 	
 	char buffer[50];
 	int n=0;
-	FOR(j, G->NY)
+	for (int j=0; j<G->NY; j++)
 	{
-		FOR(i, G->NX)
+		for (int i=0; i<G->NX; i++)
 		{
 			sprintf(buffer, "%e", var[n]);
 			file<<buffer<< ",";
@@ -291,7 +291,7 @@ void writeRealToFile(TCudaGrid2D *G, ptype *var, string fileName)
 }
 
 
-void writeRealToBinaryFile(TCudaGrid2D *G, ptype *var, string fileName)
+void writeRealToBinaryFile(TCudaGrid2D *G, double *var, string fileName)
 {
 	fileName = "data/" + fileName + ".data";
 	ofstream file(fileName.c_str(), ios::out | ios::binary);
@@ -303,11 +303,11 @@ void writeRealToBinaryFile(TCudaGrid2D *G, ptype *var, string fileName)
 		}
 	
 	int n=0;
-	FOR(j, G->NY)
+	for (int j=0; j<G->NY; j++)
 	{
-		FOR(i, G->NX)
+		for (int i=0; i<G->NX; i++)
 		{
-			file.write( (char*) &var[n], sizeof(ptype) );
+			file.write( (char*) &var[n], sizeof(double) );
 			n++;
 		}
 	}
@@ -315,7 +315,7 @@ void writeRealToBinaryFile(TCudaGrid2D *G, ptype *var, string fileName)
 }
 
 
-int readRealFromBinaryFile(TCudaGrid2D *G, ptype *var, string fileName)
+int readRealFromBinaryFile(TCudaGrid2D *G, double *var, string fileName)
 {
 	fileName = "data/" + fileName + ".data";
 	ifstream file(fileName.c_str(), ios::in | ios::binary);
@@ -327,11 +327,11 @@ int readRealFromBinaryFile(TCudaGrid2D *G, ptype *var, string fileName)
 		}
 	
 	int n=0;
-	FOR(j, G->NY)
+	for (int j=0; j<G->NY; j++)
 	{
-		FOR(i, G->NX)
+		for (int i=0; i<G->NX; i++)
 		{
-			file.read( (char*) &var[n], sizeof(ptype) );
+			file.read( (char*) &var[n], sizeof(double) );
 			n++;
 		}
 	}
@@ -341,7 +341,7 @@ int readRealFromBinaryFile(TCudaGrid2D *G, ptype *var, string fileName)
 }
 
 
-void writeDiffeoToBinaryFile(TCudaGrid2D *G, ptype *ChiX, ptype *ChiY, string simulationName, string fileName, int ctr)
+void writeDiffeoToBinaryFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr)
 {
 	std::ostringstream ss;
 	ss<<ctr;
@@ -359,13 +359,13 @@ void writeDiffeoToBinaryFile(TCudaGrid2D *G, ptype *ChiX, ptype *ChiY, string si
 }
 
 /*
-void writeRealToImage(TCudaGrid2D *G, ptype *var, string fileName, ptype min, ptype max, color_map_choice map, bool INVERTED)
+void writeRealToImage(TCudaGrid2D *G, double *var, string fileName, double min, double max, color_map_choice map, bool INVERTED)
 {
 	const unsigned int dimX = G->NX;
 	const unsigned int dimY = G->NY;
 	bitmap_image image(dimX,dimY);
 
-	ptype var_range = max - min;
+	double var_range = max - min;
 
 	const rgb_store *color_map;
 	switch(map)
@@ -414,7 +414,7 @@ void writeRealToImage(TCudaGrid2D *G, ptype *var, string fileName, ptype min, pt
 *******************************************************************/
 
 
-void writeAllRealToBinaryFile(int Len, ptype *var, string simulationName, string fileName)
+void writeAllRealToBinaryFile(int Len, double *var, string simulationName, string fileName)
 {
 	fileName = "data/" + simulationName + "/all_save_data/" + fileName + ".data";
 	ofstream file(fileName.c_str(), ios::out | ios::binary);
@@ -425,14 +425,14 @@ void writeAllRealToBinaryFile(int Len, ptype *var, string simulationName, string
 			return;
 		}
 	
-	FOR(l, Len)
-		file.write( (char*) &var[l], sizeof(ptype) );
+	for (int l=0; l<Len; l++)
+		file.write( (char*) &var[l], sizeof(double) );
 		
 	file.close();
 }
 
 
-void readAllRealFromBinaryFile(int Len, ptype *var, string simulationName, string fileName)
+void readAllRealFromBinaryFile(int Len, double *var, string simulationName, string fileName)
 {
 	fileName = "data/" + simulationName + "/all_save_data/" + fileName + ".data";
 	ifstream file(fileName.c_str(), ios::in | ios::binary);
@@ -442,14 +442,14 @@ void readAllRealFromBinaryFile(int Len, ptype *var, string simulationName, strin
 			cout<<"Error saving file. Unable to open : "<<fileName<<endl;
 		}
 		
-	FOR(l, Len)
-		file.read( (char*) &var[l], sizeof(ptype) );
+	for (int l=0; l<Len; l++)
+		file.read( (char*) &var[l], sizeof(double) );
 		
 	file.close();
 }
 
 
-void writeAllData(TCudaGrid2D *Gc, TCudaGrid2D *Gsf, ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ChiDualX, ptype *ChiDualY, ptype *wsf, ptype *wc, ptype *lsf, ptype *Phi, int stack_map_passed, string t_nb, string simulationName)
+void writeAllData(TCudaGrid2D *Gc, TCudaGrid2D *Gsf, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *ChiDualX, double *ChiDualY, double *wsf, double *wc, double *lsf, double *Phi, int stack_map_passed, string t_nb, string simulationName)
 {
 	
 	string fileName = "data/" + simulationName + "/all_save_data/stack_map_passed_" + t_nb + ".data";
@@ -472,7 +472,7 @@ void writeAllData(TCudaGrid2D *Gc, TCudaGrid2D *Gsf, ptype *ChiX_stack, ptype *C
 }
 
 
-void readAllData(TCudaGrid2D *Gc, TCudaGrid2D *Gsf, ptype *ChiX_stack, ptype *ChiY_stack, ptype *ChiX, ptype *ChiY, ptype *ChiDualX, ptype *ChiDualY, ptype *wsf, ptype *lsf, ptype *Phi, int stack_map_passed, string t_nb, string simulationName)
+void readAllData(TCudaGrid2D *Gc, TCudaGrid2D *Gsf, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *ChiDualX, double *ChiDualY, double *wsf, double *lsf, double *Phi, int stack_map_passed, string t_nb, string simulationName)
 {
 	
 	string fileName = "data/" + simulationName + "/all_save_data/stack_map_passed_" + t_nb + ".data";
@@ -494,7 +494,7 @@ void readAllData(TCudaGrid2D *Gc, TCudaGrid2D *Gsf, ptype *ChiX_stack, ptype *Ch
 }
 
 
-void writeRealToBinaryAnyFile(int Len, ptype *var, string fileAdress)
+void writeRealToBinaryAnyFile(int Len, double *var, string fileAdress)
 {
 	string fileName = fileAdress;
 	ofstream file(fileName.c_str(), ios::out | ios::binary);
@@ -505,14 +505,14 @@ void writeRealToBinaryAnyFile(int Len, ptype *var, string fileAdress)
 			return;
 		}
 	
-	FOR(l, Len)
-		file.write( (char*) &var[l], sizeof(ptype) );
+	for (int l=0; l<Len; l++)
+		file.write( (char*) &var[l], sizeof(double) );
 		
 	file.close();
 }
 
 
-void readRealToBinaryAnyFile(int Len, ptype *var, string fileAdress)
+void readRealToBinaryAnyFile(int Len, double *var, string fileAdress)
 {
 	string fileName = fileAdress;
 	ifstream file(fileName.c_str(), ios::in | ios::binary);
@@ -522,8 +522,8 @@ void readRealToBinaryAnyFile(int Len, ptype *var, string fileAdress)
 			cout<<"Error saving file. Unable to open : "<<fileName<<endl;
 		}
 		
-	FOR(l, Len)
-		file.read( (char*) &var[l], sizeof(ptype) );
+	for (int l=0; l<Len; l++)
+		file.read( (char*) &var[l], sizeof(double) );
 		
 	file.close();
 }
@@ -545,36 +545,36 @@ void readRealToBinaryAnyFile(int Len, ptype *var, string fileAdress)
 
 
 
-void writeComplexToFile(TCudaGrid2D *G, cuPtype *var, string fileName)
+void writeComplexToFile(TCudaGrid2D *G, cufftDoubleComplex *var, string fileName)
 {
 }
 
-void writeHalfComplexToFile(TCudaGrid2D *G, cuPtype *var, string fileName)
+void writeHalfComplexToFile(TCudaGrid2D *G, cufftDoubleComplex *var, string fileName)
 {
 }
 
-void writeDiffeoToFile(TCudaGrid2D *G, ptype *ChiX, ptype *ChiY, string simulationName, string fileName, int ctr)
+void writeDiffeoToFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr)
 {
 }
 
-void writeDiffeoStackToFile(TCudaGrid2D *G, ptype *ChiX, ptype *ChiY, string simulationName, string fileName, int ctr)
+void writeDiffeoStackToFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr)
 {
 }
 
-int readDiffeoFromBinaryFile(TCudaGrid2D *G, ptype *ChiX, ptype *ChiY, string simulationName, string fileName, int ctr)
+int readDiffeoFromBinaryFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr)
 {
 return 0;
 }
 
-void writeVorticityToFile(TCudaGrid2D *G, cuPtype *w, string simulationName, string fileName, int ctr)
+void writeVorticityToFile(TCudaGrid2D *G, cufftDoubleComplex *w, string simulationName, string fileName, int ctr)
 {
 }
 
-void writeVorticityToImage(TCudaGrid2D *G, cuPtype *w, ptype min, ptype max, string simulationName, string fileName, int ctr)
+void writeVorticityToImage(TCudaGrid2D *G, cufftDoubleComplex *w, double min, double max, string simulationName, string fileName, int ctr)
 {
 }
 
-void writeHalfComplexToImage(TCudaGrid2D *G, cuPtype *var, string fileName, ptype min, ptype max, color_map_choice map, bool INVERTED)
+void writeHalfComplexToImage(TCudaGrid2D *G, cufftDoubleComplex *var, string fileName, double min, double max, color_map_choice map, bool INVERTED)
 {
 }
 

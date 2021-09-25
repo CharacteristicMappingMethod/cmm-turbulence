@@ -14,12 +14,12 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	*						 	 Constants							   *
 	*******************************************************************/
 	
-	ptype LX;															// domain length
+	double LX;															// domain length
 	int NX_coarse, NY_coarse;											// coarse grid size
 	int NX_fine, NY_fine;												// fine grid size
 	
 	double grid_by_time;
-	ptype t0, dt, tf;													// time - initial, step, final
+	double t0, dt, tf;													// time - initial, step, final
 	int iterMax;														// maximum iteration count
 	string simulationName;												// name of the simulation: files get stored in the directory of this name
 	int simulation_num;													// needed for activation in device code
@@ -27,7 +27,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	int save_buffer_count;												// iterations after which files should be saved
 	int map_stack_length;												// this parameter is set to avoide memory overflow on GPU
 	int show_progress_at;
-	ptype inCompThreshold = 1e-4;										// the maximum allowance of map to deviate from grad_chi begin 1
+	double inCompThreshold = 1e-4;										// the maximum allowance of map to deviate from grad_chi begin 1
 	
 	//GPU dependent parameters
 	int mem_RAM_GPU_remaps = 128; 										// mem_index in MB on the GPU
@@ -43,7 +43,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	t0 = 0.0;
 
 	// time steps per second used by 4_nodes
-	ptype tmp_4nodes = 64;
+	double tmp_4nodes = 64;
 
 	// "4_nodes"		"quadropole"		"three_vortices"		"single_shear_layer"		"two_votices"
 	if(simulationName == "4_nodes")
@@ -135,7 +135,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 		tf = 100;	
 	#endif
 	#ifndef DISCRET
-		ptype *Dev_W_H_initial;
+		double *Dev_W_H_initial;
 		cudaMalloc((void**)&Dev_W_H_initial, 8);
 	#endif
 	
@@ -213,7 +213,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	*							Trash variable	   					   *
 	*******************************************************************/
 	
-	cuPtype *Dev_Complex_fine, *Dev_Hat_fine, *Dev_Hat_fine_bis;
+	cufftDoubleComplex *Dev_Complex_fine, *Dev_Hat_fine, *Dev_Hat_fine_bis;
 	cudaMalloc((void**)&Dev_Complex_fine, Grid_fine.sizeNComplex);
 	cudaMalloc((void**)&Dev_Hat_fine, Grid_fine.sizeNComplex);
 	cudaMalloc((void**)&Dev_Hat_fine_bis, Grid_fine.sizeNComplex);
@@ -230,18 +230,18 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	int iNDFT_block, iNDFT_thread = 256;
 	iNDFT_block = Np_particles/256;
 	int *f_k, *Dev_f_k;
-	ptype *x_1_n, *x_2_n, *p_n, *Dev_x_1_n, *Dev_x_2_n, *Dev_p_n, *X_k_bis;
-	cuPtype *X_k, *Dev_X_k, *Dev_X_k_derivative;
+	double *x_1_n, *x_2_n, *p_n, *Dev_x_1_n, *Dev_x_2_n, *Dev_p_n, *X_k_bis;
+	cufftDoubleComplex *X_k, *Dev_X_k, *Dev_X_k_derivative;
 	
-	x_1_n = new ptype[Np_particles];
-	x_2_n = new ptype[Np_particles];
-	p_n = new ptype[2*Np_particles];
+	x_1_n = new double[Np_particles];
+	x_2_n = new double[Np_particles];
+	p_n = new double[2*Np_particles];
 	f_k = new int[Grid_NDFT.NX];
-	X_k = new cuPtype[Grid_NDFT.N];
-	X_k_bis = new ptype[2*Grid_NDFT.N];
-	cudaMalloc((void**)&Dev_x_1_n, sizeof(ptype)*Np_particles);
-	cudaMalloc((void**)&Dev_x_2_n, sizeof(ptype)*Np_particles);
-	cudaMalloc((void**)&Dev_p_n, sizeof(ptype)*2*Np_particles);
+	X_k = new cufftDoubleComplex[Grid_NDFT.N];
+	X_k_bis = new double[2*Grid_NDFT.N];
+	cudaMalloc((void**)&Dev_x_1_n, sizeof(double)*Np_particles);
+	cudaMalloc((void**)&Dev_x_2_n, sizeof(double)*Np_particles);
+	cudaMalloc((void**)&Dev_p_n, sizeof(double)*2*Np_particles);
 	cudaMalloc((void**)&Dev_f_k, sizeof(int)*Np_particles);
 	cudaMalloc((void**)&Dev_X_k, Grid_NDFT.sizeNComplex);
 	cudaMalloc((void**)&Dev_X_k_derivative, Grid_NDFT.sizeNComplex);
@@ -253,23 +253,23 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	for(int i = 0; i < Grid_NDFT.NX; i+=1)
 		f_k[i] = i;
 	
-	cudaMemcpy(Dev_x_1_n, x_1_n, sizeof(ptype)*Np_particles, cudaMemcpyHostToDevice);
-	cudaMemcpy(Dev_x_2_n, x_2_n, sizeof(ptype)*Np_particles, cudaMemcpyHostToDevice);
-	cudaMemcpy(Dev_p_n, p_n, sizeof(ptype)*2*Np_particles, cudaMemcpyHostToDevice);
+	cudaMemcpy(Dev_x_1_n, x_1_n, sizeof(double)*Np_particles, cudaMemcpyHostToDevice);
+	cudaMemcpy(Dev_x_2_n, x_2_n, sizeof(double)*Np_particles, cudaMemcpyHostToDevice);
+	cudaMemcpy(Dev_p_n, p_n, sizeof(double)*2*Np_particles, cudaMemcpyHostToDevice);
 	cudaMemcpy(Dev_f_k, f_k, sizeof(int)*Grid_NDFT.NX, cudaMemcpyHostToDevice);
 	
 	printf("NDFT v_x\n");
 	NDFT_2D<<<Grid_NDFT.blocksPerGrid, Grid_NDFT.threadsPerBlock>>>(Dev_X_k, Dev_x_1_n, Dev_p_n, Dev_f_k, Grid_NDFT.NX, Np_particles);
 	printf("iNDFT v_x\n");
 	iNDFT_2D<<<iNDFT_block, iNDFT_thread>>>(Dev_X_k, Dev_x_1_n, Dev_p_n, Dev_f_k, Grid_NDFT.NX);
-	cudaMemcpy(x_1_n, Dev_x_1_n, sizeof(ptype)*Np_particles, cudaMemcpyDeviceToHost);
+	cudaMemcpy(x_1_n, Dev_x_1_n, sizeof(double)*Np_particles, cudaMemcpyDeviceToHost);
 	writeRealToBinaryAnyFile(Np_particles, x_1_n, "src/Initial_W_discret/x_1_ifft.data");
 	
 	printf("kernel_fft_dx\n");
 	kernel_fft_dx<<<Grid_NDFT.blocksPerGrid, Grid_NDFT.threadsPerBlock>>>(Dev_X_k, Dev_X_k_derivative, Grid_NDFT.NX, Grid_NDFT.NY, Grid_NDFT.h);
 	printf("iNDFT v_x/dx\n");
 	iNDFT_2D<<<iNDFT_block, iNDFT_thread>>>(Dev_X_k_derivative, Dev_x_1_n, Dev_p_n, Dev_f_k, Grid_NDFT.NX);
-	cudaMemcpy(x_1_n, Dev_x_1_n, sizeof(ptype)*Np_particles, cudaMemcpyDeviceToHost);
+	cudaMemcpy(x_1_n, Dev_x_1_n, sizeof(double)*Np_particles, cudaMemcpyDeviceToHost);
 	writeRealToBinaryAnyFile(Np_particles, x_1_n, "src/Initial_W_discret/x_1_dx_ifft.data");
 	
 	cudaMemcpy(X_k, Dev_X_k_derivative, Grid_NDFT.sizeNComplex, cudaMemcpyDeviceToHost);
@@ -287,14 +287,14 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	NDFT_2D<<<Grid_NDFT.blocksPerGrid, Grid_NDFT.threadsPerBlock>>>(Dev_X_k, Dev_x_2_n, Dev_p_n, Dev_f_k, Grid_NDFT.NX, Np_particles);
 	printf("iNDFT v_y\n");
 	iNDFT_2D<<<iNDFT_block, iNDFT_thread>>>(Dev_X_k, Dev_x_2_n, Dev_p_n, Dev_f_k, Grid_NDFT.NX);
-	cudaMemcpy(x_2_n, Dev_x_2_n, sizeof(ptype)*Np_particles, cudaMemcpyDeviceToHost);
+	cudaMemcpy(x_2_n, Dev_x_2_n, sizeof(double)*Np_particles, cudaMemcpyDeviceToHost);
 	writeRealToBinaryAnyFile(Np_particles, x_2_n, "src/Initial_W_discret/x_2_ifft.data");
 	
 	printf("kernel_fft_dy\n");
 	kernel_fft_dy<<<Grid_NDFT.blocksPerGrid, Grid_NDFT.threadsPerBlock>>>(Dev_X_k, Dev_X_k_derivative, Grid_NDFT.NX, Grid_NDFT.NY, Grid_NDFT.h);
 	printf("iNDFT v_y/dy\n");
 	iNDFT_2D<<<iNDFT_block, iNDFT_thread>>>(Dev_X_k_derivative, Dev_x_2_n, Dev_p_n, Dev_f_k, Grid_NDFT.NX);
-	cudaMemcpy(x_2_n, Dev_x_2_n, sizeof(ptype)*Np_particles, cudaMemcpyDeviceToHost);
+	cudaMemcpy(x_2_n, Dev_x_2_n, sizeof(double)*Np_particles, cudaMemcpyDeviceToHost);
 	writeRealToBinaryAnyFile(Np_particles, x_2_n, "src/Initial_W_discret/x_2_dy_ifft.data");
 	
 	printf("Fini NDFT\n");
@@ -308,11 +308,11 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	* 																   *
 	*******************************************************************/
 	
-	ptype *Host_ChiX, *Host_ChiY;
-	ptype *Dev_ChiX, *Dev_ChiY, *Dev_Chi_new_X, *Dev_Chi_new_Y;
+	double *Host_ChiX, *Host_ChiY;
+	double *Dev_ChiX, *Dev_ChiY, *Dev_Chi_new_X, *Dev_Chi_new_Y;
 	
-	Host_ChiX = new ptype[4*Grid_coarse.N];
-	Host_ChiY = new ptype[4*Grid_coarse.N];							
+	Host_ChiX = new double[4*Grid_coarse.N];
+	Host_ChiY = new double[4*Grid_coarse.N];
 	cudaMalloc((void**)&Dev_ChiX, 4*Grid_coarse.sizeNReal);
 	cudaMalloc((void**)&Dev_ChiY, 4*Grid_coarse.sizeNReal);
 	cudaMalloc((void**)&Dev_Chi_new_X, 4*Grid_coarse.sizeNReal);
@@ -326,7 +326,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	* 																   *
 	*******************************************************************/
 	
-	ptype *Host_ChiX_stack_RAM_0, *Host_ChiY_stack_RAM_0, *Host_ChiX_stack_RAM_1, *Host_ChiY_stack_RAM_1, *Host_ChiX_stack_RAM_2, *Host_ChiY_stack_RAM_2, *Host_ChiX_stack_RAM_3, *Host_ChiY_stack_RAM_3, *Dev_ChiX_stack, *Dev_ChiY_stack;
+	double *Host_ChiX_stack_RAM_0, *Host_ChiY_stack_RAM_0, *Host_ChiX_stack_RAM_1, *Host_ChiY_stack_RAM_1, *Host_ChiX_stack_RAM_2, *Host_ChiY_stack_RAM_2, *Host_ChiX_stack_RAM_3, *Host_ChiY_stack_RAM_3, *Dev_ChiX_stack, *Dev_ChiY_stack;
 	
 	cudaMalloc((void **) &Dev_ChiX_stack, map_stack_length * 4*Grid_coarse.sizeNReal);	
 	cudaMalloc((void **) &Dev_ChiY_stack, map_stack_length * 4*Grid_coarse.sizeNReal);
@@ -336,14 +336,14 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	
 	int stack_length_RAM = -1;
 	int stack_length_Nb_array_RAM = -1;
-	Host_ChiX_stack_RAM_0 = new ptype[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid_coarse.sizeNReal];
-	Host_ChiY_stack_RAM_0 = new ptype[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid_coarse.sizeNReal];
-	Host_ChiX_stack_RAM_1 = new ptype[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid_coarse.sizeNReal];
-	Host_ChiY_stack_RAM_1 = new ptype[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid_coarse.sizeNReal];
-	Host_ChiX_stack_RAM_2 = new ptype[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid_coarse.sizeNReal];
-	Host_ChiY_stack_RAM_2 = new ptype[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid_coarse.sizeNReal];
-	Host_ChiX_stack_RAM_3 = new ptype[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid_coarse.sizeNReal];
-	Host_ChiY_stack_RAM_3 = new ptype[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid_coarse.sizeNReal];
+	Host_ChiX_stack_RAM_0 = new double[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid_coarse.sizeNReal];
+	Host_ChiY_stack_RAM_0 = new double[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid_coarse.sizeNReal];
+	Host_ChiX_stack_RAM_1 = new double[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid_coarse.sizeNReal];
+	Host_ChiY_stack_RAM_1 = new double[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid_coarse.sizeNReal];
+	Host_ChiX_stack_RAM_2 = new double[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid_coarse.sizeNReal];
+	Host_ChiY_stack_RAM_2 = new double[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid_coarse.sizeNReal];
+	Host_ChiX_stack_RAM_3 = new double[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid_coarse.sizeNReal];
+	Host_ChiY_stack_RAM_3 = new double[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid_coarse.sizeNReal];
 	
 	
 	/*******************************************************************
@@ -353,12 +353,12 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	* 																   *
 	*******************************************************************/
 	
-	ptype *Host_W_coarse, *Host_W_fine, *Dev_W_coarse, *Dev_W_fine, *Dev_W_H_fine_real;
+	double *Host_W_coarse, *Host_W_fine, *Dev_W_coarse, *Dev_W_fine, *Dev_W_H_fine_real;
 	
-	Host_W_coarse = new ptype[Grid_coarse.N];
+	Host_W_coarse = new double[Grid_coarse.N];
 	cudaMalloc((void**)&Dev_W_coarse, Grid_coarse.sizeNReal);
 	
-	Host_W_fine = new ptype[Grid_fine.N];
+	Host_W_fine = new double[Grid_fine.N];
 	cudaMalloc((void**)&Dev_W_fine, Grid_fine.sizeNReal);
 	
 	//vorticity hermite 
@@ -371,8 +371,8 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	
 	#ifdef DISCRET
 		
-		ptype *Host_W_initial, *Dev_W_H_initial;
-		Host_W_initial = new ptype[Grid_fine.N];		
+		double *Host_W_initial, *Dev_W_H_initial;
+		Host_W_initial = new double[Grid_fine.N];
 		cudaMalloc((void**)&Dev_W_H_initial, 4*Grid_fine.sizeNReal);
 		
 		std::ostringstream fine_grid_scale_nb;
@@ -416,9 +416,9 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	*******************************************************************/
 	
 	//stream hermite on coarse computational grid
-    ptype *Host_Psi, *Dev_Psi_real, *Dev_Psi_real_previous, *Dev_Psi_real_previous_p;
+    double *Host_Psi, *Dev_Psi_real, *Dev_Psi_real_previous, *Dev_Psi_real_previous_p;
 
-	Host_Psi = new ptype[4*Grid_coarse.N];
+	Host_Psi = new double[4*Grid_coarse.N];
 	cudaMalloc((void**) &Dev_Psi_real, 4*Grid_coarse.sizeNReal);
 	cudaMalloc((void**) &Dev_Psi_real_previous, 4*Grid_coarse.sizeNReal);
 	cudaMalloc((void**) &Dev_Psi_real_previous_p, 4*Grid_coarse.sizeNReal);
@@ -431,17 +431,17 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	* 																   *
 	*******************************************************************/
 	
-	ptype w_min, w_max;
+	double w_min, w_max;
 	
-	ptype grad_chi_min, grad_chi_max;
+	double grad_chi_min, grad_chi_max;
 	
 	int grad_block = 32, grad_thread = 1024; // settings for min/max function, maximum threads and just one block
-	ptype *Host_w_min, *Host_w_max;
-	ptype *Dev_w_min, *Dev_w_max;
-	Host_w_min = new ptype[grad_block*grad_thread];
-	Host_w_max = new ptype[grad_block*grad_thread];
-	cudaMalloc((void**) &Dev_w_min, sizeof(ptype)*grad_block*grad_thread);
-	cudaMalloc((void**) &Dev_w_max, sizeof(ptype)*grad_block*grad_thread);
+	double *Host_w_min, *Host_w_max;
+	double *Dev_w_min, *Dev_w_max;
+	Host_w_min = new double[grad_block*grad_thread];
+	Host_w_max = new double[grad_block*grad_thread];
+	cudaMalloc((void**) &Dev_w_min, sizeof(double)*grad_block*grad_thread);
+	cudaMalloc((void**) &Dev_w_max, sizeof(double)*grad_block*grad_thread);
 	
 	
 	/*******************************************************************
@@ -452,16 +452,16 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 
 		// initialize all memory
 		int Nb_Tau_p = 21;
-		ptype Tau_p[Nb_Tau_p] = {0.0, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.125, 0.15, 0.25, 0.5, 0.75, 1, 2, 5, 13};
+		double Tau_p[Nb_Tau_p] = {0.0, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.125, 0.15, 0.25, 0.5, 0.75, 1, 2, 5, 13};
 		int Nb_particles = 1024 * 512; //64; // *512 ;
 		int particle_thread =  256;
 		int particle_block = Nb_particles / particle_thread;
 		printf("Nb_particles : %d\n", Nb_particles);
-		ptype *Host_particles_pos ,*Dev_particles_pos, *Host_particles_vel ,*Dev_particles_vel;
-		Host_particles_pos = new ptype[2*Nb_particles*Nb_Tau_p];
-		Host_particles_vel = new ptype[2*Nb_particles*Nb_Tau_p];
-		cudaMalloc((void**) &Dev_particles_pos, 2*Nb_particles*Nb_Tau_p*sizeof(ptype));
-		cudaMalloc((void**) &Dev_particles_vel, 2*Nb_particles*Nb_Tau_p*sizeof(ptype));
+		double *Host_particles_pos ,*Dev_particles_pos, *Host_particles_vel ,*Dev_particles_vel;
+		Host_particles_pos = new double[2*Nb_particles*Nb_Tau_p];
+		Host_particles_vel = new double[2*Nb_particles*Nb_Tau_p];
+		cudaMalloc((void**) &Dev_particles_pos, 2*Nb_particles*Nb_Tau_p*sizeof(double));
+		cudaMalloc((void**) &Dev_particles_vel, 2*Nb_particles*Nb_Tau_p*sizeof(double));
 
 		// create initial positions from random distribution
 		curandGenerator_t prng;
@@ -470,16 +470,16 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 
 		// copy all starting positions onto the other tau values
 		for(int index_tau_p = 1; index_tau_p < Nb_Tau_p; index_tau_p+=1)
-			cudaMemcpy(&Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_pos[0], 2*Nb_particles*sizeof(ptype), cudaMemcpyDeviceToDevice);
+			cudaMemcpy(&Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_pos[0], 2*Nb_particles*sizeof(double), cudaMemcpyDeviceToDevice);
 
 		// particles where every time step the position will be saved
 		int Nb_fine_dt_particles = 1000;
 		int freq_fine_dt_particles = save_buffer_count; // redundant
 		int prod_fine_dt_particles = Nb_fine_dt_particles * freq_fine_dt_particles;
-		ptype *Dev_particles_pos_fine_dt, *Host_particles_pos_fine_dt;
+		double *Dev_particles_pos_fine_dt, *Host_particles_pos_fine_dt;
 
-		Host_particles_pos_fine_dt = new ptype[2*prod_fine_dt_particles];
-		cudaMalloc((void**) &Dev_particles_pos_fine_dt, 2*prod_fine_dt_particles*sizeof(ptype));
+		Host_particles_pos_fine_dt = new double[2*prod_fine_dt_particles];
+		cudaMalloc((void**) &Dev_particles_pos_fine_dt, 2*prod_fine_dt_particles*sizeof(double));
 
 	#endif
 
@@ -490,11 +490,11 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 
 	int count_mesure = 0;
 	int mes_size = tf*snapshots_per_second + 2;  // add initial and last step
-    ptype *Mesure;
-    ptype *Mesure_fine;
-    ptype incomp_error [iterMax+1];
-	cudaMallocManaged(&Mesure, 3*mes_size*sizeof(ptype));
-	cudaMallocManaged(&Mesure_fine, 3*mes_size*sizeof(ptype));
+    double *Mesure;
+    double *Mesure_fine;
+    double incomp_error [iterMax+1];
+	cudaMallocManaged(&Mesure, 3*mes_size*sizeof(double));
+	cudaMallocManaged(&Mesure_fine, 3*mes_size*sizeof(double));
 
 
     // File organization : Might be moved
@@ -516,10 +516,10 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 
     // Laplacian
 	/*
-    ptype *Host_lap_fine, *Dev_lap_fine_real;
-    cuPtype *Dev_lap_fine_complex, *Dev_lap_fine_hat;
+    double *Host_lap_fine, *Dev_lap_fine_real;
+    cufftDoubleComplex *Dev_lap_fine_complex, *Dev_lap_fine_hat;
 
-    Host_lap_fine = new ptype[Grid_fine.N];
+    Host_lap_fine = new double[Grid_fine.N];
 
     cudaMalloc((void**)&Dev_lap_fine_real, Grid_fine.sizeNReal);
     cudaMalloc((void**)&Dev_lap_fine_complex, Grid_fine.sizeNComplex);
@@ -558,10 +558,10 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	
 	TCudaGrid2D Grid_2048(1024, 1024, LX);
 	
-	ptype *Host_2048_4;
-	ptype *Dev_ChiX_2048, *Dev_ChiY_2048, *Dev_W_2048;
+	double *Host_2048_4;
+	double *Dev_ChiX_2048, *Dev_ChiY_2048, *Dev_W_2048;
 	
-	Host_2048_4 = new ptype[4*Grid_2048.N];
+	Host_2048_4 = new double[4*Grid_2048.N];
 	cudaMalloc((void**)&Dev_ChiX_2048, Grid_2048.sizeNReal);
 	cudaMalloc((void**)&Dev_ChiY_2048, Grid_2048.sizeNReal);
 	
@@ -571,12 +571,12 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	cufftPlan2d(&cufftPlan_2048, Grid_2048.NX, Grid_2048.NY, CUFFT_Z2Z);
 	
 	
-	cuPtype *Dev_Complex_fine_2048, *Dev_Hat_fine_2048, *Dev_Hat_fine_bis_2048;
+	cufftDoubleComplex *Dev_Complex_fine_2048, *Dev_Hat_fine_2048, *Dev_Hat_fine_bis_2048;
 	cudaMalloc((void**)&Dev_Complex_fine_2048, Grid_2048.sizeNComplex);
 	cudaMalloc((void**)&Dev_Hat_fine_2048, Grid_2048.sizeNComplex);
 	cudaMalloc((void**)&Dev_Hat_fine_bis_2048, Grid_2048.sizeNComplex);
 	
-    ptype *Dev_Psi_2048, *Dev_Psi_2048_previous, *Dev_Psi_2048_previous_p;
+    double *Dev_Psi_2048, *Dev_Psi_2048_previous, *Dev_Psi_2048_previous_p;
     
 	cudaMalloc((void**) &Dev_Psi_2048, 4*Grid_2048.sizeNReal);
     cudaMalloc((void**) &Dev_Psi_2048_previous, 4*Grid_2048.sizeNReal);
@@ -584,10 +584,10 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 
     // Laplacian
 
-    ptype *Host_lap_fine_2048, *Dev_lap_fine_2048_real;
-    cuPtype *Dev_lap_fine_2048_complex, *Dev_lap_fine_2048_hat;
+    double *Host_lap_fine_2048, *Dev_lap_fine_2048_real;
+    cufftDoubleComplex *Dev_lap_fine_2048_complex, *Dev_lap_fine_2048_hat;
 
-    Host_lap_fine_2048 = new ptype[Grid_2048.N];
+    Host_lap_fine_2048 = new double[Grid_2048.N];
 
     cudaMalloc((void**)&Dev_lap_fine_2048_real, Grid_2048.sizeNReal);
     cudaMalloc((void**)&Dev_lap_fine_2048_complex, Grid_2048.sizeNComplex);
@@ -744,7 +744,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	get_max_min(&Grid_fine, Host_W_fine, &w_min, &w_max);
 	cout<<"W min = "<<w_min<<endl<<"W max = "<<w_max<<endl;
 	
-	ptype t = t0;
+	double t = t0;
 	int loop_ctr = 0;
 	int save_ctr = 1;
 
@@ -783,7 +783,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 		// Particles advection
 		#ifdef PARTICLES
 			Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.N, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
-			cudaMemcpy(&Dev_particles_pos_fine_dt[(loop_ctr * Nb_fine_dt_particles * 2) % (2*prod_fine_dt_particles)], Dev_particles_pos, 2*Nb_fine_dt_particles*sizeof(ptype), cudaMemcpyDeviceToDevice);
+			cudaMemcpy(&Dev_particles_pos_fine_dt[(loop_ctr * Nb_fine_dt_particles * 2) % (2*prod_fine_dt_particles)], Dev_particles_pos, 2*Nb_fine_dt_particles*sizeof(double), cudaMemcpyDeviceToDevice);
 			#pragma unroll Nb_Tau_p - 1
 			for(int index_tau_p = 1; index_tau_p < Nb_Tau_p; index_tau_p+=1){
 				#ifndef RKThree_PARTICLES
@@ -803,9 +803,9 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 
        /* #ifdef RKThree_PARTICLES
             // copy particles velocity to previous instance
-           cudaMemcpy(Dev_particles_vel_previous_p, Dev_particles_vel_previous, 2*Nb_particles*Nb_Tau_p*sizeof(ptype), cudaMemcpyDeviceToDevice);
+           cudaMemcpy(Dev_particles_vel_previous_p, Dev_particles_vel_previous, 2*Nb_particles*Nb_Tau_p*sizeof(double), cudaMemcpyDeviceToDevice);
             cudaDeviceSynchronize();
-            cudaMemcpy(Dev_particles_vel_previous, Dev_particles_vel, 2*Nb_particles*Nb_Tau_p*sizeof(ptype), cudaMemcpyDeviceToDevice);
+            cudaMemcpy(Dev_particles_vel_previous, Dev_particles_vel, 2*Nb_particles*Nb_Tau_p*sizeof(double), cudaMemcpyDeviceToDevice);
         #endif*/
 
         //copy Psi to Psi_previous and Psi_previous to Psi_previous_previous
@@ -835,10 +835,10 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 			//cudaDeviceSynchronize();
 			// compute minimum for actual check on dev, coppy to machine to get minimum from all blocks
 			Dev_get_max_min<<<grad_block, grad_thread>>>(Grid_fine.N, (cufftDoubleReal*)Dev_Complex_fine, Dev_w_min, Dev_w_max);// Dev_gradChi cufftDoubleComplex cufftDoubleReal
-			//cudaMemcpy(Host_w_min, Dev_w_min, sizeof(ptype)*grad_block*grad_thread, cudaMemcpyDeviceToHost);
-			//cudaMemcpy(Host_w_max, Dev_w_max, sizeof(ptype)*grad_block*grad_thread, cudaMemcpyDeviceToHost);
-			cudaMemcpyAsync(Host_w_min, Dev_w_min, sizeof(ptype)*grad_block*grad_thread, cudaMemcpyDeviceToHost, streams[0]);
-			cudaMemcpyAsync(Host_w_max, Dev_w_max, sizeof(ptype)*grad_block*grad_thread, cudaMemcpyDeviceToHost, streams[1]);
+			//cudaMemcpy(Host_w_min, Dev_w_min, sizeof(double)*grad_block*grad_thread, cudaMemcpyDeviceToHost);
+			//cudaMemcpy(Host_w_max, Dev_w_max, sizeof(double)*grad_block*grad_thread, cudaMemcpyDeviceToHost);
+			cudaMemcpyAsync(Host_w_min, Dev_w_min, sizeof(double)*grad_block*grad_thread, cudaMemcpyDeviceToHost, streams[0]);
+			cudaMemcpyAsync(Host_w_max, Dev_w_max, sizeof(double)*grad_block*grad_thread, cudaMemcpyDeviceToHost, streams[1]);
 
 //			Host_get_max_min(grad_block*grad_thread, Host_w_min, Host_w_max, grad_chi_min, grad_chi_max);
 			
@@ -975,7 +975,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 				cudaMemcpy(Host_W_coarse, Dev_W_coarse, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
 				cudaMemcpy(Host_Psi, Dev_Psi_real, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
                 #ifdef PARTICLES
-                    cudaMemcpy(Host_particles_pos_fine_dt, Dev_particles_pos_fine_dt, 2*prod_fine_dt_particles*sizeof(ptype), cudaMemcpyDeviceToHost);
+                    cudaMemcpy(Host_particles_pos_fine_dt, Dev_particles_pos_fine_dt, 2*prod_fine_dt_particles*sizeof(double), cudaMemcpyDeviceToHost);
                 #endif
                 //writing to file
 				std::ostringstream ss;
@@ -988,13 +988,13 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
                     writeAllRealToBinaryFile(2*prod_fine_dt_particles, Host_particles_pos_fine_dt, simulationName, "particles/fluid/particles_pos_fine_dt_" + ss.str());
                     if (save_ctr>=1){
                         if (save_ctr%1==0){
-                            cudaMemcpy(Host_particles_pos, Dev_particles_pos, 2*Nb_particles*Nb_Tau_p*sizeof(ptype), cudaMemcpyDeviceToHost);
+                            cudaMemcpy(Host_particles_pos, Dev_particles_pos, 2*Nb_particles*Nb_Tau_p*sizeof(double), cudaMemcpyDeviceToHost);
                             //cudaDeviceSynchronize();
                             writeAllRealToBinaryFile(2*Nb_particles, Host_particles_pos, simulationName, "particles/fluid/particles_pos_" + ss.str());
-                            /*cudaMemcpy(Host_particles_pos, Dev_particles_pos_1, 2*Nb_particles*Nb_Tau_p*sizeof(ptype), cudaMemcpyDeviceToHost);
+                            /*cudaMemcpy(Host_particles_pos, Dev_particles_pos_1, 2*Nb_particles*Nb_Tau_p*sizeof(double), cudaMemcpyDeviceToHost);
                             cudaDeviceSynchronize();
                             writeAllRealToBinaryFile(2*Nb_particles, Host_particles_pos, simulationName, "particles/fluid/particles_pos_dt_" + ss.str());
-                            cudaMemcpy(Host_particles_pos, Dev_particles_pos_2, 2*Nb_particles*Nb_Tau_p*sizeof(ptype), cudaMemcpyDeviceToHost);
+                            cudaMemcpy(Host_particles_pos, Dev_particles_pos_2, 2*Nb_particles*Nb_Tau_p*sizeof(double), cudaMemcpyDeviceToHost);
                             cudaDeviceSynchronize();
                             writeAllRealToBinaryFile(2*Nb_particles, Host_particles_pos, simulationName, "particles/fluid/particles_pos_dt2_" + ss.str());
 			    */
@@ -1023,7 +1023,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 				/*
 				if (save_ctr%50==0){
 					for(int index_tau_p = 1; index_tau_p < Nb_Tau_p; index_tau_p+=1)
-						cudaMemcpy(&Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_pos[0], 2*Nb_particles*sizeof(ptype), cudaMemcpyDeviceToDevice);
+						cudaMemcpy(&Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_pos[0], 2*Nb_particles*sizeof(double), cudaMemcpyDeviceToDevice);
 				}
 	            */
 				save_ctr++;
@@ -1296,7 +1296,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 *							 Remapping							   *
 *******************************************************************/
 
-void translate_initial_condition_through_map_stack(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX_stack, ptype *Dev_ChiY_stack, ptype *Host_ChiX_stack_RAM_0, ptype *Host_ChiY_stack_RAM_0, ptype *Host_ChiX_stack_RAM_1, ptype *Host_ChiY_stack_RAM_1, ptype *Host_ChiX_stack_RAM_2, ptype *Host_ChiY_stack_RAM_2, ptype *Host_ChiX_stack_RAM_3, ptype *Host_ChiY_stack_RAM_3, ptype *Dev_ChiX, ptype *Dev_ChiY, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, ptype *W_real, ptype *W_H_real, cufftHandle cufftPlan_fine, ptype *W_initial, int simulation_num_c, cuPtype *Dev_Complex_fine, cuPtype *Dev_Hat_fine, cuPtype *Dev_Hat_fine_bis)
+void translate_initial_condition_through_map_stack(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *Dev_ChiX_stack, double *Dev_ChiY_stack, double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1, double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3, double *Dev_ChiX, double *Dev_ChiY, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, double *W_real, double *W_H_real, cufftHandle cufftPlan_fine, double *W_initial, int simulation_num_c, cufftDoubleComplex *Dev_Complex_fine, cufftDoubleComplex *Dev_Hat_fine, cufftDoubleComplex *Dev_Hat_fine_bis)
 {
 	
 	// Vorticity on coarse grid to vorticity on fine grid
@@ -1339,7 +1339,7 @@ void translate_initial_condition_through_map_stack(TCudaGrid2D *Grid_coarse, TCu
 *						 Computation of Psi						   *
 *******************************************************************/
 	
-void evaulate_stream_hermite(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, ptype *Dev_ChiX, ptype *Dev_ChiY, ptype *Dev_W_H_fine_real, ptype *W_real, ptype *Psi_real, cufftHandle cufftPlan_coarse, cuPtype *Dev_Complex_coarse, cuPtype *Dev_Hat_coarse, cuPtype *Dev_Hat_coarse_bis, int molly_stencil)
+void evaulate_stream_hermite(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *Dev_ChiX, double *Dev_ChiY, double *Dev_W_H_fine_real, double *W_real, double *Psi_real, cufftHandle cufftPlan_coarse, cufftDoubleComplex *Dev_Complex_coarse, cufftDoubleComplex *Dev_Hat_coarse, cufftDoubleComplex *Dev_Hat_coarse_bis, int molly_stencil)
 {
 	
 	// Obtaining stream function at time t 
@@ -1450,7 +1450,7 @@ string create_directory_structure(string simulationName, int NX_coarse, int NX_f
 void Zoom_load_frame(string File, int grid_scale, int fine_grid_scale, string t_nb){
 	
 	
-	ptype LX;				
+	double LX;
 	int NXc, NYc;														
 	int NXsf, NYsf;														
 	int map_stack_ctr = 23;									// don't need it, it can be tertemined by the size of data loaded...
@@ -1465,11 +1465,11 @@ void Zoom_load_frame(string File, int grid_scale, int fine_grid_scale, string t_
 	TCudaGrid2D Gsf(NXsf, NYsf, LX);
 	
 	
-	ptype *ChiX, *ChiY, *ChiX_stack, *ChiY_stack;
-	ChiX = new ptype[4*grid_scale*grid_scale];
-	ChiY = new ptype[4*grid_scale*grid_scale];
-	ChiX_stack = new ptype[map_stack_ctr * 4*Grid_coarse.sizeNReal];	
-	ChiY_stack = new ptype[map_stack_ctr * 4*Grid_coarse.sizeNReal];	
+	double *ChiX, *ChiY, *ChiX_stack, *ChiY_stack;
+	ChiX = new double[4*grid_scale*grid_scale];
+	ChiY = new double[4*grid_scale*grid_scale];
+	ChiX_stack = new double[map_stack_ctr * 4*Grid_coarse.sizeNReal];
+	ChiY_stack = new double[map_stack_ctr * 4*Grid_coarse.sizeNReal];
 	
 	
 	readAllRealFromBinaryFile(4*grid_scale*grid_scale, ChiX, simulationName, "ChiX_" + t_nb);
@@ -1478,14 +1478,14 @@ void Zoom_load_frame(string File, int grid_scale, int fine_grid_scale, string t_
 	readAllRealFromBinaryFile(map_stack_ctr * 4*grid_scale*grid_scale, ChiY_stack, simulationName, "ChiY_stack_" + t_nb);
 	
 	
-	ptype *Dev_W_fine;
+	double *Dev_W_fine;
 	cudaMalloc((void**)&Dev_W_fine,  Grid_fine.sizeNReal);
 	
-	ptype *Dev_ChiX, *Dev_ChiY;
+	double *Dev_ChiX, *Dev_ChiY;
 	cudaMalloc((void**)&Dev_ChiX, 4*Grid_coarse.sizeNReal);
 	cudaMalloc((void**)&Dev_ChiY, 4*Grid_coarse.sizeNReal);
 	
-	ptype *Dev_ChiX_stack, *Dev_ChiY_stack;
+	double *Dev_ChiX_stack, *Dev_ChiY_stack;
 	cudaMalloc((void **) &Dev_ChiX_stack, map_stack_ctr * 4*Grid_coarse.sizeNReal);
 	cudaMalloc((void **) &Dev_ChiY_stack, map_stack_ctr * 4*Grid_coarse.sizeNReal);
 	
