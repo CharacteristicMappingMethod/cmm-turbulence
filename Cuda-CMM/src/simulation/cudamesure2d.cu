@@ -5,7 +5,7 @@
 
 
 
-__global__ void Compute_Energy(ptype *E, ptype *psi, int N, int NX, int NY, ptype h){
+__global__ void Compute_Energy(double *E, double *psi, int N, int NX, int NY, double h){
 
 
     int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -17,9 +17,11 @@ __global__ void Compute_Energy(ptype *E, ptype *psi, int N, int NX, int NY, ptyp
 	int In = iY*NX + iX;
 
 	// atomicAdd defined for double at sm_60
-    // atomicAdd(E, 0.5*h * h * (psi[In + N] * psi[In + N] + psi[In + 2 * N] * psi[In + 2 * N]));
-    *E += 0.5*h * h * (psi[In + N] * psi[In + N] + psi[In + 2 * N] * psi[In + 2 * N]);
-
+	#ifndef sm_50
+    	atomicAdd(E, 0.5*h * h * (psi[In + N] * psi[In + N] + psi[In + 2 * N] * psi[In + 2 * N]));
+	#else
+    	*E += 0.5*h * h * (psi[In + N] * psi[In + N] + psi[In + 2 * N] * psi[In + 2 * N]);
+	#endif
 /*	int idx = threadIdx.x;
 	int stride_x = blockDim.x;
 
@@ -30,7 +32,7 @@ __global__ void Compute_Energy(ptype *E, ptype *psi, int N, int NX, int NY, ptyp
 }
 
 
-__global__ void Compute_Enstrophy(ptype *Ens, ptype *W, int N, int NX, int NY, ptype h){
+__global__ void Compute_Enstrophy(double *Ens, double *W, int N, int NX, int NY, double h){
 
     int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
@@ -41,10 +43,11 @@ __global__ void Compute_Enstrophy(ptype *Ens, ptype *W, int N, int NX, int NY, p
 	int In = iY*NX + iX;
 
 	// atomicAdd defined for double at sm_60
-    // atomicAdd(Ens, 0.5 * h * h * (W[In] * W[In]));
-	*Ens += 0.5 * h * h * (W[In] * W[In]);
-
-
+	#ifndef sm_50
+    	atomicAdd(Ens, 0.5 * h * h * (W[In] * W[In]));
+	#else
+    	*Ens += 0.5 * h * h * (W[In] * W[In]);
+	#endif
 /*	int idx = threadIdx.x;
 	int stride_x = blockDim.x;
 
@@ -55,9 +58,22 @@ __global__ void Compute_Enstrophy(ptype *Ens, ptype *W, int N, int NX, int NY, p
 }
 
 
-void Compute_Palinstrophy(TCudaGrid2D *Grid_coarse, ptype *Pal, ptype *W_real, cuPtype *Dev_Complex, cuPtype *Dev_Hat, cuPtype *Dev_Hat_bis, cufftHandle cufftPlan_coarse){
+// two functions for host, because julius' computer doesn't support atomics for doubles
+void Compute_Energy_Host(double *E, double *psi, int N, int NX, int NY, double h){
+	for(int i = 0; i < NX*NY; i+=1){
+    	*E += 0.5*h * h * (psi[i + N] * psi[i + N] + psi[i + 2 * N] * psi[i + 2 * N]);
+	}
+}
+void Compute_Enstrophy_Host(double *Ens, double *W, int N, int NX, int NY, double h){
+	for(int i = 0; i < NX*NY; i+=1){
+		*Ens += 0.5 * h * h * (W[i] * W[i]);
+	}
+}
 
-	ptype *Host_W_coarse_real_dx_dy = new ptype[2*Grid_coarse->N];
+
+void Compute_Palinstrophy(TCudaGrid2D *Grid_coarse, double *Pal, double *W_real, cufftDoubleComplex *Dev_Complex, cufftDoubleComplex *Dev_Hat, cufftDoubleComplex *Dev_Hat_bis, cufftHandle cufftPlan_coarse){
+
+	double *Host_W_coarse_real_dx_dy = new double[2*Grid_coarse->N];
 	
 	kernel_real_to_complex<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(W_real, Dev_Hat, Grid_coarse->NX, Grid_coarse->NY);
 	cufftExecZ2Z(cufftPlan_coarse, Dev_Hat, Dev_Complex, CUFFT_FORWARD);	
@@ -75,7 +91,7 @@ void Compute_Palinstrophy(TCudaGrid2D *Grid_coarse, ptype *Pal, ptype *W_real, c
 
 
     for(int i = 0; i < Grid_coarse->N; i+=1){
-		*Pal = *Pal +  (Grid_coarse->h) * (Grid_coarse->h) * (Host_W_coarse_real_dx_dy[i] * Host_W_coarse_real_dx_dy[i] + Host_W_coarse_real_dx_dy[i + Grid_coarse->N] * Host_W_coarse_real_dx_dy[i + Grid_coarse->N]);
+		*Pal += (Grid_coarse->h) * (Grid_coarse->h) * (Host_W_coarse_real_dx_dy[i] * Host_W_coarse_real_dx_dy[i] + Host_W_coarse_real_dx_dy[i + Grid_coarse->N] * Host_W_coarse_real_dx_dy[i + Grid_coarse->N]);
 	}
 
 	*Pal = 0.5*(*Pal);
@@ -91,7 +107,7 @@ void Compute_Palinstrophy(TCudaGrid2D *Grid_coarse, ptype *Pal, ptype *W_real, c
 
 
 // Non-uniform discrete Fourier transform in 1D
-void NDFT_1D(cuPtype *X_k, ptype *x_n, ptype *p_n, ptype *f_k, int N){
+void NDFT_1D(cufftDoubleComplex *X_k, double *x_n, double *p_n, double *f_k, int N){
 	
 	// X_{k} = \sum_{n=0}^{N-1} x_{n} e^{-2\pi i p_n f_k} 
 	// X_k is a complex in Fourier space 	; 	x_n are the values of the function in real space 	; 	p_n \in [0,1] are the sample points ; f_k \in [0,N] are frequencies
@@ -109,7 +125,7 @@ void NDFT_1D(cuPtype *X_k, ptype *x_n, ptype *p_n, ptype *f_k, int N){
 
 
 // Non-uniform inverse discrete Fourier transform in 1D
-void iNDFT_1D(cuPtype *X_k, ptype *x_n, ptype *p_n, ptype *f_k, int N){
+void iNDFT_1D(cufftDoubleComplex *X_k, double *x_n, double *p_n, double *f_k, int N){
 	
 	// X_k is a complex in Fourier space 	; 	x_n are the values of the function in real space 	; 	p_n \in [0,1] are the sample points ; f_k \in [0,N] are frequencies
 	
@@ -131,7 +147,7 @@ void iNDFT_1D(cuPtype *X_k, ptype *x_n, ptype *p_n, ptype *f_k, int N){
 
 
 // Non-uniform discrete Fourier transform in 2D
-__global__ void NDFT_2D(cuPtype *X_k, ptype *x_n, ptype *p_n, int *f_k, int NX, int Np){
+__global__ void NDFT_2D(cufftDoubleComplex *X_k, double *x_n, double *p_n, int *f_k, int NX, int Np){
 	
 	// X_{k} = \sum_{n=0}^{N-1} x_{n} e^{-2\pi i p_n . f_k} 
 	// X_k is a complex in Fourier space 	; 	x_n are the values of the function in real space 	; 	p_n \in [0,1] are the sample points 	; 	f_k \in [0,N-1] are frequencies
@@ -159,7 +175,7 @@ __global__ void NDFT_2D(cuPtype *X_k, ptype *x_n, ptype *p_n, int *f_k, int NX, 
 
 
 // Non-uniform inverse discrete Fourier transform in 2D
-__global__ void iNDFT_2D(cuPtype *X_k, ptype *x_n, ptype *p_n, int *f_k, int N_grid){
+__global__ void iNDFT_2D(cufftDoubleComplex *X_k, double *x_n, double *p_n, int *f_k, int N_grid){
 	
 	// X_k is a complex in Fourier space 	; 	x_n are the values of the function in real space 	; 	p_n \in [0,1] are the sample points 	; 	f_k \in [0,N-1] are frequencies
 	
@@ -182,7 +198,7 @@ __global__ void iNDFT_2D(cuPtype *X_k, ptype *x_n, ptype *p_n, int *f_k, int N_g
 }
 
 
-void Laplacian_vort(TCudaGrid2D *Grid_fine, ptype *Dev_W_fine, cuPtype *Dev_Complex_fine, cuPtype *Dev_Hat_fine, ptype *Dev_lap_fine_real, cuPtype *Dev_lap_fine_complex, cuPtype *Dev_lap_fine_hat, cufftHandle cufftPlan_fine){
+void Laplacian_vort(TCudaGrid2D *Grid_fine, double *Dev_W_fine, cufftDoubleComplex *Dev_Complex_fine, cufftDoubleComplex *Dev_Hat_fine, double *Dev_lap_fine_real, cufftDoubleComplex *Dev_lap_fine_complex, cufftDoubleComplex *Dev_lap_fine_hat, cufftHandle cufftPlan_fine){
 
     kernel_real_to_complex<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_W_fine, Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY);
     cufftExecZ2Z(cufftPlan_fine, Dev_Complex_fine, Dev_Hat_fine, CUFFT_FORWARD);
@@ -194,14 +210,14 @@ void Laplacian_vort(TCudaGrid2D *Grid_fine, ptype *Dev_W_fine, cuPtype *Dev_Comp
 
 }
 
-__host__ __device__ ptype L1(ptype t, ptype tp, ptype tm, ptype tmm){
+__host__ __device__ double L1(double t, double tp, double tm, double tmm){
     return ((t-tm)*(t-tmm)/((tp-tm)*(tp-tmm)));
 }
 
-__host__ __device__ ptype L2(ptype t, ptype tp, ptype tm, ptype tmm){
+__host__ __device__ double L2(double t, double tp, double tm, double tmm){
     return ((t-tp)*(t-tmm)/((tm-tp)*(tm-tmm)));
 }
 
-__host__ __device__ ptype L3(ptype t, ptype tp, ptype tm, ptype tmm){
+__host__ __device__ double L3(double t, double tp, double tm, double tmm){
     return ((t-tp)*(t-tm)/((tmm-tp)*(tmm-tm)));
 }

@@ -9,7 +9,7 @@
 *******************************************************************/
 
 
-__global__ void Rescale(int Nb_particle, ptype s, ptype *particles_pos){  // Rescaling the particles uniform distribution on the square [0,s]x[0,s] (s = twoPI)
+__global__ void Rescale(int Nb_particle, double s, double *particles_pos){  // Rescaling the particles uniform distribution on the square [0,s]x[0,s] (s = twoPI)
 
   int i;
   int thread_finder = threadIdx.x + blockDim.x * blockIdx.x;
@@ -26,20 +26,20 @@ __global__ void Rescale(int Nb_particle, ptype s, ptype *particles_pos){  // Res
 
 // Advect particles using Hermite interpolation and RK2 for the time scheme.
 
-__global__ void Particle_advect(int Nb_particle, ptype dt, ptype *particles_pos, ptype *psi, ptype *psi_previous, ptype *psi_previous_p, int N, int NX, int NY, ptype h){
+__global__ void Particle_advect(int Nb_particle, double dt, double *particles_pos, double *psi, double *psi_previous, double *psi_previous_p, int N, int NX, int NY, double h){
   
 
   int i;
   int thread_finder  = threadIdx.x + blockDim.x * blockIdx.x;
   int Di = blockDim.x * gridDim.x;
-  ptype psi_x, psi_y;
-  ptype psi_x_p, psi_y_p; // Previous values of the x and y derivative of Psi.
-  //ptype psi_x_p_p, psi_y_p_p;
+  double psi_x, psi_y;
+  double psi_x_p, psi_y_p; // Previous values of the x and y derivative of Psi.
+  //double psi_x_p_p, psi_y_p_p;
   #ifdef RKThree_PARTICLES
-      ptype psi_x_pp, psi_y_pp; // Previous values of the x and y derivative of Psi.
-      ptype u, v, u_p, v_p, u_pp, v_pp; // Previous values of the x and y derivative of Psi.
-      ptype k1_x, k1_y, k2_x, k2_y, k3_x, k3_y;
-      ptype l[3] = {0.375,0.75,-0.125};
+      double psi_x_pp, psi_y_pp; // Previous values of the x and y derivative of Psi.
+      double u, v, u_p, v_p, u_pp, v_pp; // Previous values of the x and y derivative of Psi.
+      double k1_x, k1_y, k2_x, k2_y, k3_x, k3_y;
+      double l[3] = {0.375,0.75,-0.125};
   #endif
   int pos = Nb_particle / Di * thread_finder, step_pos = Nb_particle / Di;
 
@@ -107,14 +107,14 @@ __global__ void Particle_advect(int Nb_particle, ptype dt, ptype *particles_pos,
 }
 
 
-__global__ void Particle_advect_iner_ini(int Nb_particle, ptype dt, ptype *particles_pos, ptype *particles_vel, ptype *psi_previous, int N, int NX, int NY, ptype h){
+__global__ void Particle_advect_iner_ini(int Nb_particle, double dt, double *particles_pos, double *particles_vel, double *psi_previous, int N, int NX, int NY, double h){
   
 
   int i;
   int thread_finder  = threadIdx.x + blockDim.x * blockIdx.x;
   int Di = blockDim.x * gridDim.x;
-  //ptype psi_x, psi_y;
-  ptype psi_x_p, psi_y_p; // Previous values of the x and y derivative of Psi.
+  //double psi_x, psi_y;
+  double psi_x_p, psi_y_p; // Previous values of the x and y derivative of Psi.
   int pos = Nb_particle / Di * thread_finder, step_pos = Nb_particle / Di;
   
   for(i = pos;i<pos + step_pos;i++){
@@ -132,13 +132,13 @@ __global__ void Particle_advect_iner_ini(int Nb_particle, ptype dt, ptype *parti
 
 
 
-__global__ void Particle_advect_inertia(int Nb_particle, ptype dt, ptype *particles_pos, ptype *particles_vel, ptype *psi, ptype *psi_previous, int N, int NX, int NY, ptype h, ptype tau_p){
+__global__ void Particle_advect_inertia(int Nb_particle, double dt, double *particles_pos, double *particles_vel, double *psi, double *psi_previous, int N, int NX, int NY, double h, double tau_p){
   
   int i;
   int thread_finder  = threadIdx.x + blockDim.x * blockIdx.x;
   int Di = blockDim.x * gridDim.x;
-  //ptype psi_x, psi_y;
-  ptype psi_x_p, psi_y_p; // Previous values of the x and y derivative of Psi.
+  //double psi_x, psi_y;
+  double psi_x_p, psi_y_p; // Previous values of the x and y derivative of Psi.
   int pos = Nb_particle / Di * thread_finder, step_pos = Nb_particle / Di;
   
   for(i = pos;i<pos + step_pos;i++){
@@ -163,17 +163,17 @@ __global__ void Particle_advect_inertia(int Nb_particle, ptype dt, ptype *partic
 }
 
 
-__global__ void Particle_advect_inertia_RK3(int Nb_particle, ptype dt, ptype *particles_pos, ptype *particles_vel, ptype *psi, ptype *psi_previous, ptype *psi_previous_p, int N, int NX, int NY, ptype h, ptype tau_p){
+__global__ void Particle_advect_inertia_RK3(int Nb_particle, double dt, double *particles_pos, double *particles_vel, double *psi, double *psi_previous, double *psi_previous_p, int N, int NX, int NY, double h, double tau_p){
 
   int i;
   int thread_finder  = threadIdx.x + blockDim.x * blockIdx.x;
   int Di = blockDim.x * gridDim.x;
-  //ptype psi_x, psi_y;
-  ptype psi_x, psi_y, psi_x_p, psi_y_p, psi_x_pp, psi_y_pp; // Previous values of the x and y derivative of Psi.
-  ptype u, v, u_p, v_p, u_pp, v_pp; // Previous values of the x and y derivative of Psi.
-  ptype k1_x, k1_y, k2_x, k2_y, k3_x, k3_y;
-  //ptype vix, viy;
-  ptype l[3] = {0.375,0.75,-0.125};
+  //double psi_x, psi_y;
+  double psi_x, psi_y, psi_x_p, psi_y_p, psi_x_pp, psi_y_pp; // Previous values of the x and y derivative of Psi.
+  double u, v, u_p, v_p, u_pp, v_pp; // Previous values of the x and y derivative of Psi.
+  double k1_x, k1_y, k2_x, k2_y, k3_x, k3_y;
+  //double vix, viy;
+  double l[3] = {0.375,0.75,-0.125};
 
   int pos = Nb_particle / Di * thread_finder, step_pos = Nb_particle / Di;
 
@@ -248,7 +248,7 @@ __global__ void Particle_advect_inertia_RK3(int Nb_particle, ptype dt, ptype *pa
 
 
 /*
-__ 0.5*dt*global__ void Particle_advect(int Nb_particle, ptype dt, ptype *particles_pos, ptype *psi, int N, int NX, int NY){
+__ 0.5*dt*global__ void Particle_advect(int Nb_particle, double dt, double *particles_pos, double *psi, int N, int NX, int NY){
 	int In; 
 	
 	for(int i = 0; i < Nb_particle; i+=1){

@@ -12,30 +12,30 @@
 #ifdef __CUDACC__
 
 
-__global__ void Compute_Energy(ptype *E, ptype *psi, int N, int NX, int NY, ptype h);
+__global__ void Compute_Energy(double *E, double *psi, int N, int NX, int NY, double h);
+__global__ void Compute_Enstrophy(double *Ens, double *W, int N, int NX, int NY, double h);
+void Compute_Energy_Host(double *E, double *psi, int N, int NX, int NY, double h);
+void Compute_Enstrophy_Host(double *Ens, double *W, int N, int NX, int NY, double h);
+void Compute_Palinstrophy(TCudaGrid2D *Grid_coarse, double *Pal, double *W_real, cufftDoubleComplex *Dev_Complex, cufftDoubleComplex *Dev_Hat, cufftDoubleComplex *Dev_Hat_bis, cufftHandle cufftPlan_coarse);
 
-__global__ void Compute_Enstrophy(ptype *Ens, ptype *W, int N, int NX, int NY, ptype h);
 
-void Compute_Palinstrophy(TCudaGrid2D *Grid_coarse, ptype *Pal, ptype *W_real, cuPtype *Dev_Complex, cuPtype *Dev_Hat, cuPtype *Dev_Hat_bis, cufftHandle cufftPlan_coarse);
+void NDFT_1D(cufftDoubleComplex *X_k, double *x_n, double *p_n, double *f_k, int N);
 
+void iNDFT_1D(cufftDoubleComplex *X_k, double *x_n, double *p_n, double *f_k, int N);
 
-void NDFT_1D(cuPtype *X_k, ptype *x_n, ptype *p_n, ptype *f_k, int N);
+__global__ void NDFT_2D(cufftDoubleComplex *X_k, double *x_n, double *p_n, int *f_k, int NX, int Np);
 
-void iNDFT_1D(cuPtype *X_k, ptype *x_n, ptype *p_n, ptype *f_k, int N);
+__global__ void iNDFT_2D(cufftDoubleComplex *X_k, double *x_n, double *p_n, int *f_k, int N_grid);
 
-__global__ void NDFT_2D(cuPtype *X_k, ptype *x_n, ptype *p_n, int *f_k, int NX, int Np);
+//void Lagrange_coef(double *Dev_Lagr_coef, double t, double tp, double tm, double tmm);
 
-__global__ void iNDFT_2D(cuPtype *X_k, ptype *x_n, ptype *p_n, int *f_k, int N_grid);
+//__device__ void device_Lagrange_inter(double *Dev_Psi_real_previous_p_p, double *Dev_Psi_previous_p, double *Dev_Psi_previous, double *Dev_Psi_real, double *Dev_Lag_coef, int N);
 
-//void Lagrange_coef(ptype *Dev_Lagr_coef, ptype t, ptype tp, ptype tm, ptype tmm);
+void Laplacian_vort(TCudaGrid2D *Grid_fine, double *Dev_W_fine, cufftDoubleComplex *Dev_Complex_fine, cufftDoubleComplex *Dev_Hat_fine, double *Dev_lap_fine_real, cufftDoubleComplex *Dev_lap_fine_complex, cufftDoubleComplex *Dev_lap_fine_hat, cufftHandle cufftPlan_fine);
 
-//__device__ void device_Lagrange_inter(ptype *Dev_Psi_real_previous_p_p, ptype *Dev_Psi_previous_p, ptype *Dev_Psi_previous, ptype *Dev_Psi_real, ptype *Dev_Lag_coef, int N);
-
-void Laplacian_vort(TCudaGrid2D *Grid_fine, ptype *Dev_W_fine, cuPtype *Dev_Complex_fine, cuPtype *Dev_Hat_fine, ptype *Dev_lap_fine_real, cuPtype *Dev_lap_fine_complex, cuPtype *Dev_lap_fine_hat, cufftHandle cufftPlan_fine);
-
-__host__ __device__ ptype L1(ptype t, ptype tp, ptype tm, ptype tmm);
-__host__ __device__ ptype L2(ptype t, ptype tp, ptype tm, ptype tmm);
-__host__ __device__ ptype L3(ptype t, ptype tp, ptype tm, ptype tmm);
+__host__ __device__ double L1(double t, double tp, double tm, double tmm);
+__host__ __device__ double L2(double t, double tp, double tm, double tmm);
+__host__ __device__ double L3(double t, double tp, double tm, double tmm);
 
 #endif
 

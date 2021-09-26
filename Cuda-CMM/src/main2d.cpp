@@ -1,6 +1,6 @@
 #include "simulation/cudasimulation2d.h"
-//#include "simulation/cudaadvection2d.h"
 #include "simulation/cudaeuler2d.h"
+#include "simulation/settings.h"
 #include "grid/cudagrid2d.h"
 
 
@@ -18,7 +18,7 @@
 * 	
 * 	
 * 	
-* 	One sentence about the work of Thibault, Nicolas, Julius.
+* 	Main extension of the code was done by Thibault Oujia, Nicolas Saber and Julius Bergmann
 * 	
 * 	
 * 		
@@ -26,18 +26,15 @@
 
 
 
-
-
 //Main function
 int main(int argc, char *args[])
 {
-	int grid_scale = 32;
-	int fine_grid_scale = 128;
-	// 32		64		128		256		512		1024		2048		4096		8192		16384
-	// max working on V100 : grid_scale = 4096; fine_grid_scale = 16384;
-	
-	// "4_nodes"		"quadropole"		"three_vortices"		"single_shear_layer"		"two_votices"		"turbulence_gaussienne"
-	cuda_euler_2d("4_nodes", grid_scale, fine_grid_scale);						//make sure to change the problem code in the cudagrid2d.h
+
+	// build settings and apply commands
+	SettingsCMM SettingsMain(argc, args);
+
+	// main function
+	cuda_euler_2d(SettingsMain);
 	
 	//Zoom_load_frame("vortex_shear_1000_4", grid_scale, fine_grid_scale, "final");
 	
@@ -52,9 +49,31 @@ int main(int argc, char *args[])
 *					   Interesting command						   *
 *******************************************************************/
 
+/*
+ * main programs location / commands for them
+ *
+ * compiler
+ * /usr/local/cuda/bin/nvcc
+ *
+ * old visual profiler, sudo needed for memory investigation, reference to java needed for starting
+ * good for individual profiling of functios
+ * sudo /usr/local/cuda/bin/nvvp -vm /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+ *
+ * new compiler, good timeline but wrong times
+ * /usr/local/cuda/bin/nsys-ui
+ *
+ * device memory usage information
+ * nvidia-smi
+ *
+ * device information, very useful details
+ * build:
+ * cd /usr/local/cuda/samples/1_Utilities/deviceQuery
+ * sudo make
+ * run:
+ * /usr/local/cuda/samples/1_Utilities/deviceQuery/deviceQuery
+ */
 
 
-// nvidia-smi
 // make clean
 // make CUDAFLAGS=-lineinfo SimulationCuda2d.out
 

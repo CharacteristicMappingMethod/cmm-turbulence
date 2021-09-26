@@ -1,8 +1,11 @@
-SimulationCuda2d.out: cudagrid2d.o cudahermite2d.o cudaparticle2d.o cudamesure2d.o cudasimulation2d.o cudaeuler2d.o main2d.o 
-	/usr/local/cuda/bin/nvcc -O3 -g -lineinfo -o SimulationCuda2d.out cudagrid2d.o cudahermite2d.o cudaparticle2d.o cudamesure2d.o cudasimulation2d.o cudaeuler2d.o main2d.o -arch=sm_50 -lcufft -lcudadevrt -lcurand
+SimulationCuda2d.out: settings.o cudagrid2d.o cudahermite2d.o cudaparticle2d.o cudamesure2d.o cudasimulation2d.o cudaeuler2d.o main2d.o 
+	/usr/local/cuda/bin/nvcc -O3 -g -lineinfo -o SimulationCuda2d.out settings.o cudagrid2d.o cudahermite2d.o cudaparticle2d.o cudamesure2d.o cudasimulation2d.o cudaeuler2d.o main2d.o -arch=sm_50 -lcufft -lcudadevrt -lcurand
 
-all: cudagrid2d.o cudahermite2d.o cudaparticle2d.o cudamesure2d.o cudasimulation2d.o cudaeuler2d.o main2d.o 
-	/usr/local/cuda/bin/nvcc -O3 -g -lineinfo -o SimulationCuda2d.out cudagrid2d.o cudahermite2d.o cudaparticle2d.o cudamesure2d.o cudasimulation2d.o cudaeuler2d.o main2d.o -arch=sm_50 -lcufft -lcudadevrt -lcurand
+all: settings.o cudagrid2d.o cudahermite2d.o cudaparticle2d.o cudamesure2d.o cudasimulation2d.o cudaeuler2d.o main2d.o 
+	/usr/local/cuda/bin/nvcc -O3 -g -lineinfo -o SimulationCuda2d.out settings.o cudagrid2d.o cudahermite2d.o cudaparticle2d.o cudamesure2d.o cudasimulation2d.o cudaeuler2d.o main2d.o -arch=sm_50 -lcufft -lcudadevrt -lcurand
+
+settings.o: src/simulation/settings.cu src/simulation/settings.h
+	/usr/local/cuda/bin/nvcc -O3 -c -g -lineinfo src/simulation/settings.cu -o settings.o -arch=sm_50 --relocatable-device-code true 
 	
 cudagrid2d.o: src/grid/cudagrid2d.cu src/grid/cudagrid2d.h
 	/usr/local/cuda/bin/nvcc -O3 -c -g -lineinfo src/grid/cudagrid2d.cu -o cudagrid2d.o -arch=sm_50 --relocatable-device-code true
@@ -22,7 +25,7 @@ cudasimulation2d.o: src/simulation/cudasimulation2d.cu src/simulation/cudasimula
 cudaeuler2d.o: src/simulation/cudaeuler2d.cu src/simulation/cudaeuler2d.h src/simulation/cudasimulation2d.h src/hermite/cudahermite2d.h src/grid/cudagrid2d.h
 	/usr/local/cuda/bin/nvcc -O3 -c -g -lineinfo src/simulation/cudaeuler2d.cu -o cudaeuler2d.o -arch=sm_50 --relocatable-device-code true 
 	
-main2d.o: src/main2d.cpp src/simulation/cudaeuler2d.h src/simulation/cudasimulation2d.h src/grid/cudagrid2d.h
+main2d.o: src/main2d.cpp src/simulation/cudaeuler2d.h src/simulation/cudasimulation2d.h src/simulation/settings.h src/grid/cudagrid2d.h
 	/usr/local/cuda/bin/nvcc -O3 -c  -g -lineinfo src/main2d.cpp -o main2d.o 
 	
 clean:
