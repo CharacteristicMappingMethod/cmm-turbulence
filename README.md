@@ -25,6 +25,7 @@ This code is developed to be built and run on Linux machines. In addition, an in
    - clone the repository to your machine, all code is located in the Cuda-CMM folder.
 
    Checking initial conditions:
+
    - Check grid_coarse and grid_fine in Cuda-CMM/src/simulation/settings.cu to work with your GPU memory, the memory usage can be tested while the code is running with the command 'nvidia-smi'.
    - Change mem_RAM_GPU_remaps in Cuda-CMM/src/simulation/settings.cu to a suitable number for your GPU memory. This value defines the amount of remappings to be saved on the GPU in MB and should only account for a fraction of the actual memory to give more space to other variables.
    - Change mem_RAM_CPU_remaps in Cuda-CMM/src/simulation/settings.cu to match your CPU memory in MB. This value can be chosen arbitrarily high in comparison to your machines CPU RAM.
