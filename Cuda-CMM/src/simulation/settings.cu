@@ -79,8 +79,8 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "mem_RAM_CPU_remaps") setMemRamCpuRemaps(stoi(value));
 			else if (command == "Nb_array_RAM") setNbArrayRam(stoi(value));
 			else if (command == "time_integration") setTimeIntegration(value);
-			else if (command == "map_update_order") setTimeIntegration(value);
-			else if (command == "molly_stencil") setTimeIntegration(stoi(value));
+			else if (command == "map_update_order") setMapUpdateOrder(value);
+			else if (command == "molly_stencil") setMollyStencil(stoi(value));
 		}
 	}
 	//	 cout << "  args[" << count << "]   " << args[count] << "\n";
