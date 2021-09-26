@@ -1,11 +1,6 @@
 #include "cudagrid2d.h"
 
 
-
-double ep = 1e-4;
-
-
-
 Logger::Logger(string simulationName)
 {
 	fileName = "data/" + simulationName + "/log.txt";

@@ -7,7 +7,8 @@ struct stat st = {0};
 
 
 
-void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale, string time_integration, string map_update_order, int molly_stencil, double final_time_override, double time_step_factor)
+//void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale, string time_integration, string map_update_order, int molly_stencil, double final_time_override, double time_step_factor)
+void cuda_euler_2d(SettingsCMM SettingsMain, double final_time_override, double time_step_factor)
 {
 	
 	/*******************************************************************
@@ -15,31 +16,27 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	*******************************************************************/
 	
 	double LX;															// domain length
-	int NX_coarse, NY_coarse;											// coarse grid size
-	int NX_fine, NY_fine;												// fine grid size
+	int NX_coarse = SettingsMain.getGridCoarse();						// coarse grid size
+	int NY_coarse = SettingsMain.getGridCoarse();						// coarse grid size
+	int NX_fine = SettingsMain.getGridFine();							// fine grid size
+	int NY_fine = SettingsMain.getGridFine();								// fine grid size
 	
 	double grid_by_time;
 	double t0, dt, tf;													// time - initial, step, final
 	int iterMax;														// maximum iteration count
-	string simulationName;												// name of the simulation: files get stored in the directory of this name
-	int simulation_num;													// needed for activation in device code
+	string simulationName = SettingsMain.getInitialCondition();			// name of the simulation: files get stored in the directory of this name
 	int snapshots_per_second;
 	int save_buffer_count;												// iterations after which files should be saved
 	int map_stack_length;												// this parameter is set to avoide memory overflow on GPU
 	int show_progress_at;
-	double inCompThreshold = 1e-4;										// the maximum allowance of map to deviate from grad_chi begin 1
 	
 	//GPU dependent parameters
-	int mem_RAM_GPU_remaps = 128; 										// mem_index in MB on the GPU
-	int mem_RAM_CPU_remaps = 4096;										// mem_RAM_CPU_remaps in MB on the CPU
-	int Nb_array_RAM = 4;												// fixed for four different stacks
-	double ref_coarse_grid = 128;										// ref value to be compared for stack copzing to cpu, height still unclear
+	int mem_RAM_GPU_remaps = SettingsMain.getMemRamGpuRemaps(); 		// mem_index in MB on the GPU
+	int mem_RAM_CPU_remaps = SettingsMain.getMemRamCpuRemaps();			// mem_RAM_CPU_remaps in MB on the CPU
+	int Nb_array_RAM = SettingsMain.getNbArrayRam();					// fixed for four different stacks
 	
 	//initialization of parameters
-	simulationName = intial_condition;
 	LX = twoPI;	
-	NX_coarse = NY_coarse = grid_scale;
-	NX_fine = NY_fine = fine_grid_scale;
 	t0 = 0.0;
 
 	// time steps per second used by 4_nodes
@@ -52,7 +49,6 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 		snapshots_per_second = 1;
 		dt = 1.0/ tmp_4nodes;//(NX_coarse * grid_by_time);
 		tf = 1;
-		simulation_num = 0;  // unique identifier of this simulation for device
 	}
 	else if(simulationName == "quadropole")
 	{
@@ -60,7 +56,6 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 		snapshots_per_second = 20;
 		dt = 1.0/(NX_coarse * grid_by_time);
 		tf = 50;
-		simulation_num = 1;  // unique identifier of this simulation for device
 	}
 	else if(simulationName == "two_votices")
 	{
@@ -68,7 +63,6 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 		snapshots_per_second = 1;
 		dt = 1.0/(NX_coarse * grid_by_time);
 		tf = 10;
-		simulation_num = 2;  // unique identifier of this simulation for device
 	}
 	else if(simulationName == "three_vortices")
 	{
@@ -76,7 +70,6 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 		snapshots_per_second = 10;
 		dt = 1.0/(NX_coarse * grid_by_time);
 		tf = 100;
-		simulation_num = 3;  // unique identifier of this simulation for device
 	}
 	else if(simulationName == "single_shear_layer")
 	{
@@ -84,7 +77,6 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 		snapshots_per_second = 1;
 		dt = 1.0/(NX_coarse * grid_by_time);
 		tf = 50; //50;//0.5;//100;//300;//
-		simulation_num = 4;  // unique identifier of this simulation for device
 	}
 	else if(simulationName == "turbulence_gaussienne")
 	{
@@ -92,29 +84,12 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 		snapshots_per_second = 2;
 		dt = 1.0/(NX_coarse * grid_by_time);
 		tf = 50;
-		simulation_num = 5;  // unique identifier of this simulation for device
 	}
 	else 
 	{
 		cout<<"Unexpected problem name specified\n";
 		return;
 	}
-	const int simulation_num_c = simulation_num;  // now declare it as const, can lead to some improvements
-	
-	// create int for map_udate_order to simplify loops
-	int map_update_num;
-	if (map_update_order == "2nd") {
-		map_update_num = 0;
-	}
-	if (map_update_order == "3rd") {
-		map_update_num = 1;
-	}
-	if (map_update_order == "4th") {
-		map_update_num = 2;
-	}
-	else map_update_num = 0;
-	const int map_update_num_c = map_update_num;  // now declare it as const, can lead to some improvements
-
 	
 	//parameter overrides
 	if(final_time_override > 0)
@@ -143,9 +118,9 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	//shared parameters
 	iterMax = ceil(tf / dt);
 	save_buffer_count = tmp_4nodes/snapshots_per_second;//(NX_coarse * grid_by_time) / snapshots_per_second;//	tmp/snapshots_per_second;//(NX_coarse * grid_by_time) / snapshots_per_second;							// the denominator is snapshots per second
-	show_progress_at = (32 * 4 * pow(ref_coarse_grid, 3.0)) / pow(NX_coarse, 3.0);
+	show_progress_at = (32 * 4 * pow(128, 3.0)) / pow(NX_coarse, 3.0);
 		if(show_progress_at < 1) show_progress_at = 1;
-	map_stack_length = (mem_RAM_GPU_remaps * pow(ref_coarse_grid, 2.0))/ (double(NX_coarse * NX_coarse));
+	map_stack_length = (mem_RAM_GPU_remaps * pow(128, 2.0))/ (double(NX_coarse * NX_coarse));
 	int frac_mem_cpu_to_gpu = int(double(mem_RAM_CPU_remaps)/double(mem_RAM_GPU_remaps)/double(Nb_array_RAM));  // define how many more remappings we can save on CPU than on GPU
 	
 	cout<<"Initial condition : "<<simulationName<<endl;
@@ -158,30 +133,24 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	
 	// create naming for folder structure, dependent on time integration
 	string sim_name_addition;
-	int time_integration_num;
-	if (time_integration == "EulerExp") {
+	if (SettingsMain.getTimeIntegration() == "EulerExp") {
 		sim_name_addition = "_DEV_EulExp_";
-		time_integration_num = 0;
 	}
-	else if (time_integration == "ABTwo") {
+	else if (SettingsMain.getTimeIntegration() == "ABTwo") {
 		sim_name_addition = "_DEV_AB2_";
-		time_integration_num = 1;
 	}
-	else if (time_integration == "RKThree") {
+	else if (SettingsMain.getTimeIntegration() == "RKThree") {
 		sim_name_addition = "_RK3_";
-		time_integration_num = 2;
 	}
-	else if (time_integration == "RKFour") {
+	else if (SettingsMain.getTimeIntegration() == "RKFour") {
 		sim_name_addition = "_RK4_";
-		time_integration_num = 3;
 	}
 	else {
 		sim_name_addition = "_DEV_UNNOWN_";
-		time_integration_num = 0;
 	}
 
-	simulationName = simulationName + sim_name_addition + "C" + std::to_string(grid_scale) + "_F" + std::to_string(fine_grid_scale) + "_t" + std::to_string(tmp_4nodes).substr(0, std::to_string(tmp_4nodes).find(".")) + "_T" + std::to_string(tf).substr(0, std::to_string(tf).find(".")); //"vortex_shear_1000_4";
-    simulationName = create_directory_structure(simulationName, NX_coarse, NX_fine, dt, tf, save_buffer_count, show_progress_at, iterMax, map_stack_length, inCompThreshold, time_integration);
+	simulationName = simulationName + sim_name_addition + "C" + std::to_string(NX_coarse) + "_F" + std::to_string(NX_fine) + "_t" + std::to_string(tmp_4nodes).substr(0, std::to_string(tmp_4nodes).find(".")) + "_T" + std::to_string(tf).substr(0, std::to_string(tf).find(".")); //"vortex_shear_1000_4";
+    simulationName = create_directory_structure(simulationName, NX_coarse, NX_fine, dt, tf, save_buffer_count, show_progress_at, iterMax, map_stack_length, SettingsMain.getIncompThreshold(), SettingsMain.getTimeIntegration());
     Logger logger(simulationName);
     cout<<"Name of simulation : "<<simulationName<<endl;
 	
@@ -607,11 +576,11 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	//cudaDeviceSynchronize();
 	
 	//setting initial conditions
-	translate_initial_condition_through_map_stack(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_ChiX, Dev_ChiY, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Dev_W_fine, Dev_W_H_fine_real, cufftPlan_fine, Dev_W_H_initial, simulation_num_c, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
+	translate_initial_condition_through_map_stack(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_ChiX, Dev_ChiY, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Dev_W_fine, Dev_W_H_fine_real, cufftPlan_fine, Dev_W_H_initial, SettingsMain.getInitialConditionNum(), Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
 	
 	//in step 1, Psi_p stays the same old one
 
-    evaulate_stream_hermite(&Grid_coarse, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real_previous, cufftPlan_coarse, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, molly_stencil);
+    evaulate_stream_hermite(&Grid_coarse, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real_previous, cufftPlan_coarse, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, SettingsMain.getMollyStencil());
 
 
     //evaulate_stream_hermite(&Grid_2048, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_2048, Dev_Psi_2048_previous, cufftPlan_2048, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
@@ -638,7 +607,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	writeAllRealToBinaryFile(Grid_coarse.N, Host_W_coarse, simulationName, "vorticity_coarse/w_coarse_0");
     cudaDeviceSynchronize();
 
-    kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_2048, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_2048, Dev_Complex_fine_2048, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_2048.NX, Grid_2048.NY, Grid_2048.h, Dev_W_H_initial, simulation_num_c);
+    kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_2048, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_2048, Dev_Complex_fine_2048, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_2048.NX, Grid_2048.NY, Grid_2048.h, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
     cudaMemcpy(Host_2048_4, Dev_W_2048, Grid_2048.sizeNReal, cudaMemcpyDeviceToHost);
     writeAllRealToBinaryFile(Grid_2048.N, Host_2048_4, simulationName, "vorticity_fine/w_1024_0");
 
@@ -653,7 +622,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 
     // They're everywhere ! need function
 
-    kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_2048, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_2048, Dev_Complex_fine_2048, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_2048.NX, Grid_2048.NY, Grid_2048.h, Dev_W_H_initial, simulation_num_c);
+    kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_2048, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_2048, Dev_Complex_fine_2048, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_2048.NX, Grid_2048.NY, Grid_2048.h, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
 	cudaMemcpy(Host_2048_4, Dev_W_2048, Grid_2048.sizeNReal, cudaMemcpyDeviceToHost);
 	writeAllRealToBinaryFile(Grid_2048.N, Host_2048_4, simulationName, "w_2048_0");
 
@@ -775,7 +744,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 			dt = tf - t;
 
 		// compute stream hermite from vorticity
-		evaulate_stream_hermite(&Grid_coarse, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufftPlan_coarse, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, molly_stencil);
+		evaulate_stream_hermite(&Grid_coarse, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufftPlan_coarse, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis, SettingsMain.getMollyStencil());
 
         //evaulate_stream_hermite(&Grid_2048, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_2048, Dev_Psi_2048_previous, cufftPlan_2048, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
 
@@ -796,7 +765,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 		#endif
 
 		// map advection
-		kernel_advect_using_stream_hermite<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Dev_Chi_new_X, Dev_Chi_new_Y, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, t, dt, ep, time_integration_num, map_update_num_c);	// time cost
+		kernel_advect_using_stream_hermite<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Dev_Chi_new_X, Dev_Chi_new_Y, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, t, dt, SettingsMain.getMapEpsilon(), SettingsMain.getTimeIntegrationNum(), SettingsMain.getMapUpdateOrderNum());	// time cost
 		// copy new map values onto the existing map
 		cudaMemcpy(Dev_ChiX, Dev_Chi_new_X, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice);
 		cudaMemcpy(Dev_ChiY, Dev_Chi_new_Y, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice);
@@ -861,7 +830,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 		#ifdef skip_remapping  // switch to disable or enable remapping for convergence stuff
 			if ( false ) {
 		#else
-			if( incomp_error[loop_ctr] > inCompThreshold ) {
+			if( incomp_error[loop_ctr] > SettingsMain.getIncompThreshold() ) {
 		#endif
 			if(map_stack_ctr > map_stack_length*frac_mem_cpu_to_gpu*Nb_array_RAM)
 			{
@@ -877,7 +846,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 			#endif
 			
 			//adjusting initial conditions
-			translate_initial_condition_through_map_stack(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_ChiX, Dev_ChiY, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Dev_W_fine, Dev_W_H_fine_real, cufftPlan_fine, Dev_W_H_initial, simulation_num_c, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
+			translate_initial_condition_through_map_stack(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_ChiX, Dev_ChiY, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Dev_W_fine, Dev_W_H_fine_real, cufftPlan_fine, Dev_W_H_initial, SettingsMain.getInitialConditionNum(), Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
 			
 			
 			if (map_stack_ctr%map_stack_length == 0){
@@ -1005,11 +974,11 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 
                 #endif
 				if (save_ctr%1==0){
-					kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_fine, Dev_Complex_fine, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h, Dev_W_H_initial, simulation_num_c);
+					kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_fine, Dev_Complex_fine, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
                     cudaMemcpy(Host_W_fine, Dev_W_fine, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
                     writeAllRealToBinaryFile(Grid_fine.N, Host_W_fine, simulationName, "vorticity_fine/w_fine_" + ss.str());
 
-                    kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_2048, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_2048, Dev_Complex_fine_2048, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_2048.NX, Grid_2048.NY, Grid_2048.h, Dev_W_H_initial, simulation_num_c);
+                    kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_2048, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_2048, Dev_Complex_fine_2048, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_2048.NX, Grid_2048.NY, Grid_2048.h, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
                     cudaMemcpy(Host_2048_4, Dev_W_2048, Grid_2048.sizeNReal, cudaMemcpyDeviceToHost);
                     writeAllRealToBinaryFile(Grid_2048.N, Host_2048_4, simulationName, "vorticity_fine/w_1024_" + ss.str());
 
@@ -1092,7 +1061,7 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	*						 Save final step						   *
 	*******************************************************************/
 	
-	kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_fine, Dev_Complex_fine, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h, Dev_W_H_initial, simulation_num_c);
+	kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, Dev_W_fine, Dev_Complex_fine, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
 	cudaMemcpy(Host_W_fine, Dev_W_fine, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
 	writeAllRealToBinaryFile(Grid_fine.N, Host_W_fine, simulationName, "w_fine_final");
 	writeAllRealToBinaryFile(4*Grid_coarse.N, Host_Psi, simulationName, "Psi_final");
@@ -1278,10 +1247,6 @@ void cuda_euler_2d(string intial_condition, int grid_scale, int fine_grid_scale,
 	    delete [] Host_particles_pos_fine_dt;
 	    cudaFree(Dev_particles_pos);
         cudaFree(Dev_particles_vel);
-	    cudaFree(Dev_particles_pos_1);
-        cudaFree(Dev_particles_vel_1);
-	    cudaFree(Dev_particles_pos_2);
-        cudaFree(Dev_particles_vel_2);
         cudaFree(Dev_particles_pos_fine_dt);
 	#endif
 

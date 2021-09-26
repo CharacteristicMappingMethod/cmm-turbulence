@@ -1,6 +1,7 @@
 #ifndef __CUDA_EULER_2D_H__
 #define __CUDA_EULER_2D_H__
 
+#include "../simulation/settings.h"
 #include "../simulation/cudasimulation2d.h"
 #include "../grid/cudagrid2d.h"
 #include "../particle/cudaparticle2d.h"
@@ -15,7 +16,8 @@ void evaulate_stream_hermite(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, d
 
 #endif
 
-void cuda_euler_2d(string problem_name, int grid_scale, int fine_grid_scale, string time_integration, string map_update_order, int molly_stencil, double final_time_override = -1, double time_step_factor = 1);
+void cuda_euler_2d(SettingsCMM SettingsMain, double final_time_override = -1, double time_step_factor = 1);
+
 string create_directory_structure(string simulationName, int NXc, int NXf, double dt, double T, int save_buffer_count, int show_progress_at, int iterMax, int map_stack_length, double inCompThreshold, string time_integration);
 
 void Zoom_load_frame(string File, int grid_scale, int fine_grid_scale, string t_nb);

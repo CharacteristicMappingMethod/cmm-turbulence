@@ -1,6 +1,6 @@
 #include "simulation/cudasimulation2d.h"
-//#include "simulation/cudaadvection2d.h"
 #include "simulation/cudaeuler2d.h"
+#include "simulation/settings.h"
 #include "grid/cudagrid2d.h"
 
 
@@ -26,44 +26,15 @@
 
 
 
-
-
 //Main function
 int main(int argc, char *args[])
 {
 
-	// Display each command-line argument.
-	//for( int count = 0; count < argc; count++ )
-	//	 cout << "  args[" << count << "]   " << args[count] << "\n";
-
-	int grid_scale = 512;
-	int fine_grid_scale = 2048;
-	// 32		64		128		256		512		1024		2048		4096		8192		16384
-	// max working on V100 : grid_scale = 4096; fine_grid_scale = 16384;
-	
-
-	/*
-	 *  Initial conditions
-	 *  "4_nodes" 				-	flow containing exactly 4 fourier modes with two vortices
-	 *  "quadropole"			-	???
-	 *  "three_vortices"		-	???
-	 *  "single_shear_layer"	-	shear layer problem forming helmholtz-instabilities, merging into two vortices which then merges into one big vortex
-	 *  "two_vortices"			-	???
-	 *  "turbulence_gaussienne"	-	???
-	 */
-	string initial_condition = "4_nodes";
-
-	// Time integration, define by name, "RKThree", "ABTwo", "EulerExp", "RKFour"
-	string time_integration = "RKThree";
-
-	// mapupdate order, "2nd", "3rd", "4th"
-	string map_update_order = "3rd";
-
-	// mollification settings, stencil size, 0, 4, 8
-	int molly_stencil = 0;
+	// build settings and apply commands
+	SettingsCMM SettingsMain(argc, args);
 
 	// main function
-	cuda_euler_2d(initial_condition, grid_scale, fine_grid_scale, time_integration, map_update_order, molly_stencil);						//make sure to change the problem code in the cudagrid2d.h
+	cuda_euler_2d(SettingsMain);
 	
 	//Zoom_load_frame("vortex_shear_1000_4", grid_scale, fine_grid_scale, "final");
 	

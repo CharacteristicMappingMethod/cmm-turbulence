@@ -31,7 +31,6 @@ using namespace std;
 	#define sm_50  // for Julius, because he has a shitty graphics card
 	// #define skip_remapping  // in case we want to skip the remapping for convergence purposes
 
-
 	//#define DISCRET
 
 	//active le temps
@@ -39,8 +38,6 @@ using namespace std;
 
     // #define PARTICLES
     // #define RKThree_PARTICLES
-
-	extern double ep;
 
 	enum color_map_choice
 	{

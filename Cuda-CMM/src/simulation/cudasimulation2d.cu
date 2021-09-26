@@ -143,6 +143,10 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 		c2[0] = +1.0/(4.0)/ep;  // 0th order
 		c3[0] = +1.0/(4.0)/ep/ep;  // 0th order
 	}
+	// zero
+	else {
+		c1[0] = c1[1] = c1[2] = c2[0] = c2[1] = c2[2] = c3[0] = c3[1] = c3[2] = 0;
+	}
 
 	// repeat for all footpoints, 4 for 3th order, 8 for 4th order and 12 for 5th order
 	int k_total;
