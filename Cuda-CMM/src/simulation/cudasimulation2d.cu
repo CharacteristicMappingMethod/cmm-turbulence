@@ -92,7 +92,13 @@ __global__ void kernel_incompressibility_check(double *ChiX, double *ChiY, doubl
 }
 
 
-__global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *phi, double *phi_p, double *phi_p_p, int NXc, int NYc, double hc, double t, double dt, double ep, int time_integration_num, int map_update_order_num)			// time cost
+/*
+ * Main advection function of the flow map using the stream function
+ * Loop over footpoints to apply GALS
+ * For each foot point: advect using the stream function and time stepping scheme
+ * At the end: combine results of all footpoints using specific map update scheme
+ */
+__global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *phi, double *phi_p, double *phi_p_p, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num)			// time cost
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -103,16 +109,16 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 
     if(iX >= NXc || iY >= NYc)
 		return;
-	
+
 	int In = iY*NXc + iX;
-	
+
 	long int N = NXc*NYc;
-	
+
 	//running through neighbours (unrolled loops)
 	double xep, yep;
     double xf, yf;  // coordinates in loop
 	double xf_p, yf_p;  // variables used for fixed-point iteration in ABTwo
-	
+
 	// initialize new intermediate values as zeros, helpfull to not write to array every point
 	double Chi_full_x[4] = {0, 0, 0, 0};
 	double Chi_full_y[4] = {0, 0, 0, 0};
@@ -164,14 +170,14 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 		// for higher orders repeat cross shape stencil with more points
 		xep = iX*hc + (1 + k_foot/4) * ep*(1 - 2*((k_foot/2)%2));
 		yep = iY*hc + (1 + k_foot/4) * ep*(1 - 2*(((k_foot+1)/2)%2));
-		
+
 		xf = xep;
 		yf = yep;
 
 		switch (time_integration_num) {
 			case 0:  // EulerExp
 			{
-				device_hermite_interpolate_dx_dy_1(phi, xf, yf, &u, &v, NXc, NYc, hc);
+				device_hermite_interpolate_dx_dy_1(phi, xf, yf, &u, &v, NX_psi, NY_psi, h_psi);
 				xf = xep - dt * u;
 				yf = yep - dt * v;
 				break;
@@ -186,14 +192,14 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 				for(int ctr = 0; ctr<10; ctr++)
 	            {
 					//step 1
-	                device_hermite_interpolate_dx_dy_1(phi_p, xf_p, yf_p, &u_p, &v_p, NXc, NYc, hc);
+	                device_hermite_interpolate_dx_dy_1(phi_p, xf_p, yf_p, &u_p, &v_p, NX_psi, NY_psi, h_psi);
 
 	                xf_p = xf - dt * u_p;
 	                yf_p = yf - dt * v_p;
 
 					//step 2
-	                device_hermite_interpolate_dx_dy_1(phi_p, xf_p, yf_p, &u_p, &v_p, NXc, NYc, hc);
-	                device_hermite_interpolate_dx_dy_1(phi, xf , yf, &u, &v, NXc, NYc, hc);
+	                device_hermite_interpolate_dx_dy_1(phi_p, xf_p, yf_p, &u_p, &v_p, NX_psi, NY_psi, h_psi);
+	                device_hermite_interpolate_dx_dy_1(phi, xf , yf, &u, &v, NX_psi, NY_psi, h_psi);
 
 	                xf = xep - dt * (1.5*u - 0.5*u_p);
 	                yf = yep - dt * (1.5*v - 0.5*v_p);
@@ -205,21 +211,21 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 			case 2:  // RKThree
 			{
 				// compute u_tilde(X,t_n+1)
-				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep, yep, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NXc, NYc, hc);
+				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep, yep, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
 
 				// k1 = u_tilde(x,t_n+1) = 3*u_n - 3*u_n-1 + 1*u_n-2
 				k1_x = 3 * u + -3 * u_p + u_p_p;
 				k1_y = 3 * v + -3 * v_p + v_p_p;
 
 				// compute u_tilde(x - dt*k1/2, t_n+1 - dt/2)
-				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k1_x/2, yep - dt*k1_y/2, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NXc, NYc, hc);
+				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k1_x/2, yep - dt*k1_y/2, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
 
 				//k2 = u_tilde(x - k1 dt/2, t_n+1 - dt/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
 				k2_x = 1.875 * u + -1.25 * u_p + 0.375 * u_p_p;
 				k2_y = 1.875 * v + -1.25 * v_p + 0.375 * v_p_p;
 
 				//compute u_tilde(x + dt * k1 - 2*dt*k2, t_n+1 - dt)
-				device_hermite_interpolate_dx_dy_1(phi, xep + dt*k1_x - 2*dt*k2_x, yep + dt*k1_y - 2*dt*k2_y, &u, &v, NXc, NYc, hc);
+				device_hermite_interpolate_dx_dy_1(phi, xep + dt*k1_x - 2*dt*k2_x, yep + dt*k1_y - 2*dt*k2_y, &u, &v, NX_psi, NY_psi, h_psi);
 
 				// k3 = u_tilde(x = k1 dt - 2 k2 dt, t_n) = u
 
@@ -232,28 +238,28 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 			case 3:  // RKFour
 			{
 				// compute u_tilde(X,t_n+1)
-				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep, yep, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NXc, NYc, hc);
+				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep, yep, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
 
 				// k1 = u_tilde(x,t_n+1) = 3*u_n - 3*u_n-1 + 1*u_n-2
 				k1_x = 3 * u + -3 * u_p + u_p_p;
 				k1_y = 3 * v + -3 * v_p + v_p_p;
 
 				// compute u_tilde(x - dt*k1/2, t_n+1 - dt/2)
-				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k1_x/2, yep - dt*k1_y/2, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NXc, NYc, hc);
+				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k1_x/2, yep - dt*k1_y/2, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
 
 				//k2 = u_tilde(x - k1 dt/2, t_n+1 - dt/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
 				k2_x = 1.875 * u + -1.25 * u_p + 0.375 * u_p_p;
 				k2_y = 1.875 * v + -1.25 * v_p + 0.375 * v_p_p;
 
 				// compute u_tilde(x - dt*k2/2, t_n+1 - dt/2)
-				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k2_x/2, yep - dt*k2_y/2, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NXc, NYc, hc);
+				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k2_x/2, yep - dt*k2_y/2, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
 
 				//k2 = u_tilde(x - k2 dt/2, t_n+1 - dt/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
 				k3_x = 1.875 * u + -1.25 * u_p + 0.375 * u_p_p;
 				k3_y = 1.875 * v + -1.25 * v_p + 0.375 * v_p_p;
 
 				//compute u_tilde(x - dt*k3, t_n+1 - dt)
-				device_hermite_interpolate_dx_dy_1(phi, xep - dt*k3_x, yep - dt*k3_y, &u, &v, NXc, NYc, hc);
+				device_hermite_interpolate_dx_dy_1(phi, xep - dt*k3_x, yep - dt*k3_y, &u, &v, NX_psi, NY_psi, h_psi);
 
 				// k3 = u_tilde(x - k3 dt, t_n) = u
 
@@ -264,7 +270,7 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 			}
 			default:  // EulerExp on default
 			{
-				device_hermite_interpolate_dx_dy_1(phi, xf, yf, &u, &v, NXc, NYc, hc);
+				device_hermite_interpolate_dx_dy_1(phi, xf, yf, &u, &v, NX_psi, NY_psi, h_psi);
 				xf = xep - dt * u; yf = yep - dt * v;
 				break;
 			}
@@ -703,17 +709,17 @@ __global__ void cut_off_scale(cufftDoubleComplex *W, int NX)
 			W[In].x = 0;
 			W[In].y = 0;
 		}
-	if (i >= NX/2 && j <= NX/2)
+	if (i > NX/2 && j <= NX/2)
 		if (((NX-i)*(NX-i) + j*j) > NX*NX/9){
 			W[In].x = 0;
 			W[In].y = 0;
 		}
-	if (i <= NX/2 && j >= NX/2)
+	if (i <= NX/2 && j > NX/2)
 		if ((i*i + (NX-j)*(NX-j)) > NX*NX/9){
 			W[In].x = 0;
 			W[In].y = 0;
 		}
-	if (i >= NX/2 && j >= NX/2)
+	if (i > NX/2 && j > NX/2)
 		if (((NX-i)*(NX-i) + (NX-j)*(NX-j)) > NX*NX/9){
 			W[In].x = 0;
 			W[In].y = 0;
@@ -724,6 +730,31 @@ __global__ void cut_off_scale(cufftDoubleComplex *W, int NX)
 		W[In].y = 0;
 	}
 	
+}
+
+
+// for zero padding we need to move all outer elements to conserve symmetry of spectrum
+__global__ void zero_move(cufftDoubleComplex *In, cufftDoubleComplex *Out, double Nc, double Ns) {
+	int iXc = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iYc = (blockDim.y * blockIdx.y + threadIdx.y);
+
+	int Inc = iYc*Nc + iXc;
+
+	// get new positions
+	int iXs = iXc;
+	int iYs = iYc;
+	// shift upper half to the outer edge
+	if (iXc > Nc/2) {
+		iXs += Ns - Nc;
+	}
+	if (iYc > Nc/2) {
+		iYs += Ns - Nc;
+	}
+	// get index in new system
+	int Ins = iYs*Ns + iXs;
+	// transcribe
+	Out[Ins].x = In[Inc].x;
+	Out[Ins].x = In[Inc].x;
 }
 
 

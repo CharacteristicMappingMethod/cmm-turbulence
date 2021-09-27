@@ -26,7 +26,7 @@ void recompute_output_files();	//read binary files storing diffeos and recompute
 	
 	//map advection 
 	__global__ void kernel_advect_using_velocity_function(double *ChiX, double *ChiY, double *ChiDualX, double *ChiDualY, int NXc, int NYc, double hc, double t, double dt, double ep);
-	__global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *phi, double *phi_p, double *phi_p_p, int NXc, int NYc, double hc, double t, double dt, double ep, int time_integration_num, int map_update_order_num);
+	__global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *phi, double *phi_p, double *phi_p_p, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num);
 	
 	
 	//variable type conversion
@@ -53,6 +53,7 @@ void recompute_output_files();	//read binary files storing diffeos and recompute
 	__global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *ChiY, cufftDoubleComplex *x_y, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double xl, double xr, double yl, double yr);
 	
 	__global__ void cut_off_scale(cufftDoubleComplex *W, int NX);
+	__global__ void zero_move(cufftDoubleComplex *In, cufftDoubleComplex *Out, double Nc, double Ns);
 
 	//fft operations
 	__global__ void kernel_sample_on_coarse_grid(cufftDoubleComplex *AcOut, cufftDoubleComplex *AfOut, int NXc, int NYc, double hc, int NXf, int NYf, double hf);

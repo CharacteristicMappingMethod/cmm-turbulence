@@ -6,6 +6,7 @@ void SettingsCMM::setPresets() {
 	// max working on V100 : grid_scale = 4096; fine_grid_scale = 16384;
 	int grid_coarse = 512;
 	int grid_fine = 2048;
+	int grid_psi = 1024;  // psi will be upsampled to this grid
 
 	/*
 	 *  Initial conditions
@@ -29,18 +30,19 @@ void SettingsCMM::setPresets() {
 
 	// set specific settings
 	// Time integration, define by name, "RKThree", "ABTwo", "EulerExp", "RKFour"
-	string time_integration = "RKFour";
+	string time_integration = "RKThree";
 
 	// mapupdate order, "2nd", "3rd", "4th"
-	string map_update_order = "2nd";
+	string map_update_order = "3rd";
 
 	// mollification settings, stencil size, 0, 4, 8
-	int molly_stencil = 0;
+	int molly_stencil = 4;
 
 
 	// now set everything
 	setGridCoarse(grid_coarse);
 	setGridFine(grid_fine);
+	setGridPsi(grid_psi);
 	setInitialCondition(initial_condition);
 	setIncompThreshold(incomp_threshhold);
 	setMapEpsilon(map_epsilon);
@@ -72,6 +74,7 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			// big if else for different commands
 			if (command == "grid_coarse") setGridCoarse(stoi(value));
 			else if (command == "grid_fine") setGridFine(stoi(value));
+			else if (command == "grid_psi") setGridPsi(stoi(value));
 			else if (command == "initial_condition") setInitialCondition(value);
 			else if (command == "incomp_threshold") setIncompThreshold(stoi(value));
 			else if (command == "map_epsilon") setMapEpsilon(stoi(value));
@@ -95,6 +98,8 @@ SettingsCMM::SettingsCMM(int gridCoarse, int gridFine, string initialCondition) 
 	setGridCoarse(gridCoarse);
 	setGridFine(gridFine);
 	setInitialCondition(initialCondition);
+	// assume psi will not be upsampled
+	setGridPsi(gridCoarse);
 }
 
 

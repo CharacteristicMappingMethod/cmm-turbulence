@@ -45,25 +45,23 @@ TCudaGrid2D::TCudaGrid2D(int NX, int NY, double xRange)
 	
 	this->h = xRange/(float)NX;
 	
-	N = NX*NY;
+	this->N = NX*NY;
 	this->sizeNReal = sizeof(double)*N;
 	this->sizeNComplex = sizeof(cufftDoubleComplex)*N;
 
+	//block & grid
+	threadsPerBlock.x = BLOCK_SIZE;
+	threadsPerBlock.y = BLOCK_SIZE;
+	threadsPerBlock.z = 1;
 
-			//block & grid
-			threadsPerBlock.x = BLOCK_SIZE;
-			threadsPerBlock.y = BLOCK_SIZE;
-			threadsPerBlock.z = 1;
-			
-			blocksPerGrid.x = ceil((float)NX/threadsPerBlock.x);
-			blocksPerGrid.y = ceil((float)NY/threadsPerBlock.y);
-			blocksPerGrid.z = 1;
-			
-			
-			printf("Grid      : (%d, %d)\n", NX, NY);
-			printf("Block Dim : (%d, %d, %d)\n", threadsPerBlock.x, threadsPerBlock.y, threadsPerBlock.z);
-			printf("Grid Dim  : (%d, %d, %d)\n\n", blocksPerGrid.x, blocksPerGrid.y, blocksPerGrid.z);
-			
+	blocksPerGrid.x = ceil((float)NX/threadsPerBlock.x);
+	blocksPerGrid.y = ceil((float)NY/threadsPerBlock.y);
+	blocksPerGrid.z = 1;
+
+	// debug information about grid, maybe add a verbose parameter?
+//	printf("Grid      : (%d, %d)\n", NX, NY);
+//	printf("Block Dim : (%d, %d, %d)\n", threadsPerBlock.x, threadsPerBlock.y, threadsPerBlock.z);
+//	printf("Grid Dim  : (%d, %d, %d)\n\n", blocksPerGrid.x, blocksPerGrid.y, blocksPerGrid.z);
 }
 
 
@@ -92,12 +90,12 @@ void get_max_min(TCudaGrid2D *G, double *var, double *min, double *max)
 }
 
 
-void Host_get_max_min(int len, double *Var_min, double *Var_max, double min, double max)
+void Host_get_max_min(int len, double *Var_min, double *Var_max, double *min_f, double *max_f)
 {
 	//calculating max and min
 
-	min = Var_min[0];
-	max = Var_max[0];
+	double min = Var_min[0];
+	double max = Var_max[0];
 	
 	for(int i=0;i<len;i++)
 	{			
@@ -107,7 +105,9 @@ void Host_get_max_min(int len, double *Var_min, double *Var_max, double min, dou
 		if(max < Var_max[i])
 			max = Var_max[i];
 	}
-	//printf("min max : %f, %f \n", min, max);
+
+	*min_f = min;
+	*max_f = max;
 }
 
 

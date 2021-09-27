@@ -15,7 +15,7 @@ class SettingsCMM {
 
 private:
 	// main properties, needed to be able to run
-	int grid_coarse, grid_fine;
+	int grid_coarse, grid_fine, grid_psi;
 	string initial_condition; int initial_condition_num;
 	// minor properties, can be tweaked but mainly remain constant
 	double incomp_threshhold;
@@ -47,6 +47,8 @@ public:
 	void setGridCoarse(int gridCoarse) { grid_coarse = gridCoarse; }
 	int getGridFine() const { return grid_fine; }
 	void setGridFine(int gridFine) { grid_fine = gridFine; }
+	int getGridPsi() const { return grid_psi; }
+	void setGridPsi(int gridPsi) { grid_psi = gridPsi; }
 
 	// initial conditions setting
 	string getInitialCondition() const { return initial_condition; }

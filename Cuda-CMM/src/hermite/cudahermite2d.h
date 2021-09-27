@@ -29,6 +29,7 @@ void hermite_interpolation_test();			//test the hermite interpolation functional
 	
 	
 	__device__ double device_hermite_mult(double *H, double b[][4], int I[], long int N, double h);
+	__device__ double device_hermite_mult(double *H, double bX[], double bY[], int I[], long int N, double h);
 		
 	__global__ void kernel_hermite_interpolation(double *H, double *F, int NXH, int NYH, int NXF, int NYF, double hH, double hF);		//interpolation test
 	
