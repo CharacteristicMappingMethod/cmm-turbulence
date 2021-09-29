@@ -14,7 +14,8 @@ using namespace std;
 class SettingsCMM {
 
 private:
-	// main properties, needed to be able to run
+	// main properties, needed to be able to run0
+	string sim_name;
 	int grid_coarse, grid_fine, grid_psi;
 	string initial_condition; int initial_condition_num;
 	// minor properties, can be tweaked but mainly remain constant
@@ -28,10 +29,14 @@ private:
 	string time_integration; int time_integration_num;
 	string map_update_order; int map_update_order_num;
 	int molly_stencil;
+	// particles
+	bool particles;
+	int particles_num;
+	string particles_time_integration; int particles_time_integration_num;
 
 public:
 	// main functions
-	SettingsCMM(int gridCoarse, int gridFine, string initialCondition);
+	SettingsCMM(string name, int gridCoarse, int gridFine, string initialCondition);
 	SettingsCMM();
 	SettingsCMM(int argc, char *args[]);
 
@@ -42,6 +47,9 @@ public:
 
 	// get and set methods for all variables
 
+	// name
+	string getSimName() const { return sim_name; }
+	void setSimName(string simName) { sim_name = simName; }
 	// grid settings
 	int getGridCoarse() const { return grid_coarse; }
 	void setGridCoarse(int gridCoarse) { grid_coarse = gridCoarse; }
@@ -106,6 +114,23 @@ public:
 		else time_integration_num = -1;
 	}
 	int getTimeIntegrationNum() const { return time_integration_num; }
+
+	// particles
+	bool getParticles() const { return particles; }
+	void setParticles(bool Particles) { particles = Particles; }
+	int getParticlesNum() const { return particles_num; }
+	void setParticlesNum(int particlesNum) { particles_num = particlesNum; }
+	string getParticlesTimeIntegration() const { return particles_time_integration; }
+	void setParticlesTimeIntegration(string particlesTimeIntegration) {
+		particles_time_integration = particlesTimeIntegration;
+		if (particlesTimeIntegration == "EulerExp") particles_time_integration_num = 0;
+		else if (particlesTimeIntegration == "EulerMid") particles_time_integration_num = 1;
+		else if (particlesTimeIntegration == "RKThree") particles_time_integration_num = 2;
+		else if (particlesTimeIntegration == "NicolasMid") particles_time_integration_num = -2;
+		else if (particlesTimeIntegration == "NicolasRKThree") particles_time_integration_num = -3;
+		else particles_time_integration_num = -1;
+	}
+	int getParticlesTimeIntegrationNum() const { return particles_time_integration_num; }
 };
 
 #endif

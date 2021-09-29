@@ -1,6 +1,9 @@
 #include "settings.h"
 
 void SettingsCMM::setPresets() {
+	// unique identifier to differentiate simulations
+	string sim_name = "parti_nicolasrkthree";
+
 	// grid settings for coarse and fine grid
 	// 32		64		128		256		512		1024		2048		4096		8192		16384
 	// max working on V100 : grid_scale = 4096; fine_grid_scale = 16384;
@@ -19,6 +22,7 @@ void SettingsCMM::setPresets() {
 	 */
 	string initial_condition = "4_nodes";
 
+
 	// set minor properties
 	double incomp_threshhold = 1e-4;  // the maximum allowance of map to deviate from grad_chi begin 1
 	double map_epsilon = 1e-4;  // distance used for foot points for GALS map advection
@@ -27,6 +31,7 @@ void SettingsCMM::setPresets() {
 	int mem_RAM_GPU_remaps = 128;  // mem_index in MB on the GPU
 	int mem_RAM_CPU_remaps = 4096;  // mem_RAM_CPU_remaps in MB on the CPU
 	int Nb_array_RAM = 4;  // fixed for four different stacks
+
 
 	// set specific settings
 	// Time integration, define by name, "RKThree", "ABTwo", "EulerExp", "RKFour"
@@ -39,7 +44,16 @@ void SettingsCMM::setPresets() {
 	int molly_stencil = 4;
 
 
+	// set particles settings
+	bool particles = true;  // en- or disable particles
+	// tau_p has to be modified in code, since it contains an array and i dont want to hardcode it here
+	int particles_num = 1000;  // number of particles
+	// Time integration for particles, define by name, "EulerExp", "EulerMid", "RKThree", "NicolasMid", "NicolasRKThree"
+	string particles_time_integration = "RKThree";
+
+
 	// now set everything
+	setSimName(sim_name);
 	setGridCoarse(grid_coarse);
 	setGridFine(grid_fine);
 	setGridPsi(grid_psi);
@@ -52,6 +66,9 @@ void SettingsCMM::setPresets() {
 	setTimeIntegration(time_integration);
 	setMapUpdateOrder(map_update_order);
 	setMollyStencil(molly_stencil);
+	setParticles(particles);
+	setParticlesNum(particles_num);
+	setParticlesTimeIntegration(particles_time_integration);
 }
 
 
@@ -90,11 +107,12 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 }
 
 
-// class constructor from three main ingredients
-SettingsCMM::SettingsCMM(int gridCoarse, int gridFine, string initialCondition) {
+// class constructor from tfour main ingredients
+SettingsCMM::SettingsCMM(string sim_name, int gridCoarse, int gridFine, string initialCondition) {
 	// set presets
 	setPresets();
-	// override the three main components
+	// override the four main components
+	setSimName(sim_name);
 	setGridCoarse(gridCoarse);
 	setGridFine(gridFine);
 	setInitialCondition(initialCondition);

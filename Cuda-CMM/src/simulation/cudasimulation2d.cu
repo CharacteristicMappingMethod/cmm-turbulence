@@ -174,6 +174,7 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 		xf = xep;
 		yf = yep;
 
+		// time integration - note, we go backwards in time!
 		switch (time_integration_num) {
 			case 0:  // EulerExp
 			{
@@ -245,14 +246,14 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 				k1_y = 3 * v + -3 * v_p + v_p_p;
 
 				// compute u_tilde(x - dt*k1/2, t_n+1 - dt/2)
-				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k1_x/2, yep - dt*k1_y/2, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
+				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k1_x/2.0, yep - dt*k1_y/2.0, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
 
 				//k2 = u_tilde(x - k1 dt/2, t_n+1 - dt/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
 				k2_x = 1.875 * u + -1.25 * u_p + 0.375 * u_p_p;
 				k2_y = 1.875 * v + -1.25 * v_p + 0.375 * v_p_p;
 
 				// compute u_tilde(x - dt*k2/2, t_n+1 - dt/2)
-				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k2_x/2, yep - dt*k2_y/2, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
+				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k2_x/2.0, yep - dt*k2_y/2.0, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
 
 				//k2 = u_tilde(x - k2 dt/2, t_n+1 - dt/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
 				k3_x = 1.875 * u + -1.25 * u_p + 0.375 * u_p_p;
@@ -264,8 +265,8 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 				// k3 = u_tilde(x - k3 dt, t_n) = u
 
 				// build all RK-steps together
-				xf = xep - dt * (k1_x + 2*k2_x + 2*k3_x + u)/6;
-				yf = yep - dt * (k1_y + 2*k2_y + 2*k3_y + v)/6;
+				xf = xep - dt * (k1_x + 2*k2_x + 2*k3_x + u)/6.0;
+				yf = yep - dt * (k1_y + 2*k2_y + 2*k3_y + v)/6.0;
 				break;
 			}
 			default:  // EulerExp on default
