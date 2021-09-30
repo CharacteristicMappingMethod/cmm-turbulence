@@ -59,13 +59,13 @@ __global__ void Compute_Enstrophy(double *Ens, double *W, int N, int NX, int NY,
 
 
 // two functions for host, because julius' computer doesn't support atomics for doubles
-void Compute_Energy_Host(double *E, double *psi, int N, int NX, int NY, double h){
-	for(int i = 0; i < NX*NY; i+=1){
+void Compute_Energy_Host(double *E, double *psi, int N, double h){
+	for(int i = 0; i < N; i+=1){
     	*E += 0.5*h * h * (psi[i + N] * psi[i + N] + psi[i + 2 * N] * psi[i + 2 * N]);
 	}
 }
-void Compute_Enstrophy_Host(double *Ens, double *W, int N, int NX, int NY, double h){
-	for(int i = 0; i < NX*NY; i+=1){
+void Compute_Enstrophy_Host(double *Ens, double *W, int N, double h){
+	for(int i = 0; i < N; i+=1){
 		*Ens += 0.5 * h * h * (W[i] * W[i]);
 	}
 }
@@ -206,7 +206,7 @@ void Laplacian_vort(TCudaGrid2D *Grid_fine, double *Dev_W_fine, cufftDoubleCompl
 
     kernel_fft_lap<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Hat_fine, Dev_lap_fine_hat, Grid_fine->NX, Grid_fine->NY, Grid_fine->h);
     cufftExecZ2Z(cufftPlan_fine, Dev_lap_fine_hat, Dev_lap_fine_complex, CUFFT_INVERSE);
-    kernel_complex_to_real<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_lap_fine_real, Dev_lap_fine_complex, Grid_fine->NX, Grid_fine->NY);
+    kernel_complex_to_real<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_lap_fine_complex, Dev_lap_fine_real, Grid_fine->NX, Grid_fine->NY);
 
 }
 

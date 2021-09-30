@@ -56,19 +56,19 @@ void Psi_upsampling(TCudaGrid2D *Grid_2048, double *Dev_W_2048, cufftDoubleCompl
 	// Forming Psi hermite
 	kernel_fft_iLap<<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Hat_fine_bis_2048, Dev_Hat_fine_2048, Grid_2048->NX, Grid_2048->NY, Grid_2048->h);													// Inverse laplacian in Fourier space
 	cufftExecZ2Z(cufftPlan_2048, Dev_Hat_fine_2048, Dev_Complex_fine_2048, CUFFT_INVERSE);
-	kernel_complex_to_real  <<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Psi_2048, Dev_Complex_fine_2048, Grid_2048->NX, Grid_2048->NY);
+	kernel_complex_to_real  <<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Complex_fine_2048, Dev_Psi_2048, Grid_2048->NX, Grid_2048->NY);
 
 	kernel_fft_dy<<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Hat_fine_2048, Dev_Hat_fine_bis_2048, Grid_2048->NX, Grid_2048->NY, Grid_2048->h);													// y-derivative of the vorticity in Fourier space
 	cufftExecZ2Z(cufftPlan_2048, Dev_Hat_fine_bis_2048, Dev_Complex_fine_2048, CUFFT_INVERSE);
-	kernel_complex_to_real  <<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(&Dev_Psi_2048[2*Grid_2048->N], Dev_Complex_fine_2048, Grid_2048->NX, Grid_2048->NY);
+	kernel_complex_to_real  <<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Complex_fine_2048, &Dev_Psi_2048[2*Grid_2048->N], Grid_2048->NX, Grid_2048->NY);
 
 	kernel_fft_dx<<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Hat_fine_2048, Dev_Hat_fine_bis_2048, Grid_2048->NX, Grid_2048->NY, Grid_2048->h);													// x-derivative of the vorticity in Fourier space
 	cufftExecZ2Z(cufftPlan_2048, Dev_Hat_fine_bis_2048, Dev_Complex_fine_2048, CUFFT_INVERSE);
-	kernel_complex_to_real  <<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(&Dev_Psi_2048[Grid_2048->N], Dev_Complex_fine_2048, Grid_2048->NX, Grid_2048->NY);
+	kernel_complex_to_real  <<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Complex_fine_2048, &Dev_Psi_2048[Grid_2048->N], Grid_2048->NX, Grid_2048->NY);
 
 	kernel_fft_dy<<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Hat_fine_bis_2048, Dev_Hat_fine_2048, Grid_2048->NX, Grid_2048->NY, Grid_2048->h);													// y-derivative of x-derivative of of the vorticity in Fourier space
 	cufftExecZ2Z(cufftPlan_2048, Dev_Hat_fine_2048, Dev_Complex_fine_2048, CUFFT_INVERSE);
-	kernel_complex_to_real<<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(&Dev_Psi_2048[3*Grid_2048->N], Dev_Complex_fine_2048, Grid_2048->NX, Grid_2048->NY);
+	kernel_complex_to_real<<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Complex_fine_2048, &Dev_Psi_2048[3*Grid_2048->N], Grid_2048->NX, Grid_2048->NY);
 
 }
 
@@ -165,6 +165,7 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 	else k_total = 4;
 
 	// footpoint loop
+	#pragma unroll
 	for (int k_foot = 0; k_foot<k_total; k_foot++) {
 		// get position of footpoint, NE, SE, SW, NW
 		// for higher orders repeat cross shape stencil with more points
@@ -276,7 +277,7 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 				break;
 			}
 		}
-		// apply map?
+		// apply map deformation
 		device_diffeo_interpolate(ChiX, ChiY, xf, yf, &xf, &yf, NXc, NYc, hc);
 
 		// directly apply map update
@@ -325,7 +326,7 @@ __global__ void kernel_real_to_complex(double *varR, cufftDoubleComplex *varC, i
 }
 
 
-__global__ void kernel_complex_to_real(double *varR, cufftDoubleComplex *varC, int NX, int NY)
+__global__ void kernel_complex_to_real(cufftDoubleComplex *varC, double *varR, int NX, int NY)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -349,19 +350,29 @@ __global__ void kernel_real_to_complex_H(double *varR, cufftDoubleComplex *varC,
 	if(iX >= NX || iY >= NY)
 		return;
 	
-	int In = iY*NX + iX;	
-	long int N = NX*NY;
+	// not scattered
+	int In = 4*(iY*NX + iX);
+
+	#pragma unroll
+	for (int i=0; i<4; i++) {
+		varC[In+i].x = varR[In+i];
+	}
+	varC[In].y = varC[In+1].y = varC[In+2].y = varC[In+3].y = 0.0;
 	
-	varC[In].x = varR[In];
-	varC[N+In].x = varR[N+In];
-	varC[2*N+In].x = varR[2*N+In];
-	varC[3*N+In].x = varR[3*N+In];
-	varC[In].y = varC[N+In].y = varC[2*N+In].y = varC[3*N+In].y = 0.0;
+	// very scattered
+//	int In = iY*NX + iX;
+//	long int N = NX*NY;
+//
+//	varC[In].x = varR[In];
+//	varC[N+In].x = varR[N+In];
+//	varC[2*N+In].x = varR[2*N+In];
+//	varC[3*N+In].x = varR[3*N+In];
+//	varC[In].y = varC[N+In].y = varC[2*N+In].y = varC[3*N+In].y = 0.0;
 	
 }
 
 
-__global__ void kernel_complex_to_real_H(double *varR, cufftDoubleComplex *varC, int NX, int NY)
+__global__ void kernel_complex_to_real_H(cufftDoubleComplex *varC, double *varR, int NX, int NY)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -370,13 +381,20 @@ __global__ void kernel_complex_to_real_H(double *varR, cufftDoubleComplex *varC,
 	if(iX >= NX || iY >= NY)
 		return;
 	
-	int In = iY*NX + iX;	
-	long int N = NX*NY;
+	// not scattered
+	int In = 4*(iY*NX + iX);
+
+	#pragma unroll
+	for (int i=0; i<4; i++) varR[In+i] = varC[In+i].x;
 	
-	varR[In] = varC[In].x;
-	varR[N+In] = varC[N+In].x;
-	varR[2*N+In] = varC[2*N+In].x;
-	varR[3*N+In] = varC[3*N+In].x;
+	// very scattered
+//	int In = iY*NX + iX;
+//	long int N = NX*NY;
+//
+//	varR[In] = varC[In].x;
+//	varR[N+In] = varC[N+In].x;
+//	varR[2*N+In] = varC[2*N+In].x;
+//	varR[3*N+In] = varC[3*N+In].x;
 }
 
 
@@ -697,7 +715,6 @@ __global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *
 
 __global__ void cut_off_scale(cufftDoubleComplex *W, int NX)
 {
-	
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 	
@@ -705,37 +722,19 @@ __global__ void cut_off_scale(cufftDoubleComplex *W, int NX)
 	
 	int i = In/NX;
 	int j = In%NX;
-	if (i <= NX/2 && j <= NX/2)
-		if ((i*i + j*j) > NX*NX/9){
-			W[In].x = 0;
-			W[In].y = 0;
-		}
-	if (i > NX/2 && j <= NX/2)
-		if (((NX-i)*(NX-i) + j*j) > NX*NX/9){
-			W[In].x = 0;
-			W[In].y = 0;
-		}
-	if (i <= NX/2 && j > NX/2)
-		if ((i*i + (NX-j)*(NX-j)) > NX*NX/9){
-			W[In].x = 0;
-			W[In].y = 0;
-		}
-	if (i > NX/2 && j > NX/2)
-		if (((NX-i)*(NX-i) + (NX-j)*(NX-j)) > NX*NX/9){
-			W[In].x = 0;
-			W[In].y = 0;
-		}
-	
-	if (In == 0){
+	// take symmetry into account
+	if (i > NX/2) i = NX-i;
+	if (j > NX/2) j = NX-j;
+	// cut at frequency 1/3 in a round circle
+	if ((i*i + j*j) > NX*NX/9 || In == 0) {
 		W[In].x = 0;
 		W[In].y = 0;
 	}
-	
 }
 
 
-// for zero padding we need to move all outer elements to conserve symmetry of spectrum
-__global__ void zero_move(cufftDoubleComplex *In, cufftDoubleComplex *Out, double Nc, double Ns) {
+// for zero padding we need to move all outer elements to conserve symmetry of spectrum, one function to add, one to remove
+__global__ void zero_move_add(cufftDoubleComplex *In, cufftDoubleComplex *Out, double Nc, double Ns) {
 	int iXc = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iYc = (blockDim.y * blockIdx.y + threadIdx.y);
 
@@ -755,7 +754,29 @@ __global__ void zero_move(cufftDoubleComplex *In, cufftDoubleComplex *Out, doubl
 	int Ins = iYs*Ns + iXs;
 	// transcribe
 	Out[Ins].x = In[Inc].x;
-	Out[Ins].x = In[Inc].x;
+	Out[Ins].y = In[Inc].y;
+}
+__global__ void zero_move_remove(cufftDoubleComplex *In, cufftDoubleComplex *Out, double Nc, double Ns) {
+	int iXc = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iYc = (blockDim.y * blockIdx.y + threadIdx.y);
+
+	int Inc = iYc*Nc + iXc;
+
+	// get new positions
+	int iXs = iXc;
+	int iYs = iYc;
+	// shift upper half to the outer edge
+	if (iXc > Nc/2) {
+		iXs += Ns - Nc;
+	}
+	if (iYc > Nc/2) {
+		iYs += Ns - Nc;
+	}
+	// get index in new system
+	int Ins = iYs*Ns + iXs;
+	// transcribe, inverse of add so we actually ignore the middle entries
+	Out[Inc].x = In[Ins].x;
+	Out[Inc].y = In[Ins].y;
 }
 
 
@@ -1049,7 +1070,7 @@ __device__ double device_initial_W_discret(double x, double y, double *W_initial
 *******************************************************************/
 
 
-void Zoom(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *Dev_ChiX_stack, double *Dev_ChiY_stack, double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1, double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3, double *Dev_ChiX, double *Dev_ChiY, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, double *W_real, cufftHandle cufftPlan_fine, double *W_initial, cufftDoubleComplex *Dev_Complex_fine, string simulationName, int simulation_num, double L)
+void Zoom(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *Dev_ChiX_stack, double *Dev_ChiY_stack, double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1, double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3, double *Dev_ChiX, double *Dev_ChiY, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, double *W_real, cufftHandle cufftPlan_fine, double *W_initial, cufftDoubleComplex *Dev_Complex_fine, string workspace, string simulationName, int simulation_num, double L)
 {
 	double *ws;
 	ws = new double[Grid_fine->N];
@@ -1087,7 +1108,7 @@ void Zoom(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *Dev_ChiX_sta
 		std::ostringstream ss2;
 		ss2<<zoom_ctr;
 		
-		writeAllRealToBinaryFile(Grid_fine->N, ws, simulationName, "zoom_" + ss2.str());
+		writeAllRealToBinaryFile(Grid_fine->N, ws, simulationName, workspace, "zoom_" + ss2.str());
 	}
 	
 }
@@ -1132,44 +1153,44 @@ void Zoom(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *Dev_ChiX_sta
 
 
 
-////////////////////////////////////////////////////////////////////////
-void test_fft_operations()
-{
-}
-
-//void recompute_output_files(){}
-
-////////////////////////////////////////////////////////////////////////
-double compare_map_with_identity(double *chiX, double *chiY, int NX, int NY, double h)
-{
-return 0;
-}
-
-__global__ void kernel_compute_total_grid_Chi(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *gradChi, int stack_length, int NXc, int NYc, double hc, int NXs, int NYs, double hs)
-{
-}
-
-__global__ void kernel_compute_enstropy_increase_rate_factors(double *w, double *phi, double *div1, double *div2, int NXc, int NYc, double hc, double ep)
-{
-}
-
-__global__ void kernel_compute_enstropy_increase_rate_factors(double *wHsc, double *ChiX, double *ChiY, double *phi, double *div1, double *div2, int NXc, int NYc, double hc, int NXsc, int NYsc, double hsc, double ep)
-{
-}
-
-////////////////////////////////////////////////////////////////////////
-__global__ void kernel_advect_using_velocity_function(double *ChiX, double *ChiY, double *ChiDualX, double *ChiDualY,  int NXc, int NYc, double hc, double t, double dt, double ep)
-{
-}
-
-////////////////////////////////////////////////////////////////////////
-__global__ void kernel_apply_map_to_W(double *ChiX, double *ChiY, double *ws, int NXc, int NYc, double hc, int NXs, int NYs, double hs)
-{
-}
-
-__global__ void kernel_compare_map_stack_with_identity(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *error, int stack_length, int NXc, int NYc, double hc, int NXs, int NYs, double hs)
-{
-}
+//////////////////////////////////////////////////////////////////////////
+//void test_fft_operations()
+//{
+//}
+//
+////void recompute_output_files(){}
+//
+//////////////////////////////////////////////////////////////////////////
+//double compare_map_with_identity(double *chiX, double *chiY, int NX, int NY, double h)
+//{
+//return 0;
+//}
+//
+//__global__ void kernel_compute_total_grid_Chi(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *gradChi, int stack_length, int NXc, int NYc, double hc, int NXs, int NYs, double hs)
+//{
+//}
+//
+//__global__ void kernel_compute_enstropy_increase_rate_factors(double *w, double *phi, double *div1, double *div2, int NXc, int NYc, double hc, double ep)
+//{
+//}
+//
+//__global__ void kernel_compute_enstropy_increase_rate_factors(double *wHsc, double *ChiX, double *ChiY, double *phi, double *div1, double *div2, int NXc, int NYc, double hc, int NXsc, int NYsc, double hsc, double ep)
+//{
+//}
+//
+//////////////////////////////////////////////////////////////////////////
+//__global__ void kernel_advect_using_velocity_function(double *ChiX, double *ChiY, double *ChiDualX, double *ChiDualY,  int NXc, int NYc, double hc, double t, double dt, double ep)
+//{
+//}
+//
+//////////////////////////////////////////////////////////////////////////
+//__global__ void kernel_apply_map_to_W(double *ChiX, double *ChiY, double *ws, int NXc, int NYc, double hc, int NXs, int NYs, double hs)
+//{
+//}
+//
+//__global__ void kernel_compare_map_stack_with_identity(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *error, int stack_length, int NXc, int NYc, double hc, int NXs, int NYs, double hs)
+//{
+//}
 
 
 

@@ -15,7 +15,7 @@ class SettingsCMM {
 
 private:
 	// main properties, needed to be able to run0
-	string sim_name;
+	string workspace, sim_name;
 	int grid_coarse, grid_fine, grid_psi;
 	string initial_condition; int initial_condition_num;
 	// minor properties, can be tweaked but mainly remain constant
@@ -29,6 +29,7 @@ private:
 	string time_integration; int time_integration_num;
 	string map_update_order; int map_update_order_num;
 	int molly_stencil;
+	int upsample_version;
 	// particles
 	bool particles;
 	int particles_num;
@@ -36,7 +37,7 @@ private:
 
 public:
 	// main functions
-	SettingsCMM(string name, int gridCoarse, int gridFine, string initialCondition);
+	SettingsCMM(string sim_name, int gridCoarse, int gridFine, string initialCondition);
 	SettingsCMM();
 	SettingsCMM(int argc, char *args[]);
 
@@ -48,6 +49,8 @@ public:
 	// get and set methods for all variables
 
 	// name
+	string getWorkspace() const { return workspace; }
+	void setWorkspace(string Workspace) { workspace = Workspace; }
 	string getSimName() const { return sim_name; }
 	void setSimName(string simName) { sim_name = simName; }
 	// grid settings
@@ -102,6 +105,10 @@ public:
 	// molly stencil, amount of points to be used for mollification
 	int getMollyStencil() const { return molly_stencil; }
 	void setMollyStencil(int mollyStencil) { molly_stencil = mollyStencil; }
+
+	// upsample version, upsample vort and psi or only psi
+	int getUpsampleVersion() const { return upsample_version; }
+	void setUpsampleVersion(int upsampleVersion) { upsample_version = upsampleVersion; }
 
 	// time integration for map advection
 	string getTimeIntegration() const { return time_integration; }

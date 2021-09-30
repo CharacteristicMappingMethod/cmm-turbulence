@@ -5,7 +5,7 @@
 *						  Hermite interpolation					   *
 *******************************************************************/
 // this computation is used very often, using it as a function greatly reduces code-redundancy
-// however, here we have 16 scattered memory accesses
+// however, here we have 8 scattered memory accesses I[0] - I[1] and I[2] - I[3] ar paired
 __device__ double device_hermite_mult(double *H, double b[][4], int I[], long int N, double h)
 {
 	return b[0][0]* H[    I[0]] + b[0][1]* H[    I[1]] + b[1][0]* H[    I[2]] + b[1][1]* H[    I[3]] // Point interpolation
@@ -180,7 +180,7 @@ __device__ void  device_hermite_interpolate_dx_dy_3(double *H1, double *H2, doub
 	{
 		double bX[4] = {Hfx(dx), -Hfx(1-dx), Hgx(dx), Hgx(1-dx)};
 		double bY[4] = {Hf(dy), Hf(1-dy), Hg(dy), -Hg(1-dy)};
-	
+
 		// building b here is faster, as we only have to do it once for all three computations
 		double b[4][4] = {
 							bX[0]*bY[0], bX[1]*bY[0], bX[2]*bY[0], bX[3]*bY[0],
@@ -196,7 +196,7 @@ __device__ void  device_hermite_interpolate_dx_dy_3(double *H1, double *H2, doub
 	{
 		double bX[4] = {Hf(dx), Hf(1-dx), Hg(dx), -Hg(1-dx)};
 		double bY[4] = {Hfx(dy), -Hfx(1-dy), Hgx(dy), Hgx(1-dy)};
-	
+
 		// building b here is faster, as we only have to do it once for all three computations
 		double b[4][4] = {
 							bX[0]*bY[0], bX[1]*bY[0], bX[2]*bY[0], bX[3]*bY[0],

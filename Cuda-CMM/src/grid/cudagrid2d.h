@@ -79,31 +79,31 @@ using namespace std;
 	__global__ void Dev_get_max_min(int len, double *var, double *min, double *max);
 
 	//reading & writting functions
-	void writeRealToFile(TCudaGrid2D *G, double *var, string fileName);
-	void writeComplexToFile(TCudaGrid2D *G, cufftDoubleComplex *var, string fileName);
-	void writeHalfComplexToFile(TCudaGrid2D *G, cufftDoubleComplex *var, string fileName);
+//	void writeRealToFile(TCudaGrid2D *G, double *var, string fileName);
+//	void writeComplexToFile(TCudaGrid2D *G, cufftDoubleComplex *var, string fileName);
+//	void writeHalfComplexToFile(TCudaGrid2D *G, cufftDoubleComplex *var, string fileName);
+//
+//	void writeRealToBinaryFile(TCudaGrid2D *G, double *var, string fileName);
+//	int readRealFromBinaryFile(TCudaGrid2D *G, double *var, string fileName);
+//
+//	void writeRealToImage(TCudaGrid2D *G, double *var, string fileName, double min = 0, double max = 1, color_map_choice map = JET, bool INVERTED = false);
+//	void writeHalfComplexToImage(TCudaGrid2D *G, cufftDoubleComplex *var, string fileName, double min = 0, double max = 1, color_map_choice map = JET, bool INVERTED = false);
+//
+//	void writeDiffeoToFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr=0);
+//	void writeDiffeoStackToFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr=0);
+//
+//	void writeDiffeoToBinaryFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr = 0);
+//	int readDiffeoFromBinaryFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr = 0);
 
-	void writeRealToBinaryFile(TCudaGrid2D *G, double *var, string fileName);
-	int readRealFromBinaryFile(TCudaGrid2D *G, double *var, string fileName);
-
-	void writeRealToImage(TCudaGrid2D *G, double *var, string fileName, double min = 0, double max = 1, color_map_choice map = JET, bool INVERTED = false);
-	void writeHalfComplexToImage(TCudaGrid2D *G, cufftDoubleComplex *var, string fileName, double min = 0, double max = 1, color_map_choice map = JET, bool INVERTED = false);
-
-	void writeDiffeoToFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr=0);
-	void writeDiffeoStackToFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr=0);
-
-	void writeDiffeoToBinaryFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr = 0);
-	int readDiffeoFromBinaryFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr = 0);
-
-	void writeVorticityToFile(TCudaGrid2D *G, cufftDoubleComplex *w, string simulationName, string fileName, int ctr = 0);
-	void writeVorticityToImage(TCudaGrid2D *G, cufftDoubleComplex *w, double min, double max, string simulationName, string fileName, int ctr = 0);
+//	void writeVorticityToFile(TCudaGrid2D *G, cufftDoubleComplex *w, string simulationName, string fileName, int ctr = 0);
+//	void writeVorticityToImage(TCudaGrid2D *G, cufftDoubleComplex *w, double min, double max, string simulationName, string fileName, int ctr = 0);
 
 	const string currentDateTime();
 
-	__global__ void kernel_fft_lap(cufftDoubleComplex *AOut, cufftDoubleComplex *BOut, int NX, int NY, double h);
-	__global__ void kernel_fft_iLap(cufftDoubleComplex *AOut, cufftDoubleComplex *BOut, int NX, int NY, double h);
-	__global__ void kernel_fft_dx(cufftDoubleComplex *AOut, cufftDoubleComplex *BOut, int NX, int NY, double h);
-	__global__ void kernel_fft_dy(cufftDoubleComplex *AOut, cufftDoubleComplex *BOut, int NX, int NY, double h);
+	__global__ void kernel_fft_lap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h);
+	__global__ void kernel_fft_iLap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h);
+	__global__ void kernel_fft_dx(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h);
+	__global__ void kernel_fft_dy(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h);
 
 
 
@@ -112,12 +112,12 @@ using namespace std;
 
 
 
-	void writeAllRealToBinaryFile(int Len, double *var, string simulationName, string fileName);
-	void readAllRealFromBinaryFile(int Len, double *var, string simulationName, string fileName);
-	void writeAllData(TCudaGrid2D *Gc, TCudaGrid2D *Gsf, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *ChiDualX, double *ChiDualY, double *wsf, double *wc, double *lsf, double *Phi, int stack_map_passed, string t_nb, string simulationName);
-	void readAllData(TCudaGrid2D *Gc, TCudaGrid2D *Gsf, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *ChiDualX, double *ChiDualY, double *wsf, double *lsf, double *Phi, int stack_map_passed, string t_nb, string simulationName);
-	void writeRealToBinaryAnyFile(int Len, double *var, string fileAdress);
-	void readRealToBinaryAnyFile(int Len, double *var, string fileAdress);
+	void writeAllRealToBinaryFile(int Len, double *var, string workspace, string simulationName, string fileName);
+	void readAllRealFromBinaryFile(int Len, double *var, string workspace, string simulationName, string fileName);
+//	void writeAllData(TCudaGrid2D *Gc, TCudaGrid2D *Gsf, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *ChiDualX, double *ChiDualY, double *wsf, double *wc, double *lsf, double *Phi, int stack_map_passed, string t_nb, string simulationName);
+//	void readAllData(TCudaGrid2D *Gc, TCudaGrid2D *Gsf, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *ChiDualX, double *ChiDualY, double *wsf, double *lsf, double *Phi, int stack_map_passed, string t_nb, string simulationName);
+//	void writeRealToBinaryAnyFile(int Len, double *var, string fileAdress);
+//	void readRealToBinaryAnyFile(int Len, double *var, string fileAdress);
 
 
 

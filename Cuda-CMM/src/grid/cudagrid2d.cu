@@ -144,7 +144,7 @@ __global__ void Dev_get_max_min(int len, double *var, double *min, double *max)
 *******************************************************************/
 
 
-__global__ void kernel_fft_lap(cufftDoubleComplex *AOut, cufftDoubleComplex *BOut, int NX, int NY, double h)						// Laplace operator in Fourier space
+__global__ void kernel_fft_lap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h)						// Laplace operator in Fourier space
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -155,7 +155,7 @@ __global__ void kernel_fft_lap(cufftDoubleComplex *AOut, cufftDoubleComplex *BOu
 		
 	if(iX == 0 && iY == 0)
 	{
-		BOut[0].x = BOut[0].y = 0;
+		val_out[0].x = val_out[0].y = 0;
 		return;
 	}
 	
@@ -165,14 +165,11 @@ __global__ void kernel_fft_lap(cufftDoubleComplex *AOut, cufftDoubleComplex *BOu
 	double ky = twoPI/(h*NY) * (iY - (iY>NY/2)*NY);
 	double k2 = kx*kx + ky*ky;
 	
-	double x = -AOut[In].x * k2;
-	double y = -AOut[In].y * k2;
-	
-	BOut[In].x = x;	
-	BOut[In].y = y;	
+	val_out[In].x = -val_in[In].x * k2;
+	val_out[In].y = -val_in[In].y * k2;
 }
 
-__global__ void kernel_fft_iLap(cufftDoubleComplex *AOut, cufftDoubleComplex *BOut, int NX, int NY, double h)						// Inverse laplace operator in Fourier space
+__global__ void kernel_fft_iLap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h)						// Inverse laplace operator in Fourier space
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -183,7 +180,7 @@ __global__ void kernel_fft_iLap(cufftDoubleComplex *AOut, cufftDoubleComplex *BO
 		
 	if(iX == 0 && iY == 0)
 	{
-		BOut[0].x = BOut[0].y = 0;
+		val_out[0].x = val_out[0].y = 0;
 		return;
 	}
 	
@@ -193,14 +190,11 @@ __global__ void kernel_fft_iLap(cufftDoubleComplex *AOut, cufftDoubleComplex *BO
 	double ky = twoPI/(h*NY) * (iY - (iY>NY/2)*NY);
 	double k2 = kx*kx + ky*ky;
 	
-	double x = -AOut[In].x / k2;
-	double y = -AOut[In].y / k2;
-	
-	BOut[In].x = x;	
-	BOut[In].y = y;	
+	val_out[In].x = -val_in[In].x / k2;
+	val_out[In].y = -val_in[In].y / k2;
 }
 
-__global__ void kernel_fft_dx(cufftDoubleComplex *AOut, cufftDoubleComplex *BOut, int NX, int NY, double h)						// x derivative in Fourier space
+__global__ void kernel_fft_dx(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h)						// x derivative in Fourier space
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -213,14 +207,11 @@ __global__ void kernel_fft_dx(cufftDoubleComplex *AOut, cufftDoubleComplex *BOut
 	
 	double kx = twoPI/(h*NX) * (iX - (iX>NX/2)*NX);
 	
-	double x = -AOut[In].y * kx;
-	double y =  AOut[In].x * kx;
-	
-	BOut[In].x = x;	
-	BOut[In].y = y;	
+	val_out[In].x = -val_in[In].y * kx;
+	val_out[In].y =  val_in[In].x * kx;
 }
 
-__global__ void kernel_fft_dy(cufftDoubleComplex *AOut, cufftDoubleComplex *BOut, int NX, int NY, double h)						// y derivative in Fourier space
+__global__ void kernel_fft_dy(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h)						// y derivative in Fourier space
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -233,11 +224,8 @@ __global__ void kernel_fft_dy(cufftDoubleComplex *AOut, cufftDoubleComplex *BOut
 	
 	double ky = twoPI/(h*NY) * (iY - (iY>NY/2)*NY);
 	
-	double x = -AOut[In].y * ky;
-	double y =  AOut[In].x * ky;
-	
-	BOut[In].x = x;	
-	BOut[In].y = y;	
+	val_out[In].x = -val_in[In].y * ky;
+	val_out[In].y =  val_in[In].x * ky;
 }
 
 
@@ -259,99 +247,99 @@ const std::string currentDateTime() {
 *******************************************************************/
 
 
-void writeRealToFile(TCudaGrid2D *G, double *var, string fileName)
-{
-	fileName = "data/" + fileName + ".csv";
-	ofstream file(fileName.c_str(), ios::out);
-	
-		if(!file)
-		{
-			cout<<"Error saving file. Unable to open : "<<fileName<<endl;
-			return;
-		}
-	
-	char buffer[50];
-	int n=0;
-	for (int j=0; j<G->NY; j++)
-	{
-		for (int i=0; i<G->NX; i++)
-		{
-			sprintf(buffer, "%e", var[n]);
-			file<<buffer<< ",";
-			n++;
-		}
-		file << "\n";
-	}
-	file.close();
-}
+//void writeRealToFile(TCudaGrid2D *G, double *var, string workspace, string fileName)
+//{
+//	fileName = workspace + "data/" + fileName + ".csv";
+//	ofstream file(fileName.c_str(), ios::out);
+//
+//		if(!file)
+//		{
+//			cout<<"Error saving file. Unable to open : "<<fileName<<endl;
+//			return;
+//		}
+//
+//	char buffer[50];
+//	int n=0;
+//	for (int j=0; j<G->NY; j++)
+//	{
+//		for (int i=0; i<G->NX; i++)
+//		{
+//			sprintf(buffer, "%e", var[n]);
+//			file<<buffer<< ",";
+//			n++;
+//		}
+//		file << "\n";
+//	}
+//	file.close();
+//}
+//
+//
+//void writeRealToBinaryFile(TCudaGrid2D *G, double *var, string workspace, string fileName)
+//{
+//	fileName = workspace + "data/" + fileName + ".data";
+//	ofstream file(fileName.c_str(), ios::out | ios::binary);
+//
+//		if(!file)
+//		{
+//			cout<<"Error saving file. Unable to open : "<<fileName<<endl;
+//			return;
+//		}
+//
+//	int n=0;
+//	for (int j=0; j<G->NY; j++)
+//	{
+//		for (int i=0; i<G->NX; i++)
+//		{
+//			file.write( (char*) &var[n], sizeof(double) );
+//			n++;
+//		}
+//	}
+//	file.close();
+//}
+//
+//
+//int readRealFromBinaryFile(TCudaGrid2D *G, double *var, string workspace, string fileName)
+//{
+//	fileName = workspace + "data/" + fileName + ".data";
+//	ifstream file(fileName.c_str(), ios::in | ios::binary);
+//
+//		if(!file)
+//		{
+//			//cout<<"Error saving file. Unable to open : "<<fileName<<endl;
+//			return -1;
+//		}
+//
+//	int n=0;
+//	for (int j=0; j<G->NY; j++)
+//	{
+//		for (int i=0; i<G->NX; i++)
+//		{
+//			file.read( (char*) &var[n], sizeof(double) );
+//			n++;
+//		}
+//	}
+//	file.close();
+//
+//	return 0;
+//}
 
 
-void writeRealToBinaryFile(TCudaGrid2D *G, double *var, string fileName)
-{
-	fileName = "data/" + fileName + ".data";
-	ofstream file(fileName.c_str(), ios::out | ios::binary);
-	
-		if(!file)
-		{
-			cout<<"Error saving file. Unable to open : "<<fileName<<endl;
-			return;
-		}
-	
-	int n=0;
-	for (int j=0; j<G->NY; j++)
-	{
-		for (int i=0; i<G->NX; i++)
-		{
-			file.write( (char*) &var[n], sizeof(double) );
-			n++;
-		}
-	}
-	file.close();
-}
-
-
-int readRealFromBinaryFile(TCudaGrid2D *G, double *var, string fileName)
-{
-	fileName = "data/" + fileName + ".data";
-	ifstream file(fileName.c_str(), ios::in | ios::binary);
-	
-		if(!file)
-		{
-			//cout<<"Error saving file. Unable to open : "<<fileName<<endl;
-			return -1;
-		}
-	
-	int n=0;
-	for (int j=0; j<G->NY; j++)
-	{
-		for (int i=0; i<G->NX; i++)
-		{
-			file.read( (char*) &var[n], sizeof(double) );
-			n++;
-		}
-	}
-	file.close();
-	
-	return 0;
-}
-
-
-void writeDiffeoToBinaryFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr)
-{
-	std::ostringstream ss;
-	ss<<ctr;
-	fileName = simulationName + "/all_map_data/" + fileName + ss.str();
-	
-	writeRealToBinaryFile(G,  ChiX, 			fileName + "_X_F");
-	writeRealToBinaryFile(G, &ChiX[1*G->N], 	fileName + "_X_Fx");
-	writeRealToBinaryFile(G, &ChiX[2*G->N], 	fileName + "_X_Fy");
-	writeRealToBinaryFile(G, &ChiX[3*G->N], 	fileName + "_X_Fxy");
-	
-	writeRealToBinaryFile(G,  ChiY, 			fileName + "_Y_F");
-	writeRealToBinaryFile(G, &ChiY[1*G->N], 	fileName + "_Y_Fx");
-	writeRealToBinaryFile(G, &ChiY[2*G->N], 	fileName + "_Y_Fy");
-	writeRealToBinaryFile(G, &ChiY[3*G->N], 	fileName + "_Y_Fxy");
-}
+//void writeDiffeoToBinaryFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string workspace, string simulationName, string fileName, int ctr)
+//{
+//	std::ostringstream ss;
+//	ss<<ctr;
+//	fileName = simulationName + "/all_map_data/" + fileName + ss.str();
+//
+//	writeRealToBinaryFile(G,  ChiX, 			fileName + "_X_F");
+//	writeRealToBinaryFile(G, &ChiX[1*G->N], 	fileName + "_X_Fx");
+//	writeRealToBinaryFile(G, &ChiX[2*G->N], 	fileName + "_X_Fy");
+//	writeRealToBinaryFile(G, &ChiX[3*G->N], 	fileName + "_X_Fxy");
+//
+//	writeRealToBinaryFile(G,  ChiY, 			fileName + "_Y_F");
+//	writeRealToBinaryFile(G, &ChiY[1*G->N], 	fileName + "_Y_Fx");
+//	writeRealToBinaryFile(G, &ChiY[2*G->N], 	fileName + "_Y_Fy");
+//	writeRealToBinaryFile(G, &ChiY[3*G->N], 	fileName + "_Y_Fxy");
+//}
 
 /*
 void writeRealToImage(TCudaGrid2D *G, double *var, string fileName, double min, double max, color_map_choice map, bool INVERTED)
@@ -409,9 +397,9 @@ void writeRealToImage(TCudaGrid2D *G, double *var, string fileName, double min, 
 *******************************************************************/
 
 
-void writeAllRealToBinaryFile(int Len, double *var, string simulationName, string fileName)
+void writeAllRealToBinaryFile(int Len, double *var, string workspace, string simulationName, string fileName)
 {
-	fileName = "data/" + simulationName + "/all_save_data/" + fileName + ".data";
+	fileName = workspace + "data/" + simulationName + "/all_save_data/" + fileName + ".data";
 	ofstream file(fileName.c_str(), ios::out | ios::binary);
 	
 		if(!file)
@@ -427,9 +415,9 @@ void writeAllRealToBinaryFile(int Len, double *var, string simulationName, strin
 }
 
 
-void readAllRealFromBinaryFile(int Len, double *var, string simulationName, string fileName)
+void readAllRealFromBinaryFile(int Len, double *var, string workspace, string simulationName, string fileName)
 {
-	fileName = "data/" + simulationName + "/all_save_data/" + fileName + ".data";
+	fileName = workspace + "data/" + simulationName + "/all_save_data/" + fileName + ".data";
 	ifstream file(fileName.c_str(), ios::in | ios::binary);
 	
 		if(!file)
@@ -444,84 +432,84 @@ void readAllRealFromBinaryFile(int Len, double *var, string simulationName, stri
 }
 
 
-void writeAllData(TCudaGrid2D *Gc, TCudaGrid2D *Gsf, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *ChiDualX, double *ChiDualY, double *wsf, double *wc, double *lsf, double *Phi, int stack_map_passed, string t_nb, string simulationName)
-{
-	
-	string fileName = "data/" + simulationName + "/all_save_data/stack_map_passed_" + t_nb + ".data";
-	ofstream file(fileName.c_str(), ios::out | ios::binary);
-	file.write( (char*) &stack_map_passed, sizeof(int) );
-	file.close();
-	
-	
-	writeAllRealToBinaryFile(Gsf->N, wsf, simulationName, "w_" + t_nb);
-	writeAllRealToBinaryFile(Gc->N, wc, simulationName, "wc_" + t_nb);
-	//writeAllRealToBinaryFile(Gsf->N, lsf, simulationName, "l_" + t_nb);
-	writeAllRealToBinaryFile(4*Gc->N, Phi, simulationName, "Phi_" + t_nb);
-	//writeAllRealToBinaryFile(4*Gc->N, ChiX, simulationName, "ChiX_" + t_nb);
-	//writeAllRealToBinaryFile(4*Gc->N, ChiY, simulationName, "ChiY_" + t_nb);
-	//writeAllRealToBinaryFile(4*Gc->N, ChiDualX, simulationName, "ChiDualX_" + t_nb);
-	//writeAllRealToBinaryFile(4*Gc->N, ChiDualY, simulationName, "ChiDualY_" + t_nb);
-	writeAllRealToBinaryFile(stack_map_passed*4*Gc->N, ChiX_stack, simulationName, "ChiX_stack_" + t_nb);
-	writeAllRealToBinaryFile(stack_map_passed*4*Gc->N, ChiY_stack, simulationName, "ChiY_stack_" + t_nb);
-	
-}
+//void writeAllData(TCudaGrid2D *Gc, TCudaGrid2D *Gsf, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *ChiDualX, double *ChiDualY, double *wsf, double *wc, double *lsf, double *Phi, int stack_map_passed, string t_nb, string workspace, string simulationName)
+//{
+//
+//	string fileName = workspace + "data/" + simulationName + "/all_save_data/stack_map_passed_" + t_nb + ".data";
+//	ofstream file(fileName.c_str(), ios::out | ios::binary);
+//	file.write( (char*) &stack_map_passed, sizeof(int) );
+//	file.close();
+//
+//
+//	writeAllRealToBinaryFile(Gsf->N, wsf, workspace, simulationName, "w_" + t_nb);
+//	writeAllRealToBinaryFile(Gc->N, wc, workspace, simulationName, "wc_" + t_nb);
+//	//writeAllRealToBinaryFile(Gsf->N, lsf, simulationName, "l_" + t_nb);
+//	writeAllRealToBinaryFile(4*Gc->N, Phi, workspace, simulationName, "Phi_" + t_nb);
+//	//writeAllRealToBinaryFile(4*Gc->N, ChiX, simulationName, "ChiX_" + t_nb);
+//	//writeAllRealToBinaryFile(4*Gc->N, ChiY, simulationName, "ChiY_" + t_nb);
+//	//writeAllRealToBinaryFile(4*Gc->N, ChiDualX, simulationName, "ChiDualX_" + t_nb);
+//	//writeAllRealToBinaryFile(4*Gc->N, ChiDualY, simulationName, "ChiDualY_" + t_nb);
+//	writeAllRealToBinaryFile(stack_map_passed*4*Gc->N, ChiX_stack, workspace, simulationName, "ChiX_stack_" + t_nb);
+//	writeAllRealToBinaryFile(stack_map_passed*4*Gc->N, ChiY_stack, workspace, simulationName, "ChiY_stack_" + t_nb);
+//
+//}
+//
+//
+//void readAllData(TCudaGrid2D *Gc, TCudaGrid2D *Gsf, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *ChiDualX, double *ChiDualY, double *wsf, double *lsf, double *Phi, int stack_map_passed, string t_nb, string workspace, string simulationName)
+//{
+//
+//	string fileName = workspace + "data/" + simulationName + "/all_save_data/stack_map_passed_" + t_nb + ".data";
+//	ifstream file(fileName.c_str(), ios::in | ios::binary);
+//	file.read( (char*) &stack_map_passed, sizeof(int) );
+//	file.close();
+//
+//
+//	readAllRealFromBinaryFile(Gsf->N, wsf, workspace, simulationName, "w_" + t_nb);
+//	readAllRealFromBinaryFile(Gsf->N, lsf, workspace, simulationName, "l_" + t_nb);
+//	readAllRealFromBinaryFile(4*Gc->N, Phi, workspace, simulationName, "Phi_" + t_nb);
+//	readAllRealFromBinaryFile(4*Gc->N, ChiX, workspace, simulationName, "ChiX_" + t_nb);
+//	readAllRealFromBinaryFile(4*Gc->N, ChiY, workspace, simulationName, "ChiY_" + t_nb);
+//	readAllRealFromBinaryFile(4*Gc->N, ChiDualX, workspace, simulationName, "ChiDualX_" + t_nb);
+//	readAllRealFromBinaryFile(4*Gc->N, ChiDualY, workspace, simulationName, "ChiDualY_" + t_nb);
+//	readAllRealFromBinaryFile(stack_map_passed*4*Gc->N, ChiX_stack, workspace, simulationName, "ChiX_stack_" + t_nb);
+//	readAllRealFromBinaryFile(stack_map_passed*4*Gc->N, ChiY_stack, workspace, simulationName, "ChiY_stack_" + t_nb);
+//
+//}
 
 
-void readAllData(TCudaGrid2D *Gc, TCudaGrid2D *Gsf, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *ChiDualX, double *ChiDualY, double *wsf, double *lsf, double *Phi, int stack_map_passed, string t_nb, string simulationName)
-{
-	
-	string fileName = "data/" + simulationName + "/all_save_data/stack_map_passed_" + t_nb + ".data";
-	ifstream file(fileName.c_str(), ios::in | ios::binary);
-	file.read( (char*) &stack_map_passed, sizeof(int) );
-	file.close();
-	
-	
-	readAllRealFromBinaryFile(Gsf->N, wsf, simulationName, "w_" + t_nb);
-	readAllRealFromBinaryFile(Gsf->N, lsf, simulationName, "l_" + t_nb);
-	readAllRealFromBinaryFile(4*Gc->N, Phi, simulationName, "Phi_" + t_nb);
-	readAllRealFromBinaryFile(4*Gc->N, ChiX, simulationName, "ChiX_" + t_nb);
-	readAllRealFromBinaryFile(4*Gc->N, ChiY, simulationName, "ChiY_" + t_nb);
-	readAllRealFromBinaryFile(4*Gc->N, ChiDualX, simulationName, "ChiDualX_" + t_nb);
-	readAllRealFromBinaryFile(4*Gc->N, ChiDualY, simulationName, "ChiDualY_" + t_nb);
-	readAllRealFromBinaryFile(stack_map_passed*4*Gc->N, ChiX_stack, simulationName, "ChiX_stack_" + t_nb);
-	readAllRealFromBinaryFile(stack_map_passed*4*Gc->N, ChiY_stack, simulationName, "ChiY_stack_" + t_nb);
-	
-}
-
-
-void writeRealToBinaryAnyFile(int Len, double *var, string fileAdress)
-{
-	string fileName = fileAdress;
-	ofstream file(fileName.c_str(), ios::out | ios::binary);
-	
-		if(!file)
-		{
-			cout<<"Error saving file. Unable to open : "<<fileName<<endl;
-			return;
-		}
-	
-	for (int l=0; l<Len; l++)
-		file.write( (char*) &var[l], sizeof(double) );
-		
-	file.close();
-}
-
-
-void readRealToBinaryAnyFile(int Len, double *var, string fileAdress)
-{
-	string fileName = fileAdress;
-	ifstream file(fileName.c_str(), ios::in | ios::binary);
-	
-		if(!file)
-		{
-			cout<<"Error saving file. Unable to open : "<<fileName<<endl;
-		}
-		
-	for (int l=0; l<Len; l++)
-		file.read( (char*) &var[l], sizeof(double) );
-		
-	file.close();
-}
+//void writeRealToBinaryAnyFile(int Len, double *var, string fileAdress)
+//{
+//	string fileName = fileAdress;
+//	ofstream file(fileName.c_str(), ios::out | ios::binary);
+//
+//		if(!file)
+//		{
+//			cout<<"Error saving file. Unable to open : "<<fileName<<endl;
+//			return;
+//		}
+//
+//	for (int l=0; l<Len; l++)
+//		file.write( (char*) &var[l], sizeof(double) );
+//
+//	file.close();
+//}
+//
+//
+//void readRealToBinaryAnyFile(int Len, double *var, string fileAdress)
+//{
+//	string fileName = fileAdress;
+//	ifstream file(fileName.c_str(), ios::in | ios::binary);
+//
+//		if(!file)
+//		{
+//			cout<<"Error saving file. Unable to open : "<<fileName<<endl;
+//		}
+//
+//	for (int l=0; l<Len; l++)
+//		file.read( (char*) &var[l], sizeof(double) );
+//
+//	file.close();
+//}
 
 
 
@@ -536,40 +524,36 @@ void readRealToBinaryAnyFile(int Len, double *var, string fileAdress)
 *******************************************************************/
 /******************************************************************/
 
-
-
-
-
-void writeComplexToFile(TCudaGrid2D *G, cufftDoubleComplex *var, string fileName)
-{
-}
-
-void writeHalfComplexToFile(TCudaGrid2D *G, cufftDoubleComplex *var, string fileName)
-{
-}
-
-void writeDiffeoToFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr)
-{
-}
-
-void writeDiffeoStackToFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr)
-{
-}
-
-int readDiffeoFromBinaryFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr)
-{
-return 0;
-}
-
-void writeVorticityToFile(TCudaGrid2D *G, cufftDoubleComplex *w, string simulationName, string fileName, int ctr)
-{
-}
-
-void writeVorticityToImage(TCudaGrid2D *G, cufftDoubleComplex *w, double min, double max, string simulationName, string fileName, int ctr)
-{
-}
-
-void writeHalfComplexToImage(TCudaGrid2D *G, cufftDoubleComplex *var, string fileName, double min, double max, color_map_choice map, bool INVERTED)
-{
-}
+//void writeComplexToFile(TCudaGrid2D *G, cufftDoubleComplex *var, string fileName)
+//{
+//}
+//
+//void writeHalfComplexToFile(TCudaGrid2D *G, cufftDoubleComplex *var, string fileName)
+//{
+//}
+//
+//void writeDiffeoToFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr)
+//{
+//}
+//
+//void writeDiffeoStackToFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr)
+//{
+//}
+//
+//int readDiffeoFromBinaryFile(TCudaGrid2D *G, double *ChiX, double *ChiY, string simulationName, string fileName, int ctr)
+//{
+//return 0;
+//}
+//
+//void writeVorticityToFile(TCudaGrid2D *G, cufftDoubleComplex *w, string simulationName, string fileName, int ctr)
+//{
+//}
+//
+//void writeVorticityToImage(TCudaGrid2D *G, cufftDoubleComplex *w, double min, double max, string simulationName, string fileName, int ctr)
+//{
+//}
+//
+//void writeHalfComplexToImage(TCudaGrid2D *G, cufftDoubleComplex *var, string fileName, double min, double max, color_map_choice map, bool INVERTED)
+//{
+//}
 

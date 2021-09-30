@@ -1,15 +1,16 @@
 #include "settings.h"
 
 void SettingsCMM::setPresets() {
-	// unique identifier to differentiate simulations
-	string sim_name = "parti_nicolasrkthree";
+	// naming and saving settings of the simulation
+	string workspace = "./"; // where should the files be saved? "./" or "" means at the run location, has to end with backslash
+	string sim_name = "mem_changes";  // unique identifier to differentiate simulations
 
 	// grid settings for coarse and fine grid
 	// 32		64		128		256		512		1024		2048		4096		8192		16384
 	// max working on V100 : grid_scale = 4096; fine_grid_scale = 16384;
 	int grid_coarse = 512;
 	int grid_fine = 2048;
-	int grid_psi = 1024;  // psi will be upsampled to this grid
+	int grid_psi = 1024;  // psi will be used on this grid
 
 	/*
 	 *  Initial conditions
@@ -41,11 +42,13 @@ void SettingsCMM::setPresets() {
 	string map_update_order = "3rd";
 
 	// mollification settings, stencil size, 0, 4, 8
-	int molly_stencil = 4;
+	int molly_stencil = 0;
 
+	// for now we have two different upsample versions, upsample on vorticity and psi (1) or only psi (0)
+	int upsample_version = 1;
 
 	// set particles settings
-	bool particles = true;  // en- or disable particles
+	bool particles = false;  // en- or disable particles
 	// tau_p has to be modified in code, since it contains an array and i dont want to hardcode it here
 	int particles_num = 1000;  // number of particles
 	// Time integration for particles, define by name, "EulerExp", "EulerMid", "RKThree", "NicolasMid", "NicolasRKThree"
@@ -53,6 +56,7 @@ void SettingsCMM::setPresets() {
 
 
 	// now set everything
+	setWorkspace(workspace);
 	setSimName(sim_name);
 	setGridCoarse(grid_coarse);
 	setGridFine(grid_fine);
@@ -66,6 +70,7 @@ void SettingsCMM::setPresets() {
 	setTimeIntegration(time_integration);
 	setMapUpdateOrder(map_update_order);
 	setMollyStencil(molly_stencil);
+	setUpsampleVersion(upsample_version);
 	setParticles(particles);
 	setParticlesNum(particles_num);
 	setParticlesTimeIntegration(particles_time_integration);
@@ -89,7 +94,9 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			string value = command_full.substr(pos_equal+1, command_full.length());
 
 			// big if else for different commands
-			if (command == "grid_coarse") setGridCoarse(stoi(value));
+			if (command == "workspace") setWorkspace(value);
+			else if (command == "sim_name") setSimName(value);
+			else if (command == "grid_coarse") setGridCoarse(stoi(value));
 			else if (command == "grid_fine") setGridFine(stoi(value));
 			else if (command == "grid_psi") setGridPsi(stoi(value));
 			else if (command == "initial_condition") setInitialCondition(value);
@@ -101,6 +108,14 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "time_integration") setTimeIntegration(value);
 			else if (command == "map_update_order") setMapUpdateOrder(value);
 			else if (command == "molly_stencil") setMollyStencil(stoi(value));
+			else if (command == "upsample_version") setUpsampleVersion(stoi(value));
+			// true false handling
+			else if (command == "particles") {
+				if (value == "true" || value == "True" || value == "1") setParticles(true);
+				else if (value == "false" || value == "False" || value == "0") setParticles(false);
+			}
+			else if (command == "particles_num") setParticlesNum(stoi(value));
+			else if (command == "particles_time_integration") setParticlesTimeIntegration(value);
 		}
 	}
 	//	 cout << "  args[" << count << "]   " << args[count] << "\n";
