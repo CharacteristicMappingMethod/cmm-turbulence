@@ -52,7 +52,7 @@ void recompute_output_files();	//read binary files storing diffeos and recompute
 	void kernel_apply_map_stack_to_W_custom_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1, double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3, double *W_real, cufftDoubleComplex *Dev_Complex_fine, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double xl, double xr, double yl, double yr, double *W_initial, int simulation_num);
 	__global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *ChiY, cufftDoubleComplex *x_y, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double xl, double xr, double yl, double yr);
 	
-	__global__ void cut_off_scale(cufftDoubleComplex *W, int NX);
+	__global__ void cut_off_scale(cufftDoubleComplex *W, int NX, double freq);
 	__global__ void zero_move_add(cufftDoubleComplex *In, cufftDoubleComplex *Out, double Nc, double Ns);
 	__global__ void zero_move_remove(cufftDoubleComplex *In, cufftDoubleComplex *Out, double Nc, double Ns);
 

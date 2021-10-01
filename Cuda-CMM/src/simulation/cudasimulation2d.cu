@@ -713,7 +713,8 @@ __global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *
 }
 
 
-__global__ void cut_off_scale(cufftDoubleComplex *W, int NX)
+// cut at given frequencies in a round circle
+__global__ void cut_off_scale(cufftDoubleComplex *W, int NX, double freq)
 {
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
@@ -726,7 +727,7 @@ __global__ void cut_off_scale(cufftDoubleComplex *W, int NX)
 	if (i > NX/2) i = NX-i;
 	if (j > NX/2) j = NX-j;
 	// cut at frequency 1/3 in a round circle
-	if ((i*i + j*j) > NX*NX/9 || In == 0) {
+	if ((i*i + j*j) > freq*freq || In == 0) {
 		W[In].x = 0;
 		W[In].y = 0;
 	}

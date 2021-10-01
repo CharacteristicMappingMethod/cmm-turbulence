@@ -18,6 +18,10 @@ private:
 	string workspace, sim_name;
 	int grid_coarse, grid_fine, grid_psi;
 	string initial_condition; int initial_condition_num;
+	// time stepping properties
+	double final_time, factor_dt_by_grid;
+	int steps_per_sec, snapshots_per_sec;
+	bool set_dt_by_steps;
 	// minor properties, can be tweaked but mainly remain constant
 	double incomp_threshhold;
 	double map_epsilon;
@@ -30,6 +34,7 @@ private:
 	string map_update_order; int map_update_order_num;
 	int molly_stencil;
 	int upsample_version;
+	double freq_cut_psi;
 	// particles
 	bool particles;
 	int particles_num;
@@ -60,6 +65,18 @@ public:
 	void setGridFine(int gridFine) { grid_fine = gridFine; }
 	int getGridPsi() const { return grid_psi; }
 	void setGridPsi(int gridPsi) { grid_psi = gridPsi; }
+
+	// time stepping properties
+	double getFinalTime() const { return final_time; }
+	void setFinalTime(double finalTime) { final_time = finalTime; }
+	double getFactorDtByGrid() const { return factor_dt_by_grid; }
+	void setFactorDtByGrid(double factorDtByGrid) { factor_dt_by_grid = factorDtByGrid; }
+	int getStepsPerSec() const { return steps_per_sec; }
+	void setStepsPerSec(int stepsPerSec) { steps_per_sec = stepsPerSec; }
+	int getSnapshotsPerSec() const { return snapshots_per_sec; }
+	void setSnapshotsPerSec(int snapshotsPerSec) { snapshots_per_sec = snapshotsPerSec; }
+	bool getSetDtBySteps() const { return set_dt_by_steps; }
+	void setSetDtBySteps(bool setDtBySteps) { set_dt_by_steps = setDtBySteps; }
 
 	// initial conditions setting
 	string getInitialCondition() const { return initial_condition; }
@@ -109,6 +126,10 @@ public:
 	// upsample version, upsample vort and psi or only psi
 	int getUpsampleVersion() const { return upsample_version; }
 	void setUpsampleVersion(int upsampleVersion) { upsample_version = upsampleVersion; }
+
+	// low pass cut frequencies for psi
+	double getFreqCutPsi() const { return freq_cut_psi; }
+	void setFreqCutPsi(double freqCutPsi) { freq_cut_psi = freqCutPsi; }
 
 	// time integration for map advection
 	string getTimeIntegration() const { return time_integration; }

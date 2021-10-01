@@ -23,6 +23,13 @@ void SettingsCMM::setPresets() {
 	 */
 	string initial_condition = "4_nodes";
 
+	// set time properties
+	double final_time = 1;  // end of computation
+	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this is the factor for it
+	int steps_per_sec = 64;  // how many steps do we want per seconds?
+	bool set_dt_by_steps = true;  // choose wether we want to set dt by steps or by grid
+	// dt will be set in cudaeuler, so that all changes can be applied there
+	int snapshots_per_sec = 1;  // how many times do we want to save data per sec?
 
 	// set minor properties
 	double incomp_threshhold = 1e-4;  // the maximum allowance of map to deviate from grad_chi begin 1
@@ -46,6 +53,8 @@ void SettingsCMM::setPresets() {
 
 	// for now we have two different upsample versions, upsample on vorticity and psi (1) or only psi (0)
 	int upsample_version = 1;
+	// in addition to the upsampling, we want to lowpass in fourier space by cutting high frequencies
+	double freq_cut_psi = (double)(grid_coarse)/2.0;  // take into accout, that frequencies are symmetric around N/2
 
 	// set particles settings
 	bool particles = false;  // en- or disable particles
@@ -61,6 +70,11 @@ void SettingsCMM::setPresets() {
 	setGridCoarse(grid_coarse);
 	setGridFine(grid_fine);
 	setGridPsi(grid_psi);
+	setFinalTime(final_time);
+	setFactorDtByGrid(factor_dt_by_grid);
+	setStepsPerSec(steps_per_sec);
+	setSnapshotsPerSec(snapshots_per_sec);
+	setSetDtBySteps(set_dt_by_steps);
 	setInitialCondition(initial_condition);
 	setIncompThreshold(incomp_threshhold);
 	setMapEpsilon(map_epsilon);
@@ -71,6 +85,7 @@ void SettingsCMM::setPresets() {
 	setMapUpdateOrder(map_update_order);
 	setMollyStencil(molly_stencil);
 	setUpsampleVersion(upsample_version);
+	setFreqCutPsi(freq_cut_psi);
 	setParticles(particles);
 	setParticlesNum(particles_num);
 	setParticlesTimeIntegration(particles_time_integration);
@@ -99,9 +114,17 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "grid_coarse") setGridCoarse(stoi(value));
 			else if (command == "grid_fine") setGridFine(stoi(value));
 			else if (command == "grid_psi") setGridPsi(stoi(value));
+			else if (command == "final_time") setFinalTime(stod(value));
+			else if (command == "factor_dt_by_grid") setFactorDtByGrid(stod(value));
+			else if (command == "steps_per_sec") setStepsPerSec(stoi(value));
+			else if (command == "set_dt_by_steps") {
+				if (value == "true" || value == "True" || value == "1") setSetDtBySteps(true);
+				else if (value == "false" || value == "False" || value == "0") setSetDtBySteps(false);
+			}
+			else if (command == "snapshots_per_sec") setSnapshotsPerSec(stoi(value));
 			else if (command == "initial_condition") setInitialCondition(value);
-			else if (command == "incomp_threshold") setIncompThreshold(stoi(value));
-			else if (command == "map_epsilon") setMapEpsilon(stoi(value));
+			else if (command == "incomp_threshold") setIncompThreshold(stod(value));
+			else if (command == "map_epsilon") setMapEpsilon(stod(value));
 			else if (command == "mem_RAM_GPU_remaps") setMemRamGpuRemaps(stoi(value));
 			else if (command == "mem_RAM_CPU_remaps") setMemRamCpuRemaps(stoi(value));
 			else if (command == "Nb_array_RAM") setNbArrayRam(stoi(value));
@@ -109,6 +132,7 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "map_update_order") setMapUpdateOrder(value);
 			else if (command == "molly_stencil") setMollyStencil(stoi(value));
 			else if (command == "upsample_version") setUpsampleVersion(stoi(value));
+			else if (command == "freq_cut_psi") setFreqCutPsi(stod(value));
 			// true false handling
 			else if (command == "particles") {
 				if (value == "true" || value == "True" || value == "1") setParticles(true);
