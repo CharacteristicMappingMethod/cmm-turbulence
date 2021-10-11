@@ -1,8 +1,5 @@
 #ifndef __CUDA_HERMITE_2D_H__
 #define __CUDA_HERMITE_2D_H__
-#include "../grid/cudagrid2d.h"
-
-
 
 
 //Hermite Basis functions//
@@ -13,7 +10,7 @@
 
 
 //CPU functions
-void hermite_interpolation_test();			//test the hermite interpolation functionality
+//void hermite_interpolation_test();			//test the hermite interpolation functionality
 
 
 
@@ -31,7 +28,7 @@ void hermite_interpolation_test();			//test the hermite interpolation functional
 	__device__ double device_hermite_mult(double *H, double b[][4], int I[], long int N, double h);
 	__device__ double device_hermite_mult(double *H, double bX[], double bY[], int I[], long int N, double h);
 		
-	__global__ void kernel_hermite_interpolation(double *H, double *F, int NXH, int NYH, int NXF, int NYF, double hH, double hF);		//interpolation test
+//	__global__ void kernel_hermite_interpolation(double *H, double *F, int NXH, int NYH, int NXF, int NYF, double hH, double hF);		//interpolation test
 	
 	__device__ double device_hermite_interpolate   (double *H, double x, double y, int NX, int NY, double h);
 	__device__ double device_hermite_interpolate_dx(double *H, double x, double y, int NX, int NY, double h);

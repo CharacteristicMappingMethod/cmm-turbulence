@@ -204,9 +204,9 @@ __global__ void Particle_advect_inertia_2(int Nb_particle, double dt, double *pa
 
 			// compute u(x + dt*k1,t_n+1)
 			device_hermite_interpolate_dx_dy_1(psi, particles_pos[2*i] + dt*u_p, particles_pos[2*i+1] + dt*v_p, &u, &v, NX, NY, h);
-			// k2 = u_tilde(x + dt k1, t_n + dt) = - (v_n+1 - u_n+1) with v_n+1 = 3*v_n - 3*v_n-1 + 1*v_n-2
-			k2_x = - (3*particles_vel[2*i  ] - 3*particles_vel_p[2*i  ] + particles_vel_p_p[2*i  ] - u) / tau_p;
-			k2_y = - (3*particles_vel[2*i+1] - 3*particles_vel_p[2*i+1] + particles_vel_p_p[2*i+1] - v) / tau_p;
+			// k2 = u_tilde(x + dt k1, t_n + dt) = - (v_n+1 - u_n+1) with v_n+1 = v_n + dt*k1
+			k2_x = - (particles_vel[2*i  ] + dt*k1_x - u) / tau_p;
+			k2_y = - (particles_vel[2*i+1] + dt*k1_y - v) / tau_p;
 
 			// build kp2 = dt/2 (k1 + k2) to simplify computations
 			kp2_x = dt/2.0 * (k1_x + k2_x);

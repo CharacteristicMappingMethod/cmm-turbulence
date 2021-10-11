@@ -346,17 +346,14 @@ __device__ double  device_diffeo_grad(double *Hx, double *Hy, double x, double y
 *							   Old								   *
 *******************************************************************/
 /******************************************************************/
-
-
-
-void hermite_interpolation_test()
-{
-}
-
-
-__global__ void kernel_hermite_interpolation(double *H, double *F, int NXH, int NYH, int NXF, int NYF, double hH, double hF)
-{
-}
+//void hermite_interpolation_test()
+//{
+//}
+//
+//
+//__global__ void kernel_hermite_interpolation(double *H, double *F, int NXH, int NYH, int NXF, int NYF, double hH, double hF)
+//{
+//}
 
 
 

@@ -3,7 +3,7 @@
 void SettingsCMM::setPresets() {
 	// naming and saving settings of the simulation
 	string workspace = "./"; // where should the files be saved? "./" or "" means at the run location, has to end with backslash
-	string sim_name = "mem_changes";  // unique identifier to differentiate simulations
+	string sim_name = "psi_debug";  // unique identifier to differentiate simulations
 
 	// grid settings for coarse and fine grid
 	// 32		64		128		256		512		1024		2048		4096		8192		16384
@@ -24,7 +24,7 @@ void SettingsCMM::setPresets() {
 	string initial_condition = "4_nodes";
 
 	// set time properties
-	double final_time = 1;  // end of computation
+	double final_time = 4;  // end of computation
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this is the factor for it
 	int steps_per_sec = 64;  // how many steps do we want per seconds?
 	bool set_dt_by_steps = true;  // choose wether we want to set dt by steps or by grid
@@ -33,7 +33,7 @@ void SettingsCMM::setPresets() {
 
 	// set minor properties
 	double incomp_threshhold = 1e-4;  // the maximum allowance of map to deviate from grad_chi begin 1
-	double map_epsilon = 1e-4;  // distance used for foot points for GALS map advection
+	double map_epsilon = 1e-5;  // distance used for foot points for GALS map advection
 
 	// set memory properties
 	int mem_RAM_GPU_remaps = 128;  // mem_index in MB on the GPU
@@ -54,7 +54,7 @@ void SettingsCMM::setPresets() {
 	// for now we have two different upsample versions, upsample on vorticity and psi (1) or only psi (0)
 	int upsample_version = 1;
 	// in addition to the upsampling, we want to lowpass in fourier space by cutting high frequencies
-	double freq_cut_psi = (double)(grid_coarse)/2.0;  // take into accout, that frequencies are symmetric around N/2
+	double freq_cut_psi = (double)(grid_psi)/2.0;  // take into account, that frequencies are symmetric around N/2
 
 	// set particles settings
 	bool particles = false;  // en- or disable particles

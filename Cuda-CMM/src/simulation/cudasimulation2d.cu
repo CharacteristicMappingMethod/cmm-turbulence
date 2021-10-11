@@ -25,7 +25,7 @@ __global__ void kernel_init_diffeo(double *ChiX, double *ChiY, int NX, int NY, d
 }
 
 
-__global__ void upsample(double *ChiX, double *ChiY, double *ChiX_2048, double *ChiY_2048, int NXc, int NYc, double hc, int NXs, int NYs, double hs)															// time cost
+__global__ void k_sample(double *ChiX, double *ChiY, double *ChiX_s, double *ChiY_s, int NXc, int NYc, double hc, int NXs, int NYs, double hs)															// time cost
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -42,34 +42,8 @@ __global__ void upsample(double *ChiX, double *ChiY, double *ChiX_2048, double *
 	
 	device_diffeo_interpolate(ChiX, ChiY, x, y, &x, &y, NXc, NYc, hc);		
 	
-	ChiX_2048[In] = x;
-	ChiY_2048[In] = y;
-}
-
-
-void Psi_upsampling(TCudaGrid2D *Grid_2048, double *Dev_W_2048, cufftDoubleComplex *Dev_Complex_fine_2048, cufftDoubleComplex *Dev_Hat_fine_bis_2048, cufftDoubleComplex *Dev_Hat_fine_2048, double *Dev_Psi_2048, cufftHandle cufftPlan_2048){
-
-	kernel_real_to_complex<<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_W_2048, Dev_Complex_fine_2048, Grid_2048->NX, Grid_2048->NY);
-	cufftExecZ2Z(cufftPlan_2048, Dev_Complex_fine_2048, Dev_Hat_fine_bis_2048, CUFFT_FORWARD);
-	kernel_normalize<<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Hat_fine_bis_2048, Grid_2048->NX, Grid_2048->NY);
-
-	// Forming Psi hermite
-	kernel_fft_iLap<<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Hat_fine_bis_2048, Dev_Hat_fine_2048, Grid_2048->NX, Grid_2048->NY, Grid_2048->h);													// Inverse laplacian in Fourier space
-	cufftExecZ2Z(cufftPlan_2048, Dev_Hat_fine_2048, Dev_Complex_fine_2048, CUFFT_INVERSE);
-	kernel_complex_to_real  <<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Complex_fine_2048, Dev_Psi_2048, Grid_2048->NX, Grid_2048->NY);
-
-	kernel_fft_dy<<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Hat_fine_2048, Dev_Hat_fine_bis_2048, Grid_2048->NX, Grid_2048->NY, Grid_2048->h);													// y-derivative of the vorticity in Fourier space
-	cufftExecZ2Z(cufftPlan_2048, Dev_Hat_fine_bis_2048, Dev_Complex_fine_2048, CUFFT_INVERSE);
-	kernel_complex_to_real  <<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Complex_fine_2048, &Dev_Psi_2048[2*Grid_2048->N], Grid_2048->NX, Grid_2048->NY);
-
-	kernel_fft_dx<<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Hat_fine_2048, Dev_Hat_fine_bis_2048, Grid_2048->NX, Grid_2048->NY, Grid_2048->h);													// x-derivative of the vorticity in Fourier space
-	cufftExecZ2Z(cufftPlan_2048, Dev_Hat_fine_bis_2048, Dev_Complex_fine_2048, CUFFT_INVERSE);
-	kernel_complex_to_real  <<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Complex_fine_2048, &Dev_Psi_2048[Grid_2048->N], Grid_2048->NX, Grid_2048->NY);
-
-	kernel_fft_dy<<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Hat_fine_bis_2048, Dev_Hat_fine_2048, Grid_2048->NX, Grid_2048->NY, Grid_2048->h);													// y-derivative of x-derivative of of the vorticity in Fourier space
-	cufftExecZ2Z(cufftPlan_2048, Dev_Hat_fine_2048, Dev_Complex_fine_2048, CUFFT_INVERSE);
-	kernel_complex_to_real<<<Grid_2048->blocksPerGrid, Grid_2048->threadsPerBlock>>>(Dev_Complex_fine_2048, &Dev_Psi_2048[3*Grid_2048->N], Grid_2048->NX, Grid_2048->NY);
-
+	ChiX_s[In] = x;
+	ChiY_s[In] = y;
 }
 
 
@@ -303,98 +277,6 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 	Chi_new_X[1*N+In] = Chi_full_x[1];	Chi_new_Y[1*N+In] = Chi_full_y[1];
 	Chi_new_X[2*N+In] = Chi_full_x[2];	Chi_new_Y[2*N+In] = Chi_full_y[2];
 	Chi_new_X[3*N+In] = Chi_full_x[3];	Chi_new_Y[3*N+In] = Chi_full_y[3];
-}
-
-
-/*******************************************************************
-*						 Real and Complex						   *
-*******************************************************************/
-	
-__global__ void kernel_real_to_complex(double *varR, cufftDoubleComplex *varC, int NX, int NY)
-{
-	//index
-	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
-	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-	
-	if(iX >= NX || iY >= NY)
-		return;
-	
-	int In = iY*NX + iX;	
-	
-	varC[In].x = varR[In];
-	varC[In].y = 0.0;
-}
-
-
-__global__ void kernel_complex_to_real(cufftDoubleComplex *varC, double *varR, int NX, int NY)
-{
-	//index
-	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
-	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-	
-	if(iX >= NX || iY >= NY)
-		return;
-	
-	int In = iY*NX + iX;	
-	
-	varR[In] = varC[In].x;
-}
-
-
-__global__ void kernel_real_to_complex_H(double *varR, cufftDoubleComplex *varC, int NX, int NY)
-{
-	//index
-	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
-	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-	
-	if(iX >= NX || iY >= NY)
-		return;
-	
-	// not scattered
-	int In = 4*(iY*NX + iX);
-
-	#pragma unroll
-	for (int i=0; i<4; i++) {
-		varC[In+i].x = varR[In+i];
-	}
-	varC[In].y = varC[In+1].y = varC[In+2].y = varC[In+3].y = 0.0;
-	
-	// very scattered
-//	int In = iY*NX + iX;
-//	long int N = NX*NY;
-//
-//	varC[In].x = varR[In];
-//	varC[N+In].x = varR[N+In];
-//	varC[2*N+In].x = varR[2*N+In];
-//	varC[3*N+In].x = varR[3*N+In];
-//	varC[In].y = varC[N+In].y = varC[2*N+In].y = varC[3*N+In].y = 0.0;
-	
-}
-
-
-__global__ void kernel_complex_to_real_H(cufftDoubleComplex *varC, double *varR, int NX, int NY)
-{
-	//index
-	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
-	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-	
-	if(iX >= NX || iY >= NY)
-		return;
-	
-	// not scattered
-	int In = 4*(iY*NX + iX);
-
-	#pragma unroll
-	for (int i=0; i<4; i++) varR[In+i] = varC[In+i].x;
-	
-	// very scattered
-//	int In = iY*NX + iX;
-//	long int N = NX*NY;
-//
-//	varR[In] = varC[In].x;
-//	varR[N+In] = varC[N+In].x;
-//	varR[2*N+In] = varC[2*N+In].x;
-//	varR[3*N+In] = varC[3*N+In].x;
 }
 
 
@@ -713,73 +595,6 @@ __global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *
 }
 
 
-// cut at given frequencies in a round circle
-__global__ void cut_off_scale(cufftDoubleComplex *W, int NX, double freq)
-{
-	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
-	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-	
-	int In = iY*NX + iX;
-	
-	int i = In/NX;
-	int j = In%NX;
-	// take symmetry into account
-	if (i > NX/2) i = NX-i;
-	if (j > NX/2) j = NX-j;
-	// cut at frequency 1/3 in a round circle
-	if ((i*i + j*j) > freq*freq || In == 0) {
-		W[In].x = 0;
-		W[In].y = 0;
-	}
-}
-
-
-// for zero padding we need to move all outer elements to conserve symmetry of spectrum, one function to add, one to remove
-__global__ void zero_move_add(cufftDoubleComplex *In, cufftDoubleComplex *Out, double Nc, double Ns) {
-	int iXc = (blockDim.x * blockIdx.x + threadIdx.x);
-	int iYc = (blockDim.y * blockIdx.y + threadIdx.y);
-
-	int Inc = iYc*Nc + iXc;
-
-	// get new positions
-	int iXs = iXc;
-	int iYs = iYc;
-	// shift upper half to the outer edge
-	if (iXc > Nc/2) {
-		iXs += Ns - Nc;
-	}
-	if (iYc > Nc/2) {
-		iYs += Ns - Nc;
-	}
-	// get index in new system
-	int Ins = iYs*Ns + iXs;
-	// transcribe
-	Out[Ins].x = In[Inc].x;
-	Out[Ins].y = In[Inc].y;
-}
-__global__ void zero_move_remove(cufftDoubleComplex *In, cufftDoubleComplex *Out, double Nc, double Ns) {
-	int iXc = (blockDim.x * blockIdx.x + threadIdx.x);
-	int iYc = (blockDim.y * blockIdx.y + threadIdx.y);
-
-	int Inc = iYc*Nc + iXc;
-
-	// get new positions
-	int iXs = iXc;
-	int iYs = iYc;
-	// shift upper half to the outer edge
-	if (iXc > Nc/2) {
-		iXs += Ns - Nc;
-	}
-	if (iYc > Nc/2) {
-		iYs += Ns - Nc;
-	}
-	// get index in new system
-	int Ins = iYs*Ns + iXs;
-	// transcribe, inverse of add so we actually ignore the middle entries
-	Out[Inc].x = In[Ins].x;
-	Out[Inc].y = In[Ins].y;
-}
-
 
 /*******************************************************************
 *						 										   *
@@ -828,6 +643,7 @@ __global__ void kernel_apply_map_and_sample_from_hermite(double *ChiX, double *C
 
 	// mollification to act as a lowpass filter
 	double x2, y2;
+
 	/*                                      0  1/6  0
 	 * mollifier of order 1 using stencil  1/6 1/3 1/6
 	 * using 4 neighbouring points			0  1/6  0
@@ -838,8 +654,8 @@ __global__ void kernel_apply_map_and_sample_from_hermite(double *ChiX, double *C
 		double moll_add = device_hermite_interpolate(H, x2, y2, NXh, NYh, hh)/3.0;  // other values will be added on here
 		for (int i_molly = 0; i_molly < 4; i_molly++) {
 			// choose 4 points in between the grid: W, E, S, N
-			double x2 = x + hs/2*((i_molly/2+1)%2) * (-1 + 2*(i_molly%2));  // -1 +1  0  0
-			double y2 = y + hs/2*((i_molly/2  )%2) * (-1 + 2*(i_molly%2));  //  0  0 -1 +1
+			x2 = x + hs/2.0*((i_molly/2+1)%2) * (-1 + 2*(i_molly%2));  // -1 +1  0  0
+			y2 = y + hs/2.0*((i_molly/2  )%2) * (-1 + 2*(i_molly%2));  //  0  0 -1 +1
 
 			device_diffeo_interpolate(ChiX, ChiY, x2, y2, &x2, &y2, NXc, NYc, hc);
 			moll_add += device_hermite_interpolate(H, x2, y2, NXh, NYh, hh)/6.0;
@@ -856,8 +672,8 @@ __global__ void kernel_apply_map_and_sample_from_hermite(double *ChiX, double *C
 		double moll_add = 0;  // other values will be added on here
 		for (int i_molly = 0; i_molly < 9; i_molly++) {
 			// choose 9 points in between the grid: SW, S, SE, W, C, E, NW, N, NE
-			double x2 = x + hs*(-1 + i_molly%3)/2;
-			double y2 = y + hs*(-1 + i_molly/3)/2;
+			x2 = x + hs*(-1 + i_molly%3)/3.0;
+			y2 = y + hs*(-1 + i_molly/3)/3.0;
 
 			device_diffeo_interpolate(ChiX, ChiY, x2, y2, &x2, &y2, NXc, NYc, hc);
 			moll_add += (1 + (i_molly%3)%2) * (1 + (i_molly/3)%2) * device_hermite_interpolate(H, x2, y2, NXh, NYh, hh)/16.0;
@@ -866,53 +682,13 @@ __global__ void kernel_apply_map_and_sample_from_hermite(double *ChiX, double *C
 	}
 	// else, assume no mollification
 	else {
+		double x2, y2;
 		device_diffeo_interpolate(ChiX, ChiY, x, y, &x2, &y2, NXc, NYc, hc);
 		fs[In] = device_hermite_interpolate(H, x2, y2, NXh, NYh, hh);
 	}
 }
 
 
-/*******************************************************************
-*						 										   *
-*******************************************************************/
-
-////////////////////////////////////////////////////////////////////////
-__global__ void kernel_sample_on_coarse_grid(cufftDoubleComplex *AcOut, cufftDoubleComplex *AfOut, int NXc, int NYc, double hc, int NXf, int NYf, double hf)
-{
-	//index
-	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
-	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-	
-	if(iX >= NXc || iY >= NYc)
-		return;
-	
-	int In = iY*NXc + iX;	
-		
-		////////////////////////////////////////////////////
-		//same sampling grid
-		AcOut[In].x = AfOut[In].x;
-		AcOut[In].y = AfOut[In].y;
-		return;
-	
-}
-
-
-__global__ void kernel_normalize(cufftDoubleComplex *F, int NX, int NY)
-{
-	//index
-	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
-	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-	
-	if(iX >= NX || iY >= NY)
-		return;
-	
-	int In = iY*NX + iX;	
-	
-	double N = NX*NY;
-	
-	F[In].x /= (double)N;
-	F[In].y /= (double)N;
-}
 
 
 /*******************************************************************
@@ -1043,20 +819,19 @@ __device__ double device_initial_W(double x, double y, int simulation_num)
 
 
 __device__ double device_initial_W_discret(double x, double y, double *W_initial, int NX, int NY){
-	
-	int In; 
-	
-	
+	// map position back into domain
 	x = fmod(x, twoPI);
-	x = (x < 0)*(twoPI+x) + (x > 0)*(x);
+	x -= floor(x/twoPI)*twoPI;
+//	x = (x < 0)*(twoPI+x) + (x > 0)*(x);
 	y = fmod(y, twoPI);
-	y = (y < 0)*(twoPI+y) + (y > 0)*(y);
+	y -= floor(y/twoPI)*twoPI;
+//	y = (y < 0)*(twoPI+y) + (y > 0)*(y);
 	
-	In = floor(y/twoPI * NY) * NX + floor(x/twoPI * NX); 
+	// compute index
+	int In = floor(y/twoPI * NY) * NX + floor(x/twoPI * NX);
 	//In = floor(x * NY) * NX + floor(y * NX); 
 	
 	return W_initial[In];
-
 }
 
 

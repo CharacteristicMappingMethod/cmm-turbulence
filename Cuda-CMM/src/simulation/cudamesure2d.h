@@ -2,6 +2,7 @@
 #define __CUDA_MESURE_2D_H__
 #include "../grid/cudagrid2d.h"
 #include "../simulation/cudasimulation2d.h"
+#include "../simulation/cmm-fft.h"
 
 
 //Lagrange polynomial with stencil
@@ -17,6 +18,8 @@ __global__ void Compute_Enstrophy(double *Ens, double *W, int N, int NX, int NY,
 void Compute_Energy_Host(double *E, double *psi, int N, double h);
 void Compute_Enstrophy_Host(double *Ens, double *W, int N, double h);
 void Compute_Palinstrophy(TCudaGrid2D *Grid_coarse, double *Pal, double *W_real, cufftDoubleComplex *Dev_Complex, cufftDoubleComplex *Dev_Hat, cufftDoubleComplex *Dev_Hat_bis, cufftHandle cufftPlan_coarse);
+void Compute_Palinstrophy_fourier(TCudaGrid2D *Grid_coarse, double *Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftDoubleComplex *Dev_Temp_C2, cufftHandle cufftPlan_coarse);
+//void Compute_Palinstrophy_hermite(TCudaGrid2D *Grid_fine, double *Pal, double *W_H_real);
 
 
 void NDFT_1D(cufftDoubleComplex *X_k, double *x_n, double *p_n, double *f_k, int N);

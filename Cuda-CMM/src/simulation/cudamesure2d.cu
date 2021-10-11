@@ -71,16 +71,18 @@ void Compute_Enstrophy_Host(double *Ens, double *W, int N, double h){
 }
 
 
+// attention: Palinstrophy does not work for now with only two trash variables
+// i have to rewrite this in different forms
 void Compute_Palinstrophy(TCudaGrid2D *Grid_coarse, double *Pal, double *W_real, cufftDoubleComplex *Dev_Complex, cufftDoubleComplex *Dev_Hat, cufftDoubleComplex *Dev_Hat_bis, cufftHandle cufftPlan_coarse){
 
 	double *Host_W_coarse_real_dx_dy = new double[2*Grid_coarse->N];
 	
-	kernel_real_to_complex<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(W_real, Dev_Hat, Grid_coarse->NX, Grid_coarse->NY);
+	k_real_to_comp<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(W_real, Dev_Hat, Grid_coarse->NX, Grid_coarse->NY);
 	cufftExecZ2Z(cufftPlan_coarse, Dev_Hat, Dev_Complex, CUFFT_FORWARD);	
-	kernel_normalize<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Complex, Grid_coarse->NX, Grid_coarse->NY);
+	k_normalize<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Complex, Grid_coarse->NX, Grid_coarse->NY);
 	
-	kernel_fft_dx<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Complex, Dev_Hat, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h); 					// x-derivative in Fourier space			    
-	kernel_fft_dy<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Complex, Dev_Hat_bis, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h); 				// y-derivative in Fourier space
+	k_fft_dx<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Complex, Dev_Hat, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h); 					// x-derivative in Fourier space
+	k_fft_dy<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Complex, Dev_Hat_bis, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h); 				// y-derivative in Fourier space
 	
 	cufftExecZ2Z(cufftPlan_coarse, Dev_Hat, Dev_Complex, CUFFT_INVERSE);
     cudaDeviceSynchronize();
@@ -97,6 +99,50 @@ void Compute_Palinstrophy(TCudaGrid2D *Grid_coarse, double *Pal, double *W_real,
 	*Pal = 0.5*(*Pal);
 	
 }
+
+
+// compute palinstrophy using fourier transformations - a bit expensive but ca marche
+void Compute_Palinstrophy_fourier(TCudaGrid2D *Grid_coarse, double *Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftDoubleComplex *Dev_Temp_C2, cufftHandle cufftPlan_coarse){
+
+	double *Host_W_coarse_real_dx_dy = new double[2*Grid_coarse->N];
+
+	// round 1: dx dervative
+	k_real_to_comp<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(W_real, Dev_Temp_C1, Grid_coarse->NX, Grid_coarse->NY);
+	cufftExecZ2Z(cufftPlan_coarse, Dev_Temp_C1, Dev_Temp_C2, CUFFT_FORWARD);
+	k_normalize<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Temp_C2, Grid_coarse->NX, Grid_coarse->NY);
+	k_fft_dx<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h); 					// x-derivative in Fourier space
+	cufftExecZ2Z(cufftPlan_coarse, Dev_Temp_C1, Dev_Temp_C2, CUFFT_INVERSE);
+	cudaMemcpy(Host_W_coarse_real_dx_dy, (cufftDoubleReal*)Dev_Temp_C2, Grid_coarse->N, cudaMemcpyDeviceToHost);
+
+	// round 1: dy dervative
+	k_real_to_comp<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(W_real, Dev_Temp_C1, Grid_coarse->NX, Grid_coarse->NY);
+	cufftExecZ2Z(cufftPlan_coarse, Dev_Temp_C1, Dev_Temp_C2, CUFFT_FORWARD);
+	k_normalize<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Temp_C2, Grid_coarse->NX, Grid_coarse->NY);
+	k_fft_dy<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h); 					// y-derivative in Fourier space
+	cufftExecZ2Z(cufftPlan_coarse, Dev_Temp_C1, Dev_Temp_C2, CUFFT_INVERSE);
+	cudaMemcpy(&Host_W_coarse_real_dx_dy[Grid_coarse->N], (cufftDoubleReal*)Dev_Temp_C2, Grid_coarse->N, cudaMemcpyDeviceToHost);
+
+	// now compute actual palinstrophy and add everything together
+    for(int i = 0; i < Grid_coarse->N; i+=1){
+		*Pal += 0.5 * (Grid_coarse->h) * (Grid_coarse->h) * (Host_W_coarse_real_dx_dy[i] * Host_W_coarse_real_dx_dy[i] + Host_W_coarse_real_dx_dy[i + Grid_coarse->N] * Host_W_coarse_real_dx_dy[i + Grid_coarse->N]);
+	}
+}
+
+
+//// compute palinstrophy using hermite array - cheap, but we need the vorticity hermite for that, only works for fine array, can be kernelized too actually, but not now
+//void Compute_Palinstrophy_hermite(TCudaGrid2D *Grid_fine, double *Pal, double *W_H_real){
+//
+//	// dx and dy values are in position 2/4 and 3/4, copy to host
+//	double *Host_W_coarse_real_dx_dy = new double[2*Grid_fine->N];
+//	cudaMemcpy(Host_W_coarse_real_dx_dy, &W_H_real[Grid_fine->N], 2*Grid_fine->N, cudaMemcpyDeviceToHost);
+//	cudaMemcpy(Host_W_coarse_real_dx_dy, &W_H_real[Grid_fine->N], 2*Grid_fine->N, cudaMemcpyDeviceToHost);
+//	cudaMemcpy(Host_W_coarse_real_dx_dy, &W_H_real[Grid_fine->N], 2*Grid_fine->N, cudaMemcpyDeviceToHost);
+//
+//	// now compute actual palinstrophy and add everything together
+//    for(int i = 0; i < Grid_fine->N; i+=1){
+//		*Pal += 0.5 * (Grid_fine->h) * (Grid_fine->h) * (Host_W_coarse_real_dx_dy[i] * Host_W_coarse_real_dx_dy[i] + Host_W_coarse_real_dx_dy[i + Grid_fine->N] * Host_W_coarse_real_dx_dy[i + Grid_fine->N]);
+//	}
+//}
 
 
 
@@ -200,13 +246,13 @@ __global__ void iNDFT_2D(cufftDoubleComplex *X_k, double *x_n, double *p_n, int 
 
 void Laplacian_vort(TCudaGrid2D *Grid_fine, double *Dev_W_fine, cufftDoubleComplex *Dev_Complex_fine, cufftDoubleComplex *Dev_Hat_fine, double *Dev_lap_fine_real, cufftDoubleComplex *Dev_lap_fine_complex, cufftDoubleComplex *Dev_lap_fine_hat, cufftHandle cufftPlan_fine){
 
-    kernel_real_to_complex<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_W_fine, Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY);
+    k_real_to_comp<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_W_fine, Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY);
     cufftExecZ2Z(cufftPlan_fine, Dev_Complex_fine, Dev_Hat_fine, CUFFT_FORWARD);
-    kernel_normalize<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY);
+    k_normalize<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY);
 
-    kernel_fft_lap<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Hat_fine, Dev_lap_fine_hat, Grid_fine->NX, Grid_fine->NY, Grid_fine->h);
+    k_fft_lap<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Hat_fine, Dev_lap_fine_hat, Grid_fine->NX, Grid_fine->NY, Grid_fine->h);
     cufftExecZ2Z(cufftPlan_fine, Dev_lap_fine_hat, Dev_lap_fine_complex, CUFFT_INVERSE);
-    kernel_complex_to_real<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_lap_fine_complex, Dev_lap_fine_real, Grid_fine->NX, Grid_fine->NY);
+    k_comp_to_real<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_lap_fine_complex, Dev_lap_fine_real, Grid_fine->NX, Grid_fine->NY);
 
 }
 

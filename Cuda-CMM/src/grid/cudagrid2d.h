@@ -36,9 +36,6 @@ using namespace std;
 	//active le temps
 	//#define TIME_TESTING
 
-    // #define PARTICLES
-    // #define RKThree_PARTICLES
-
 	enum color_map_choice
 	{
 		GRAY, 
@@ -99,14 +96,6 @@ using namespace std;
 //	void writeVorticityToImage(TCudaGrid2D *G, cufftDoubleComplex *w, double min, double max, string simulationName, string fileName, int ctr = 0);
 
 	const string currentDateTime();
-
-	__global__ void kernel_fft_lap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h);
-	__global__ void kernel_fft_iLap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h);
-	__global__ void kernel_fft_dx(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h);
-	__global__ void kernel_fft_dy(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h);
-
-
-
 
 
 
