@@ -206,8 +206,8 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 				// k3 = u_tilde(x = k1 dt - 2 k2 dt, t_n) = u
 
 				// build all RK-steps together
-				xf = xep - dt * (k1_x + 4*k2_x + u)/6;
-				yf = yep - dt * (k1_y + 4*k2_y + v)/6;
+				xf = xep - dt * (k1_x + 4*k2_x + u)/6.0;
+				yf = yep - dt * (k1_y + 4*k2_y + v)/6.0;
 				break;
 			}
 			// RKFour time step utilizing some intermediate steps

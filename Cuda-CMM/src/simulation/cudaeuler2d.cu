@@ -353,7 +353,6 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	int Nb_particles, particle_thread, particle_block;
 	double *Host_particles_pos ,*Dev_particles_pos;  // position of particles
 	double *Host_particles_vel ,*Dev_particles_vel;  // velocity of particles
-	double *Dev_particles_vel_p, *Dev_particles_vel_p_p;  // previous time step velocities needed for time stepping
 	curandGenerator_t prng;
 	int Nb_fine_dt_particles, freq_fine_dt_particles, prod_fine_dt_particles, taup_fine_particles;
 	double *Dev_particles_pos_fine_dt, *Host_particles_pos_fine_dt;
@@ -371,8 +370,6 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		Host_particles_vel = new double[2*Nb_particles*Nb_Tau_p];
 		cudaMalloc((void**) &Dev_particles_pos, 2*Nb_particles*Nb_Tau_p*sizeof(double));
 		cudaMalloc((void**) &Dev_particles_vel, 2*Nb_particles*Nb_Tau_p*sizeof(double));
-		cudaMalloc((void**) &Dev_particles_vel_p, 2*Nb_particles*Nb_Tau_p*sizeof(double));
-		cudaMalloc((void**) &Dev_particles_vel_p_p, 2*Nb_particles*Nb_Tau_p*sizeof(double));
 
 		// create initial positions from random distribution
 		curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_DEFAULT);
@@ -612,11 +609,6 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			Particle_advect_iner_ini<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h);
 
 		}
-		// copy velocity values onto older values
-		cudaMemcpy(Dev_particles_vel_p, Dev_particles_vel, 2*Nb_particles*Nb_Tau_p*sizeof(double), cudaMemcpyDeviceToDevice);
-		cudaDeviceSynchronize();
-		cudaMemcpyAsync(Dev_particles_vel_p_p, Dev_particles_vel_p, 2*Nb_particles*Nb_Tau_p*sizeof(double), cudaMemcpyDeviceToDevice, streams[1]);
-
 		// safe initial position of particles
         cudaMemcpy(Host_particles_pos, Dev_particles_pos, 2*Nb_particles*Nb_Tau_p*sizeof(double), cudaMemcpyDeviceToHost);
         //cudaDeviceSynchronize();
@@ -692,14 +684,10 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			for(int index_tau_p = 1; index_tau_p < Nb_Tau_p; index_tau_p+=1){
 
 				Particle_advect_inertia_2<<<particle_block, particle_thread>>>(Nb_particles, dt,
-						&Dev_particles_pos[2*Nb_particles*index_tau_p],
-						&Dev_particles_vel[2*Nb_particles*index_tau_p],
-						&Dev_particles_vel_p[2*Nb_particles*index_tau_p],
-						&Dev_particles_vel_p_p[2*Nb_particles*index_tau_p],
+						&Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p],
 						Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p,
 						Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h,
 						Tau_p[index_tau_p], SettingsMain.getParticlesTimeIntegrationNum());
-
 			}
 		}
 
@@ -1192,8 +1180,8 @@ void translate_initial_condition_through_map_stack(TCudaGrid2D *Grid_coarse, TCu
 	cufftExecZ2Z(cufftPlan_fine, Dev_Temp_C2, Dev_Temp_C1, CUFFT_FORWARD);
 	k_normalize<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Temp_C1, Grid_fine->NX, Grid_fine->NY);
 
-	// cutoff for turbulence spectrum
-	k_fft_cut_off_scale<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Temp_C1, Grid_fine->NX, (double)(Grid_coarse->NX)/3.0);
+	// cut_off frequencies at N_psi/3 for turbulence (effectively 2/3)
+	k_fft_cut_off_scale<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Temp_C1, Grid_fine->NX, (double)(Grid_fine->NX)/3.0);
 	
 	// form hermite formulation
 	fourier_hermite(Grid_fine, Dev_Temp_C1, W_H_real, Dev_Temp_C2, cufftPlan_fine);
@@ -1319,8 +1307,7 @@ void compute_conservation_targets(TCudaGrid2D *Grid_fine, TCudaGrid2D *Grid_coar
 		// coarse grid
 		Compute_Energy<<<Grid_psi->blocksPerGrid,Grid_psi->threadsPerBlock>>>(&Mesure[3*count_mesure], Dev_Psi, Grid_psi->N, Grid_psi->NX, Grid_psi->NY, Grid_psi->h);
 		Compute_Enstrophy<<<Grid_coarse->blocksPerGrid,Grid_coarse->threadsPerBlock>>>(&Mesure[1 + 3*count_mesure], Dev_W_coarse, Grid_coarse->N, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h);
-		// fine grid
-		//Compute_Energy<<<Grid_2048.blocksPerGrid,Grid_2048.threadsPerBlock>>>(&Mesure_fine[3*count_mesure], Dev_Psi_2048, Grid_2048.N, Grid_2048.NX, Grid_2048.NY, Grid_2048.h);
+		// fine grid, no energy because we do not have velocity on fine grid
 		Compute_Enstrophy<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(&Mesure_fine[1 + 3*count_mesure], Dev_W_H_fine, Grid_fine->N, Grid_fine->NX, Grid_fine->NY, Grid_fine->h);
 	#else
 		// coarse grid
@@ -1328,8 +1315,9 @@ void compute_conservation_targets(TCudaGrid2D *Grid_fine, TCudaGrid2D *Grid_coar
 		Compute_Energy_Host(&Mesure[3*count_mesure], Host_save, Grid_psi->N, Grid_psi->h);
 		cudaMemcpy(Host_save, Dev_W_coarse, Grid_coarse->sizeNReal, cudaMemcpyDeviceToHost);
 		Compute_Enstrophy_Host(&Mesure[1 + 3*count_mesure], Host_save, Grid_coarse->N, Grid_coarse->h);
-		// fine grid
-		// missing
+		// fine grid, no energy because we do not have velocity on fine grid
+		cudaMemcpy(Host_save, Dev_W_H_fine, Grid_fine->sizeNReal, cudaMemcpyDeviceToHost);
+		Compute_Enstrophy_Host(&Mesure_fine[1 + 3*count_mesure], Host_save, Grid_fine->N, Grid_fine->h);
 	#endif
 	// palinstrophy is computed on Host, fine first because vorticity is saved in temporal array
 	Compute_Palinstrophy_fourier(Grid_fine, &Mesure_fine[2 + 3*count_mesure], Dev_W_H_fine, Dev_Temp_C1, Dev_Temp_C2, cufftPlan_fine);

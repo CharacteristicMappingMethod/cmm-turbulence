@@ -160,7 +160,7 @@ __global__ void Particle_advect_iner_ini(int Nb_particle, double dt, double *par
 }
 
 
-__global__ void Particle_advect_inertia_2(int Nb_particle, double dt, double *particles_pos, double *particles_vel, double *particles_vel_p, double *particles_vel_p_p, double *psi, double *psi_p, double *psi_p_p, int N, int NX, int NY, double h, double tau_p, int particles_time_integration_num) {
+__global__ void Particle_advect_inertia_2(int Nb_particle, double dt, double *particles_pos, double *particles_vel, double *psi, double *psi_p, double *psi_p_p, int N, int NX, int NY, double h, double tau_p, int particles_time_integration_num) {
 	int i = (blockDim.x * blockIdx.x + threadIdx.x);  // (thread_num_max * block_num + thread_num) - gives position
 
 	// return if position is larger than particle size
@@ -172,92 +172,93 @@ __global__ void Particle_advect_inertia_2(int Nb_particle, double dt, double *pa
 
 	double u, v, u_p, v_p, u_pp, v_pp; // Previous values of the x and y derivative of Psi.
 	double k1_x, k1_y, k2_x, k2_y, k3_x, k3_y;  // step functions for vel
-	double kp2_x, kp2_y, kp3_x, kp3_y;  // step functions for pos
-
-	double v_n_x = particles_vel[2*i  ];
-	double v_n_y = particles_vel[2*i+1];  // needed to shift velocity values
+	double kp1_x, kp1_y, kp2_x, kp2_y, kp3_x, kp3_y;  // step functions for pos
 
 	// compute new velocity, important: psi is set at t_n+1, psi_previous at t_n and pri_previous_p at t_n-1
 	switch (particles_time_integration_num) {
 		// euler exp
 		case 0: {
-			// compute u(x,t_n)
+			// compute u(p_n,t_n)
 			device_hermite_interpolate_dx_dy_1(psi_p, particles_pos[2*i], particles_pos[2*i+1], &u, &v, NX, NY, h);
 
-			// we already have all information to update particle_pos
-			particles_pos[2*i  ] += dt * v_n_x;
-			particles_pos[2*i+1] += dt * v_n_y;
+			// p_n+1 = p_n + dt v_n
+			particles_pos[2*i  ] += dt * particles_vel[2*i  ];
+			particles_pos[2*i+1] += dt * particles_vel[2*i+1];
 
-			// k1 = u_tilde(x, t_n ) = - (v_n - u_n) / tau_p
+			// k1 = F(v_n, t_n) = - (v_n - u_n(p_n)) / tau_p
 			// x_n+1 = x_n + dt*k1
-			particles_vel[2*i  ] -= dt * (v_n_x - u)/tau_p;
-			particles_vel[2*i+1] -= dt * (v_n_y - v)/tau_p;
+			particles_vel[2*i  ] -= dt * (particles_vel[2*i  ] - u)/tau_p;
+			particles_vel[2*i+1] -= dt * (particles_vel[2*i+1] - v)/tau_p;
 			break;
 		}
 		// heun / modified euler / trapezoidal method
 		case 1: {
-			// compute u(x,t_n)
+			// kp1 = F_p(p_n, v_n, t_n) = v_n
+			kp1_x = particles_vel[2*i  ];
+			kp1_y = particles_vel[2*i+1];
+			// compute u(p_n,t_n)
 			device_hermite_interpolate_dx_dy_1(psi_p, particles_pos[2*i], particles_pos[2*i+1], &u_p, &v_p, NX, NY, h);
-			// k1 = u_tilde(x, t_n ) = - (v_n - u_n) / tau_p
-			k1_x = - (particles_vel[2*i  ] - u_p)/tau_p;
-			k1_y = - (particles_vel[2*i+1] - v_p)/tau_p;
+			// kv1 = F_v(p_n, v_n, t_n) = - (v_n - u(p_n, t_n)) / tau_p
+			k1_x = - (kp1_x - u_p)/tau_p;
+			k1_y = - (kp1_y - v_p)/tau_p;
 
-			// compute u(x + dt*k1,t_n+1)
-			device_hermite_interpolate_dx_dy_1(psi, particles_pos[2*i] + dt*u_p, particles_pos[2*i+1] + dt*v_p, &u, &v, NX, NY, h);
-			// k2 = u_tilde(x + dt k1, t_n + dt) = - (v_n+1 - u_n+1) with v_n+1 = v_n + dt*k1
-			k2_x = - (particles_vel[2*i  ] + dt*k1_x - u) / tau_p;
-			k2_y = - (particles_vel[2*i+1] + dt*k1_y - v) / tau_p;
+			// kp2 = F_p(p_n + h kp_1, v_n + h kv_1, t_n+1) = v_n + h kv_1
+			kp2_x = kp1_x + dt * k1_x;
+			kp2_y = kp1_y + dt * k1_y;
 
-			// build kp2 = dt/2 (k1 + k2) to simplify computations
-			kp2_x = dt/2.0 * (k1_x + k2_x);
-			kp2_y = dt/2.0 * (k1_y + k2_y);
-
-			// x_n+1 = x_n + dt/2 (u_n + u_n+1) = x_n + dt/2 (2*u_n + kp2)
-			particles_pos[2*i  ] += dt/2.0 * (2*particles_vel[2*i  ] + kp2_x);
-			particles_pos[2*i+1] += dt/2.0 * (2*particles_vel[2*i+1] + kp2_y);
+			// compute u(p_n + hkp1, t_n+1)
+			device_hermite_interpolate_dx_dy_1(psi, particles_pos[2*i  ] + dt * kp1_x, particles_pos[2*i+1] + dt * kp1_y, &u, &v, NX, NY, h);
+			// kv2 = F_v(p_n + h kp_1, v_n + h kv_1, t_n+1) = - (v_n + h kv_1 - u(p_n + hkp1, t_n+1)) / tau_p
+			k2_x = - (kp1_x + dt*k1_x - u) / tau_p;
+			k2_y = - (kp1_y + dt*k1_y - v) / tau_p;
 
 			// x_n+1 = x_n + dt/2 (k1 + k2)
-			particles_vel[2*i  ] += kp2_x;
-			particles_vel[2*i+1] += kp2_y;
+			particles_pos[2*i  ] += dt/2.0 * (kp1_x + kp2_x);
+			particles_pos[2*i+1] += dt/2.0 * (kp2_y + kp2_y);
+
+			// x_n+1 = x_n + dt/2 (k1 + k2)
+			particles_vel[2*i  ] += dt/2.0 * (k1_x + k2_x);
+			particles_vel[2*i+1] += dt/2.0 * (k1_x + k2_x);
 			break;
 		}
 		// runge kutta 3
 		case 2: {
-			// compute u(x,t_n)
+			// kp1 = F_p(p_n, v_n, t_n) = v_n
+			kp1_x = particles_vel[2*i  ];
+			kp1_y = particles_vel[2*i+1];
+			// compute u(p_n,t_n)
 			device_hermite_interpolate_dx_dy_1(psi_p, particles_pos[2*i], particles_pos[2*i+1], &u_p, &v_p, NX, NY, h);
-			// k1 = u_tilde(x, t_n ) = - (v_n - u_n) / tau_p
-			k1_x = - (particles_vel[2*i  ] - u_p)/tau_p;
-			k1_y = - (particles_vel[2*i+1] - v_p)/tau_p;
+			// kv1 = F_v(p_n, v_n, t_n) = - (v_n - u(p_n, t_n)) / tau_p
+			k1_x = - (kp1_x - u_p)/tau_p;
+			k1_y = - (kp1_y - v_p)/tau_p;
 
+			// kp2 = F_p(p_n + h/2 kp_1, v_n + h/2 kv_1, t_n+1/2) = v_n + h/2 kv_1
+			kp2_x = kp1_x + dt/2.0 * k1_x;
+			kp2_y = kp1_y + dt/2.0 * k1_y;
 
-			// kp2 = u_tilde(x + dt*k1/2, t_n + dt/2) = v_n+1/2 = 1.875*v_n - 1.25*v_n-1 + 0.375*v_n-2
-			kp2_x = 1.875*particles_vel[2*i  ] + -1.25*particles_vel_p[2*i  ] +  0.375*particles_vel_p_p[2*i  ];
-			kp2_y = 1.875*particles_vel[2*i+1] + -1.25*particles_vel_p[2*i+1] +  0.375*particles_vel_p_p[2*i+1];
+			// compute u(p_n + h/2 kp1, t_n+1/2)
+			device_hermite_interpolate_dx_dy_3(psi_p_p, psi_p, psi, particles_pos[2*i  ] + dt/2.0 * kp1_x, particles_pos[2*i+1] + dt/2.0 * kp1_y, &u_pp, &v_pp, &u_p, &v_p, &u, &v, NX, NY, h);
+			// kv2 = F_v(p_n + h/2 kp_1, v_n + h/2 kv_1, t_n+1/2) = - (v_n + h/2 kv_1 - u(p_n + h/2kp1, t_n+1/2)) / tau_p with u_n+1/2 = 3/8*u_n+1 + 3/4*u_n - 1/8*u_n-1
+			k2_x = - (kp1_x + dt/2.0*k1_x - (0.375*u + 0.75*u_p - 0.125*u_pp)) / tau_p;
+			k2_y = - (kp1_y + dt/2.0*k1_y - (0.375*v + 0.75*v_p - 0.125*v_pp)) / tau_p;
 
-			// compute u(x + dt/2 k1, t_n+1/2)
-			device_hermite_interpolate_dx_dy_3(psi, psi_p, psi_p_p, particles_pos[2*i] + dt*k1_x/2.0, particles_pos[2*i+1] + dt*k1_y/2.0, &u, &v, &u_p, &v_p, &u_pp, &v_pp, NX, NY, h);
-			// k2 = u_tilde(x + dt*k1/2, t_n + dt/2) = -(v_n+1/2 - u_n+1/2)/tau_p with u_n+1/2 = 0.375*u_n+1 + 0.75*u_n -0.125*u_n-1 and v_n+1/2 = kp2
-			k2_x = -(kp2_x -  (0.375*u +  0.75*u_p + -0.125*u_pp)) / tau_p;
-			k2_y = -(kp2_y -  (0.375*v +  0.75*v_p + -0.125*v_pp)) / tau_p;
+			// kp3 = F_p(p_n - h kp_1 + 2h kp_2, v_n - h kv_1 + 2h kv_2, t_n+1) = v_n -h* kv_1 + 2h* kv_2
+			kp3_x = kp1_x + dt * (-k1_x + 2 * k2_x);
+			kp3_y = kp1_y + dt * (-k1_y + 2 * k2_x);
 
-			// compute u(x - dt*k1 + 2*dt*k2, t_n+1)
-			device_hermite_interpolate_dx_dy_1(psi, particles_pos[2*i] - dt*k1_x + 2*dt*k2_x, particles_pos[2*i+1] - dt*k1_y + 2*dt*k2_y, &u, &v, NX, NY, h);
-			// k3 = u_tilde(x + k1 dt - 2 k2 dt, t_n+1) = -(v_n+1 - u_n+1) / tau_p with v_n+1 = 3*v_n - 3*v_n-1 + 1*v_n-2
-			k3_x = - (3*particles_vel[2*i  ] - 3*particles_vel_p[2*i  ] + particles_vel_p_p[2*i  ] - u) / tau_p;
-			k3_y = - (3*particles_vel[2*i+1] - 3*particles_vel_p[2*i+1] + particles_vel_p_p[2*i+1] - v) / tau_p;
+			// compute u(p_n - h kp1 + 2h kp2, t_n+1)
+			device_hermite_interpolate_dx_dy_1(psi, particles_pos[2*i  ] + dt*(-kp1_x+2*kp2_x), particles_pos[2*i+1] + dt*(-kp1_y+2*kp2_y), &u, &v, NX, NY, h);
+			// kv3 = F_v(p_n - h kp_1 + 2h kp_2, v_n - h kv_1 + 2h kv_2, t_n+1) = - (v_n + h(-kv_1+2kv_2) - u(p_n+1 + h(-kp_1+2kp_2), t_n+1)) / tau_p
+			k3_x = - (kp1_x + dt*(-k1_x+2*k2_x) - u) / tau_p;
+			k3_y = - (kp1_y + dt*(-k1_y+2*k2_y) - v) / tau_p;
 
-			// kp3 = u_tilde(x + k1 dt - 2 k2 dt, t_n + dt)
-			kp3_x = dt * (k1_x + 4*k2_x + k3_x)/6;
-			kp3_y = dt * (k1_y + 4*k2_y + k3_y)/6;
+			// x_n+1 = x_n + dt/6 (k1 + 4*k2 + k3)
+			particles_pos[2*i  ] += dt/6.0 * (kp1_x + 4*kp2_x + kp3_x);
+			particles_pos[2*i+1] += dt/6.0 * (kp2_y + 4*kp2_y + kp3_y);
 
-			// x_n+1 = x_n + dt/6 (u_n + 4*u_n+1/2 + u_n+1) = x_n + dt/2 (2*u_n + 4*kp2 + kp3)
-			particles_pos[2*i  ] += dt * (2*particles_vel[2*i  ] + 4*kp2_x + kp3_x)/6;
-			particles_pos[2*i+1] += dt * (2*particles_vel[2*i+1] + 4*kp2_y + kp3_y)/6;
-
-			particles_vel[2*i  ] += kp3_x;
-			particles_vel[2*i+1] += kp3_x;
-
-//			printf("Particle number : %d - k1_x : %f - kp2_x : %f - k2_x : %f - k3_x : %f\n", i, k1_x, kp2_x, k2_x, k3_x);
+			// x_n+1 = x_n + dt/6 (k1 + 4*k2 + k3)
+			particles_vel[2*i  ] += dt/6.0 * (k1_x + k2_x + k3_x);
+			particles_vel[2*i+1] += dt/6.0 * (k1_x + k2_x + k3_y);
 
 			break;
 		}
@@ -324,119 +325,113 @@ __global__ void Particle_advect_inertia_2(int Nb_particle, double dt, double *pa
 	particles_pos[2*i]   -= floor(particles_pos[2*i]/LX)*LX;
 	particles_pos[2*i+1] -= floor(particles_pos[2*i+1]/LY)*LX;
 
-	// shift velocity values
-	particles_vel_p_p[2*i  ] = particles_vel_p[2*i  ];
-	particles_vel_p_p[2*i+1] = particles_vel_p[2*i+1];
-	particles_vel_p[2*i  ]   = v_n_x;
-	particles_vel_p[2*i+1]   = v_n_y;
-
-	// debugging of particle position
-	printf("Particle number : %d - Position X : %f - Position Y : %f - Vel X : %f - Vel Y : %f\n", i, particles_pos[2*i], particles_pos[2*i+1], particles_vel[2*i], particles_vel[2*i+1]);
+//	// debugging of particle position
+//	printf("Particle number : %d - Position X : %f - Position Y : %f - Vel X : %f - Vel Y : %f\n", i, particles_pos[2*i], particles_pos[2*i+1], particles_vel[2*i], particles_vel[2*i+1]);
 
 }
 
 
-__global__ void Particle_advect_inertia(int Nb_particle, double dt, double *particles_pos, double *particles_vel, double *psi, double *psi_previous, int N, int NX, int NY, double h, double tau_p){
-  
-  int i;
-  int thread_finder  = threadIdx.x + blockDim.x * blockIdx.x;
-  int Di = blockDim.x * gridDim.x;
-  //double psi_x, psi_y;
-  double psi_x_p, psi_y_p; // Previous values of the x and y derivative of Psi.
-  int pos = Nb_particle / Di * thread_finder, step_pos = Nb_particle / Di;
-  
-  for(i = pos;i<pos + step_pos;i++){
-
-    device_hermite_interpolate_dx_dy(psi_previous, particles_pos[2 * i], particles_pos[2 * i + 1], &psi_x_p, &psi_y_p, NX, NY, h);
-    //device_hermite_interpolate_dx_dy(psi, particles_pos[2 * i] + 0.5 * dt * psi_y_p, particles_pos[2 * i + 1] - 0.5 * dt * psi_x_p, &psi_x, &psi_y, NX, NY, h);
-
-    //particles_vel[2 * i] =  particles_vel[2 * i] - dt * (particles_vel[2 * i] - psi_y_p) / tau_p;
-    particles_vel[2 * i] =  particles_vel[2 * i] - 0.5*(dt/tau_p) * ((particles_vel[2 * i] - psi_y_p) + (particles_vel[2*i] + 0.5*dt*(particles_vel[2 * i] - psi_y_p)  - psi_y_p));
-
-    particles_pos[2 * i] = fmod(particles_pos[2 * i] + dt * particles_vel[2 * i], twoPI);
-    particles_pos[2 * i] =  (particles_pos[2 * i] < 0)*(twoPI + particles_pos[2 * i]) + (particles_pos[2 * i] > 0)*(particles_pos[2 * i]);
-
-    //particles_vel[2 * i + 1] =  particles_vel[2 * i + 1] - dt * (particles_vel[2 * i + 1] + psi_x_p) / tau_p;
-    particles_vel[2 * i + 1] =  particles_vel[2 * i + 1] - 0.5*(dt/tau_p) * (particles_vel[2 * i + 1] + psi_x_p + (particles_vel[2*i + 1 ] + 0.5*dt*(particles_vel[2 * i] + psi_x_p) + psi_x_p));
-
-    particles_pos[2 * i + 1] = fmod(particles_pos[2 * i + 1]  + dt * particles_vel[2 * i + 1], twoPI);
-    particles_pos[2 * i + 1] = (particles_pos[2 * i + 1] < 0)*(twoPI + particles_pos[2 * i + 1]) + (particles_pos[2 * i + 1] > 0)*(particles_pos[2 * i + 1]);
-
-
-  }
-}
-
-
-__global__ void Particle_advect_inertia_RK3(int Nb_particle, double dt, double *particles_pos, double *particles_vel, double *psi, double *psi_previous, double *psi_previous_p, int N, int NX, int NY, double h, double tau_p){
-
-  int i;
-  int thread_finder  = threadIdx.x + blockDim.x * blockIdx.x;
-  int Di = blockDim.x * gridDim.x;
-  //double psi_x, psi_y;
-  double psi_x, psi_y, psi_x_p, psi_y_p, psi_x_pp, psi_y_pp; // Previous values of the x and y derivative of Psi.
-  double u, v, u_p, v_p, u_pp, v_pp; // Previous values of the x and y derivative of Psi.
-  double k1_x, k1_y, k2_x, k2_y, k3_x, k3_y;
-  //double vix, viy;
-  double l[3] = {0.375,0.75,-0.125};
-
-  int pos = Nb_particle / Di * thread_finder, step_pos = Nb_particle / Di;
-
-  for(i = pos;i<pos + step_pos;i++){
-
-    // Compute k1
-    device_hermite_interpolate_dx_dy(psi_previous, particles_pos[2 * i], particles_pos[2 * i + 1], &psi_x_p, &psi_y_p, NX, NY, h);
-    u_p = psi_y_p;
-    v_p = -psi_x_p;
-
-    k1_x = particles_vel[2*i] - u_p;
-    k1_y = particles_vel[2*i+1] - v_p;
-
-    // Compute k2
-    device_hermite_interpolate_dx_dy(psi_previous_p, particles_pos[2 * i] + 0.5 * dt * k1_x, particles_pos[2 * i + 1] + 0.5 * dt * k1_y, &psi_x_pp, &psi_y_pp, NX, NY, h);
-    u_pp = psi_y_pp;
-    v_pp = -psi_x_pp;
-
-    device_hermite_interpolate_dx_dy(psi_previous, particles_pos[2 * i] + 0.5 * dt * k1_x, particles_pos[2 * i + 1] + 0.5 * dt * k1_y, &psi_x_p, &psi_y_p, NX, NY, h);
-    u_p = psi_y_p;
-    v_p = -psi_x_p;
-
-    device_hermite_interpolate_dx_dy(psi, particles_pos[2 * i] + 0.5 * dt * k1_x, particles_pos[2 * i + 1] + 0.5 * dt * k1_y, &psi_x, &psi_y, NX, NY, h);
-    u = psi_y;
-    v = -psi_x;
-
-    //k2_x = L1(t+dt/2, t, t-dt, t-2*dt) * u + L2(t+dt/2, t, t-dt, t-2*dt)* u_p + L3(t+dt/2, t, t-dt, t-2*dt)*u_p_p;
-    //k2_y = L1(t+dt/2, t, t-dt, t-2*dt) * v + L2(t+dt/2, t, t-dt, t-2*dt)* v_p + L3(t+dt/2, t, t-dt, t-2*dt)*v_p_p;
-
-    //vix = l[0] * particles_vel[2*i] + l[1]* particles_vel_previous[2*i] + l[2] * particles_vel_previous_p[2*i];
-    //viy = l[0] * particles_vel[2*i + 1] + l[1]* particles_vel_previous[2*i + 1 ] + l[2] * particles_vel_previous_p[2*i+1];
-
-    k2_x = particles_vel[2*i] + 0.5*dt*k1_x - (l[0] * u + l[1]* u_p + l[2] * u_pp);
-    k2_y = particles_vel[2*i+1] + 0.5*dt*k1_y - (l[0] * v + l[1] * v_p + l[2] * v_pp);
-
-
-    // Compute k3
-
-    device_hermite_interpolate_dx_dy(psi, particles_pos[2*i] - dt*k1_x + 2*dt*k2_x, particles_pos[2*i+1] - dt*k1_y + 2*dt*k2_y , &psi_x, &psi_y, NX, NY, h);
-    u = psi_y;
-    v = -psi_x;
-
-    k3_x = particles_vel[2*i]  - dt*k1_x + 2*dt*k2_x - u;
-    k3_y = particles_vel[2*i + 1] - dt*k1_y + 2*dt*k2_y - v;
-
-
-    particles_vel[2 * i] =  particles_vel[2 * i] - (dt/tau_p) * (k1_x + 4*k2_x + k3_x)/6;
-
-    particles_pos[2 * i] = fmod(particles_pos[2 * i] + dt * (particles_vel[2*i]), twoPI);
-    particles_pos[2 * i] =  (particles_pos[2 * i] < 0)*(twoPI + particles_pos[2 * i]) + (particles_pos[2 * i] > 0)*(particles_pos[2 * i]);
-
-    //particles_vel[2 * i + 1] =  particles_vel[2 * i + 1] - dt * (particles_vel[2 * i + 1] + psi_x_p) / tau_p;
-    particles_vel[2 * i + 1] =  particles_vel[2 * i + 1] - (dt/tau_p) * (k1_y + 4*k2_y + k3_y)/6;
-
-    particles_pos[2 * i + 1] = fmod(particles_pos[2 * i + 1]  + dt * (particles_vel[2 * i + 1]), twoPI);
-    particles_pos[2 * i + 1] = (particles_pos[2 * i + 1] < 0)*(twoPI + particles_pos[2 * i + 1]) + (particles_pos[2 * i + 1] > 0)*(particles_pos[2 * i + 1]);
-
-  }
-}
+//__global__ void Particle_advect_inertia(int Nb_particle, double dt, double *particles_pos, double *particles_vel, double *psi, double *psi_previous, int N, int NX, int NY, double h, double tau_p){
+//
+//  int i;
+//  int thread_finder  = threadIdx.x + blockDim.x * blockIdx.x;
+//  int Di = blockDim.x * gridDim.x;
+//  //double psi_x, psi_y;
+//  double psi_x_p, psi_y_p; // Previous values of the x and y derivative of Psi.
+//  int pos = Nb_particle / Di * thread_finder, step_pos = Nb_particle / Di;
+//
+//  for(i = pos;i<pos + step_pos;i++){
+//
+//    device_hermite_interpolate_dx_dy(psi_previous, particles_pos[2 * i], particles_pos[2 * i + 1], &psi_x_p, &psi_y_p, NX, NY, h);
+//    //device_hermite_interpolate_dx_dy(psi, particles_pos[2 * i] + 0.5 * dt * psi_y_p, particles_pos[2 * i + 1] - 0.5 * dt * psi_x_p, &psi_x, &psi_y, NX, NY, h);
+//
+//    //particles_vel[2 * i] =  particles_vel[2 * i] - dt * (particles_vel[2 * i] - psi_y_p) / tau_p;
+//    particles_vel[2 * i] =  particles_vel[2 * i] - 0.5*(dt/tau_p) * ((particles_vel[2 * i] - psi_y_p) + (particles_vel[2*i] + 0.5*dt*(particles_vel[2 * i] - psi_y_p)  - psi_y_p));
+//
+//    particles_pos[2 * i] = fmod(particles_pos[2 * i] + dt * particles_vel[2 * i], twoPI);
+//    particles_pos[2 * i] =  (particles_pos[2 * i] < 0)*(twoPI + particles_pos[2 * i]) + (particles_pos[2 * i] > 0)*(particles_pos[2 * i]);
+//
+//    //particles_vel[2 * i + 1] =  particles_vel[2 * i + 1] - dt * (particles_vel[2 * i + 1] + psi_x_p) / tau_p;
+//    particles_vel[2 * i + 1] =  particles_vel[2 * i + 1] - 0.5*(dt/tau_p) * (particles_vel[2 * i + 1] + psi_x_p + (particles_vel[2*i + 1 ] + 0.5*dt*(particles_vel[2 * i] + psi_x_p) + psi_x_p));
+//
+//    particles_pos[2 * i + 1] = fmod(particles_pos[2 * i + 1]  + dt * particles_vel[2 * i + 1], twoPI);
+//    particles_pos[2 * i + 1] = (particles_pos[2 * i + 1] < 0)*(twoPI + particles_pos[2 * i + 1]) + (particles_pos[2 * i + 1] > 0)*(particles_pos[2 * i + 1]);
+//
+//
+//  }
+//}
+//
+//
+//__global__ void Particle_advect_inertia_RK3(int Nb_particle, double dt, double *particles_pos, double *particles_vel, double *psi, double *psi_previous, double *psi_previous_p, int N, int NX, int NY, double h, double tau_p){
+//
+//  int i;
+//  int thread_finder  = threadIdx.x + blockDim.x * blockIdx.x;
+//  int Di = blockDim.x * gridDim.x;
+//  //double psi_x, psi_y;
+//  double psi_x, psi_y, psi_x_p, psi_y_p, psi_x_pp, psi_y_pp; // Previous values of the x and y derivative of Psi.
+//  double u, v, u_p, v_p, u_pp, v_pp; // Previous values of the x and y derivative of Psi.
+//  double k1_x, k1_y, k2_x, k2_y, k3_x, k3_y;
+//  //double vix, viy;
+//  double l[3] = {0.375,0.75,-0.125};
+//
+//  int pos = Nb_particle / Di * thread_finder, step_pos = Nb_particle / Di;
+//
+//  for(i = pos;i<pos + step_pos;i++){
+//
+//    // Compute k1
+//    device_hermite_interpolate_dx_dy(psi_previous, particles_pos[2 * i], particles_pos[2 * i + 1], &psi_x_p, &psi_y_p, NX, NY, h);
+//    u_p = psi_y_p;
+//    v_p = -psi_x_p;
+//
+//    k1_x = particles_vel[2*i] - u_p;
+//    k1_y = particles_vel[2*i+1] - v_p;
+//
+//    // Compute k2
+//    device_hermite_interpolate_dx_dy(psi_previous_p, particles_pos[2 * i] + 0.5 * dt * k1_x, particles_pos[2 * i + 1] + 0.5 * dt * k1_y, &psi_x_pp, &psi_y_pp, NX, NY, h);
+//    u_pp = psi_y_pp;
+//    v_pp = -psi_x_pp;
+//
+//    device_hermite_interpolate_dx_dy(psi_previous, particles_pos[2 * i] + 0.5 * dt * k1_x, particles_pos[2 * i + 1] + 0.5 * dt * k1_y, &psi_x_p, &psi_y_p, NX, NY, h);
+//    u_p = psi_y_p;
+//    v_p = -psi_x_p;
+//
+//    device_hermite_interpolate_dx_dy(psi, particles_pos[2 * i] + 0.5 * dt * k1_x, particles_pos[2 * i + 1] + 0.5 * dt * k1_y, &psi_x, &psi_y, NX, NY, h);
+//    u = psi_y;
+//    v = -psi_x;
+//
+//    //k2_x = L1(t+dt/2, t, t-dt, t-2*dt) * u + L2(t+dt/2, t, t-dt, t-2*dt)* u_p + L3(t+dt/2, t, t-dt, t-2*dt)*u_p_p;
+//    //k2_y = L1(t+dt/2, t, t-dt, t-2*dt) * v + L2(t+dt/2, t, t-dt, t-2*dt)* v_p + L3(t+dt/2, t, t-dt, t-2*dt)*v_p_p;
+//
+//    //vix = l[0] * particles_vel[2*i] + l[1]* particles_vel_previous[2*i] + l[2] * particles_vel_previous_p[2*i];
+//    //viy = l[0] * particles_vel[2*i + 1] + l[1]* particles_vel_previous[2*i + 1 ] + l[2] * particles_vel_previous_p[2*i+1];
+//
+//    k2_x = particles_vel[2*i] + 0.5*dt*k1_x - (l[0] * u + l[1]* u_p + l[2] * u_pp);
+//    k2_y = particles_vel[2*i+1] + 0.5*dt*k1_y - (l[0] * v + l[1] * v_p + l[2] * v_pp);
+//
+//
+//    // Compute k3
+//
+//    device_hermite_interpolate_dx_dy(psi, particles_pos[2*i] - dt*k1_x + 2*dt*k2_x, particles_pos[2*i+1] - dt*k1_y + 2*dt*k2_y , &psi_x, &psi_y, NX, NY, h);
+//    u = psi_y;
+//    v = -psi_x;
+//
+//    k3_x = particles_vel[2*i]  - dt*k1_x + 2*dt*k2_x - u;
+//    k3_y = particles_vel[2*i + 1] - dt*k1_y + 2*dt*k2_y - v;
+//
+//
+//    particles_vel[2 * i] =  particles_vel[2 * i] - (dt/tau_p) * (k1_x + 4*k2_x + k3_x)/6;
+//
+//    particles_pos[2 * i] = fmod(particles_pos[2 * i] + dt * (particles_vel[2*i]), twoPI);
+//    particles_pos[2 * i] =  (particles_pos[2 * i] < 0)*(twoPI + particles_pos[2 * i]) + (particles_pos[2 * i] > 0)*(particles_pos[2 * i]);
+//
+//    //particles_vel[2 * i + 1] =  particles_vel[2 * i + 1] - dt * (particles_vel[2 * i + 1] + psi_x_p) / tau_p;
+//    particles_vel[2 * i + 1] =  particles_vel[2 * i + 1] - (dt/tau_p) * (k1_y + 4*k2_y + k3_y)/6;
+//
+//    particles_pos[2 * i + 1] = fmod(particles_pos[2 * i + 1]  + dt * (particles_vel[2 * i + 1]), twoPI);
+//    particles_pos[2 * i + 1] = (particles_pos[2 * i + 1] < 0)*(twoPI + particles_pos[2 * i + 1]) + (particles_pos[2 * i + 1] > 0)*(particles_pos[2 * i + 1]);
+//
+//  }
+//}
 
 
 
