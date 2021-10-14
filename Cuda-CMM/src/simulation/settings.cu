@@ -43,7 +43,8 @@ void SettingsCMM::setPresets() {
 
 	// set specific settings
 	// Time integration, define by name, "RKThree", "ABTwo", "EulerExp", "RKFour"
-	string time_integration = "RKThree";
+//	string time_integration = "RKThree";
+	string time_integration = "RKThreeMod";
 
 	// mapupdate order, "2nd", "3rd", "4th"
 	string map_update_order = "3rd";

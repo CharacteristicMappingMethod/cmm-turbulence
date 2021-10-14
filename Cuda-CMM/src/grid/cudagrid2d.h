@@ -1,6 +1,8 @@
 #ifndef __CUDA_GRID_2D_H__
 #define __CUDA_GRID_2D_H__
 
+// #define HDF5_INCLUDE
+
 #include "stdio.h"
 #include "stdlib.h"
 #include "math.h"
@@ -19,6 +21,10 @@
 #include <curand.h>
 #include <curand_kernel.h>
 //#include "../bitmap/bitmap_image.hpp"
+
+#ifdef HDF5_INCLUDE
+	#include "hdf5.h"
+#endif
 
 using namespace std;
 

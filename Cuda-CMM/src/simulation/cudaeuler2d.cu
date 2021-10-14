@@ -1181,7 +1181,7 @@ void translate_initial_condition_through_map_stack(TCudaGrid2D *Grid_coarse, TCu
 	k_normalize<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Temp_C1, Grid_fine->NX, Grid_fine->NY);
 
 	// cut_off frequencies at N_psi/3 for turbulence (effectively 2/3)
-	k_fft_cut_off_scale<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Temp_C1, Grid_fine->NX, (double)(Grid_fine->NX)/3.0);
+//	k_fft_cut_off_scale<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Temp_C1, Grid_fine->NX, (double)(Grid_fine->NX)/3.0);
 	
 	// form hermite formulation
 	fourier_hermite(Grid_fine, Dev_Temp_C1, W_H_real, Dev_Temp_C2, cufftPlan_fine);
@@ -1208,7 +1208,11 @@ void evaluate_stream_hermite(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, T
 
 	// cut_off frequencies at N_psi/3 for turbulence (effectively 2/3) and compute smooth W
 	// use Psi grid here for intermediate storage
-	k_fft_cut_off_scale<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Temp_C2, Grid_coarse->NX, (double)(Grid_psi->NX)/3.0);
+//	k_fft_cut_off_scale<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Temp_C2, Grid_coarse->NX, (double)(Grid_psi->NX)/3.0);
+
+	// cut high frequencies in fourier space, however not that much happens after zero move add from coarse grid
+	k_fft_cut_off_scale<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Temp_C2, Grid_psi->NX, freq_cut_psi);
+
 	cufftExecZ2Z(cufftPlan_coarse, Dev_Temp_C2, (cufftDoubleComplex*)Psi_real, CUFFT_INVERSE);
 	k_comp_to_real<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>((cufftDoubleComplex*)Psi_real, W_real, Grid_coarse->NX, Grid_coarse->NY);
 
@@ -1216,9 +1220,6 @@ void evaluate_stream_hermite(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, T
 	// initialize zeros for padding for trash variable to be used, Grid_psi is needed but it can be set for fine too
 	cudaMemset(Dev_Temp_C1, 0, Grid_fine->sizeNComplex);
 	k_fft_grid_add<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid_coarse->NX, Grid_psi->NX);
-
-	// cut high frequencies for psi in fourier space, however not that much happens after zero move add from coarse grid
-	k_fft_cut_off_scale<<<Grid_psi->blocksPerGrid, Grid_psi->threadsPerBlock>>>(Dev_Temp_C1, Grid_psi->NX, freq_cut_psi);
 
 	// Forming Psi hermite now on psi grid
 	k_fft_iLap<<<Grid_psi->blocksPerGrid, Grid_psi->threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C2, Grid_psi->NX, Grid_psi->NY, Grid_psi->h);												// Inverse laplacian in Fourier space
@@ -1242,13 +1243,14 @@ void evaluate_stream_hermite_2(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine,
 
 	// cut_off frequencies at N_psi/3 for turbulence (effectively 2/3) and compute smooth W
 	// use Psi grid here for intermediate storage
-	k_fft_cut_off_scale<<<Grid_psi->blocksPerGrid, Grid_psi->threadsPerBlock>>>(Dev_Temp_C2, Grid_psi->NX, (double)(Grid_psi->NX)/3.0);
+//	k_fft_cut_off_scale<<<Grid_psi->blocksPerGrid, Grid_psi->threadsPerBlock>>>(Dev_Temp_C2, Grid_psi->NX, (double)(Grid_psi->NX)/3.0);
+
+	// cut high frequencies in fourier space
+	k_fft_cut_off_scale<<<Grid_psi->blocksPerGrid, Grid_psi->threadsPerBlock>>>(Dev_Temp_C2, Grid_psi->NX, freq_cut_psi);
+
 	k_fft_grid_remove<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid_coarse->NX, Grid_psi->NX);
 	cufftExecZ2Z(cufftPlan_coarse, Dev_Temp_C1, (cufftDoubleComplex*)Psi_real, CUFFT_INVERSE);
 	k_comp_to_real<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>((cufftDoubleComplex*)Psi_real, W_real, Grid_coarse->NX, Grid_coarse->NY);
-
-	// cut high frequencies for psi in fourier space
-	k_fft_cut_off_scale<<<Grid_psi->blocksPerGrid, Grid_psi->threadsPerBlock>>>(Dev_Temp_C2, Grid_psi->NX, freq_cut_psi);
 
 	// Forming Psi hermite on psi grid
 	k_fft_iLap<<<Grid_psi->blocksPerGrid, Grid_psi->threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid_psi->NX, Grid_psi->NY, Grid_psi->h);												// Inverse laplacian in Fourier space

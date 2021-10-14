@@ -91,7 +91,6 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 	//running through neighbours (unrolled loops)
 	double xep, yep;
     double xf, yf;  // coordinates in loop
-	double xf_p, yf_p;  // variables used for fixed-point iteration in ABTwo
 
 	// initialize new intermediate values as zeros, helpfull to not write to array every point
 	double Chi_full_x[4] = {0, 0, 0, 0};
@@ -161,7 +160,7 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 			// Adam-Bashfords of order two, where a fixed point iteration with 10 iterations
 			case 1:  // ABTwo
 			{
-				xf_p = xep; yf_p = yep;
+				double xf_p, yf_p;  // variables used for fixed-point iteration
 
 				// fixed point iteration for xf,yf using previous foot points (self-correction)
 	            #pragma unroll 10
@@ -183,7 +182,13 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 	            }
 	            break;
 			}
-			// RKThree time step utilizing some intermediate steps
+			/*
+			 *  RKThree time step utilizing some intermediate steps
+			 *  Butcher tableau:
+			 *  1/2 | 1/2
+			 *   1  | -1   2
+			 *      | 1/6 2/3 1/6
+			 */
 			case 2:  // RKThree
 			{
 				// compute u_tilde(X,t_n+1)
@@ -210,7 +215,14 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 				yf = yep - dt * (k1_y + 4*k2_y + v)/6.0;
 				break;
 			}
-			// RKFour time step utilizing some intermediate steps
+			/*
+			 *  classical RKFour time step
+			 *  Butcher tableau:
+			 *  1/2 | 1/2
+			 *  1/2 |  0  1/2
+			 *   1  |  0   0   1
+			 *      | 1/6 1/3 1/3 1/6
+			 */
 			case 3:  // RKFour
 			{
 				// compute u_tilde(X,t_n+1)
@@ -230,7 +242,7 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 				// compute u_tilde(x - dt*k2/2, t_n+1 - dt/2)
 				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k2_x/2.0, yep - dt*k2_y/2.0, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
 
-				//k2 = u_tilde(x - k2 dt/2, t_n+1 - dt/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
+				//k3 = u_tilde(x - k2 dt/2, t_n+1 - dt/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
 				k3_x = 1.875 * u + -1.25 * u_p + 0.375 * u_p_p;
 				k3_y = 1.875 * v + -1.25 * v_p + 0.375 * v_p_p;
 
@@ -242,6 +254,80 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 				// build all RK-steps together
 				xf = xep - dt * (k1_x + 2*k2_x + 2*k3_x + u)/6.0;
 				yf = yep - dt * (k1_y + 2*k2_y + 2*k3_y + v)/6.0;
+				break;
+			}
+			/*
+			 * Modified RKThree with negative times, faster than classical
+			 * Butcher tableau:
+			 * 1 |  1
+			 * 2 |  4    -2
+			 *   | 5/12 -2/3 1/12
+			 */
+			case 4: // custom RKThree
+			{
+				// compute u_tilde(X,t_n+1)
+				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep, yep, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
+				// k1 = u_tilde(X, t_n+1) = 3*u_n - 3*u_n-1 + 1*u_n-2
+				k1_x = 3 * u + -3 * u_p + u_p_p;
+				k1_y = 3 * v + -3 * v_p + v_p_p;
+
+				// compute u_tilde(X - dt*k1, t_n)
+				device_hermite_interpolate_dx_dy_1(phi, xep - dt*k1_x, yep - dt*k1_y, &u, &v, NX_psi, NY_psi, h_psi);
+				// k2 = u_tilde(X - dt*k1, t_n)
+				k2_x = u;
+				k2_y = v;
+
+				// compute u_tilde(X - 4*dt*k1 + 2*dt*k2, t_n-1)
+				device_hermite_interpolate_dx_dy_1(phi_p, xep - 4*dt*k1_x + 2*dt*k2_x, yep - 4*dt*k1_y + 2*dt*k2_y, &u_p, &v_p, NX_psi, NY_psi, h_psi);
+				// k3 = u_tilde(X - 4*dt*k1 + 2*dt*k2, t_n-1)
+				k3_x = u_p;
+				k3_y = v_p;
+
+				// build all RK-steps together
+				// x = x_n - dt (5*k1 + 8*k2 - k3)/12
+				xf = xep - dt * (5*k1_x + 8*k2_x - k3_x)/12.0;
+				yf = yep - dt * (5*k1_y + 8*k2_y - k3_y)/12.0;
+				break;
+			}
+			/*
+			 *  modified RKFour time step of case IV with b=1/4 (Butcher (2016)), is faster than classical
+			 *  Butcher tableau:
+			 *   1 |   1
+			 *  1/2 | 3/8  1/8
+			 *   1  |  0  -1/3  4/3
+			 *      | 1/6 -1/12 2/3 1/4
+			 */
+			case 5:  // custom RKFour case IV
+			{
+				// compute u_tilde(X, t_n+1)
+				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep, yep, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
+
+				// k1 = u_tilde(X, t_n+1) = 3*u_n - 3*u_n-1 + 1*u_n-2
+				k1_x = 3 * u + -3 * u_p + u_p_p;
+				k1_y = 3 * v + -3 * v_p + v_p_p;
+
+				// compute u_tilde(X - dt*k1, t_n)
+				device_hermite_interpolate_dx_dy_1(phi, xep - dt*k1_x, yep - dt*k1_y, &u, &v, NX_psi, NY_psi, h_psi);
+				//k2 = u_tilde(X - k1 dt, t_n)
+				k2_x = u;
+				k2_y = v;
+
+				// compute u_tilde(X - 3/8 dt*k1 - 1/8 dt*k2, t_n+1/2)
+				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k1_x*3.0/8.0 - dt*k2_x*1.0/8.0, yep - dt*k1_y*3.0/8.0 - dt*k2_y*1.0/8.0, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
+
+				//k3 = u_tilde(X - 3/8 dt*k1 - 1/8 dt*k2, t_n+1/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
+				k3_x = 1.875 * u + -1.25 * u_p + 0.375 * u_p_p;
+				k3_y = 1.875 * v + -1.25 * v_p + 0.375 * v_p_p;
+
+				//compute u_tilde(X + 1/3 dt*k2 - 4/3 dt*k3, t_n)
+				device_hermite_interpolate_dx_dy_1(phi, xep + dt*k2_x/3.0 - dt*k3_x*4.0/3.0, yep + dt*k2_y/3.0 - dt*k3_y*4.0/3.0, &u, &v, NX_psi, NY_psi, h_psi);
+
+				// k3 = u_tilde(X + 1/3 dt*k2 - 4/3 dt*k3, t_n) = u
+
+				// build all RK-steps together
+				// x = x_n - dt (2*k1 - k2 + 8*k3 + 3*k4)/12
+				xf = xep - dt * (2*k1_x - k2_x + 8*k3_x + 3*u)/12.0;
+				yf = yep - dt * (2*k1_y - k2_y + 8*k3_y + 3*v)/12.0;
 				break;
 			}
 			default:  // EulerExp on default

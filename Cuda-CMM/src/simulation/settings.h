@@ -139,6 +139,8 @@ public:
 		else if (timeIntegration == "ABTwo") time_integration_num = 1;
 		else if (timeIntegration == "RKThree") time_integration_num = 2;
 		else if (timeIntegration == "RKFour") time_integration_num = 3;
+		else if (timeIntegration == "RKThreeMod") time_integration_num = 4;
+		else if (timeIntegration == "RKFourMod") time_integration_num = 5;
 		else time_integration_num = -1;
 	}
 	int getTimeIntegrationNum() const { return time_integration_num; }
