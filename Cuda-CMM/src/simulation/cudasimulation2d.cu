@@ -927,53 +927,53 @@ __device__ double device_initial_W_discret(double x, double y, double *W_initial
 
 
 
-/*******************************************************************
-*							   Zoom								   *
-*******************************************************************/
-
-
-void Zoom(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *Dev_ChiX_stack, double *Dev_ChiY_stack, double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1, double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3, double *Dev_ChiX, double *Dev_ChiY, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, double *W_real, cufftHandle cufftPlan_fine, double *W_initial, cufftDoubleComplex *Dev_Complex_fine, string workspace, string simulationName, int simulation_num, double L)
-{
-	double *ws;
-	ws = new double[Grid_fine->N];
-	int save_ctr = 0;
-	
-	double xCenter = 0.54;
-	double yCenter = 0.51;
-	double width = 0.5;
-	
-	double xMin = xCenter - width/2;
-	double xMax = xMin + width;
-	double yMin = yCenter - width/2;
-	double yMax = yMin + width;
-	
-	std::ostringstream ss;
-	ss<<save_ctr;
-	
-	
-	//save zooming effects
-	for(int zoom_ctr = 0; zoom_ctr<10; zoom_ctr++){
-		
-		width *=  0.5;//0.99
-		xMin = xCenter - width/2;
-		xMax = xMin + width;
-		yMin = yCenter - width/2;
-		yMax = yMin + width;
-		
-		
-		//kernel_apply_map_stack_to_W_custom<<<Gsf->blocksPerGrid, Gsf->threadsPerBlock>>>(devChiX_stack, devChiY_stack, devChiX, devChiY, devWs, stack_map_passed, Gc->NX, Gc->NY, Gc->h, Gsf->NX, Gsf->NY, Gsf->h, xMin*L, xMax*L, yMin*L, yMax*L, W_initial);	
-		kernel_apply_map_stack_to_W_custom_part_All(Grid_coarse, Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, W_real, Dev_Complex_fine, stack_length, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, mem_RAM, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, xMin*L, xMax*L, yMin*L, yMax*L, W_initial, simulation_num);
-		
-		
-		cudaMemcpy(ws, W_real, Grid_fine->sizeNReal, cudaMemcpyDeviceToHost);
-		
-		std::ostringstream ss2;
-		ss2<<zoom_ctr;
-		
-		writeAllRealToBinaryFile(Grid_fine->N, ws, simulationName, workspace, "zoom_" + ss2.str());
-	}
-	
-}
+///*******************************************************************
+//*							   Zoom								   *
+//*******************************************************************/
+//
+//
+//void Zoom(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *Dev_ChiX_stack, double *Dev_ChiY_stack, double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1, double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3, double *Dev_ChiX, double *Dev_ChiY, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, double *W_real, cufftHandle cufftPlan_fine, double *W_initial, cufftDoubleComplex *Dev_Complex_fine, string workspace, string simulationName, int simulation_num, double L)
+//{
+//	double *ws;
+//	ws = new double[Grid_fine->N];
+//	int save_ctr = 0;
+//
+//	double xCenter = 0.54;
+//	double yCenter = 0.51;
+//	double width = 0.5;
+//
+//	double xMin = xCenter - width/2;
+//	double xMax = xMin + width;
+//	double yMin = yCenter - width/2;
+//	double yMax = yMin + width;
+//
+//	std::ostringstream ss;
+//	ss<<save_ctr;
+//
+//
+//	//save zooming effects
+//	for(int zoom_ctr = 0; zoom_ctr<10; zoom_ctr++){
+//
+//		width *=  0.5;//0.99
+//		xMin = xCenter - width/2;
+//		xMax = xMin + width;
+//		yMin = yCenter - width/2;
+//		yMax = yMin + width;
+//
+//
+//		//kernel_apply_map_stack_to_W_custom<<<Gsf->blocksPerGrid, Gsf->threadsPerBlock>>>(devChiX_stack, devChiY_stack, devChiX, devChiY, devWs, stack_map_passed, Gc->NX, Gc->NY, Gc->h, Gsf->NX, Gsf->NY, Gsf->h, xMin*L, xMax*L, yMin*L, yMax*L, W_initial);
+//		kernel_apply_map_stack_to_W_custom_part_All(Grid_coarse, Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, W_real, Dev_Complex_fine, stack_length, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, mem_RAM, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, xMin*L, xMax*L, yMin*L, yMax*L, W_initial, simulation_num);
+//
+//
+//		cudaMemcpy(ws, W_real, Grid_fine->sizeNReal, cudaMemcpyDeviceToHost);
+//
+//		std::ostringstream ss2;
+//		ss2<<zoom_ctr;
+//
+//		writeAllRealToBinaryFile(Grid_fine->N, ws, simulationName, workspace, "zoom_" + ss2.str());
+//	}
+//
+//}
 
 
 /*******************************************************************

@@ -1,7 +1,5 @@
-#include "simulation/cudasimulation2d.h"
 #include "simulation/cudaeuler2d.h"
 #include "simulation/settings.h"
-#include "grid/cudagrid2d.h"
 
 
 

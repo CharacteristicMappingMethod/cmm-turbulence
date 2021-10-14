@@ -1,6 +1,6 @@
 // this function contains all functions in fourier space and helper functions for dealing with cufftComplex variables
-#ifndef __FFT_H__
-#define __FFT_H__
+#ifndef __CMM_FFT_H__
+#define __CMM_FFT_H__
 
 #include <cufft.h>
 #include <cufftXt.h>

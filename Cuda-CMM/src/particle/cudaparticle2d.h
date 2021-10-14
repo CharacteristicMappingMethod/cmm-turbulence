@@ -1,13 +1,5 @@
 #ifndef __CUDA_PARTICLES_2D_H__
 #define __CUDA_PARTICLES_2D_H__
-#include "../grid/cudagrid2d.h"
-
-
-
-
-
-
-
 
 
 #ifdef __CUDACC__
@@ -23,7 +15,6 @@ __global__ void Particle_advect_inertia_2(int Nb_particle, double dt, double *pa
 
 //__global__ void Particle_advect_inertia(int Nb_particle, double dt, double *particles_pos, double *particles_vel, double *Psi, double *Psi_previous, int N, int NX, int NY, double h, double tau_p);
 //__global__ void Particle_advect_inertia_RK3(int Nb_particle, double dt, double *particles_pos, double *particles_vel, double *Psi, double *Psi_previous, double *Psi_previous_p, int N, int NX, int NY, double h, double tau_p);
-
 
 
 #endif

@@ -3,7 +3,7 @@
 void SettingsCMM::setPresets() {
 	// naming and saving settings of the simulation
 	string workspace = "./"; // where should the files be saved? "./" or "" means at the run location, has to end with backslash
-	string sim_name = "psi_debug";  // unique identifier to differentiate simulations
+	string sim_name = "debug";  // unique identifier to differentiate simulations
 
 	// grid settings for coarse and fine grid
 	// 32		64		128		256		512		1024		2048		4096		8192		16384
@@ -44,7 +44,7 @@ void SettingsCMM::setPresets() {
 	// set specific settings
 	// Time integration, define by name, "RKThree", "ABTwo", "EulerExp", "RKFour"
 //	string time_integration = "RKThree";
-	string time_integration = "RKThreeMod";
+	string time_integration = "RKThreeMod";  // slightly faster with a bit better convergence
 
 	// mapupdate order, "2nd", "3rd", "4th"
 	string map_update_order = "3rd";

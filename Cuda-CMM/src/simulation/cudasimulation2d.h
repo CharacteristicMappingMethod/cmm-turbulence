@@ -54,12 +54,7 @@ void recompute_output_files();	//read binary files storing diffeos and recompute
 	__device__ double device_initial_W_discret(double x, double y, double *W_initial, int NX, int NY);
 	__device__ double initHomeoIso(double x, double y);
 	
-	
-	void Zoom(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *Dev_ChiX_stack, double *Dev_ChiY_stack, double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1, double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3, double *Dev_ChiX, double *Dev_ChiY, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, double *W_real, cufftHandle cufftPlan_fine, double *W_initial, cufftDoubleComplex *Dev_Complex_fine, string workspace, string simulationName, int simulation_num, double L);
 	__global__ void k_upsample(double *ChiX, double *ChiY, double *ChiX_2048, double *ChiY_2048, int NXc, int NYc, double hc, int NXs, int NYs, double hs);
-
-	//    void Psi_upsampling(TCudaGrid2D *Grid_2048, double *Dev_W_2048, cufftDoubleComplex *Dev_Complex_fine_2048, cufftDoubleComplex *Dev_Hat_fine_bis_2048, cufftDoubleComplex *Dev_Hat_fine_2048, double *Dev_Psi_2048, cufftHandle cufftPlan_2048);
-	
 	
 	
 #endif

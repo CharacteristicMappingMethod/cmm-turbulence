@@ -1,7 +1,6 @@
 #ifndef __CUDA_MESURE_2D_H__
 #define __CUDA_MESURE_2D_H__
 #include "../grid/cudagrid2d.h"
-#include "../simulation/cudasimulation2d.h"
 #include "../simulation/cmm-fft.h"
 
 
