@@ -38,6 +38,8 @@ void create_directory_structure(SettingsCMM SettingsMain, string file_name, doub
 			case 1: { file<<"Time integration : Adam Bashfords 2"<<endl; break; }
 			case 2: { file<<"Time integration : Runge Kutta 3"<<endl; break; }
 			case 3: { file<<"Time integration : Runge Kutta 4"<<endl; break; }
+			case 4: { file<<"Time integration : Runge Kutta 3 (modified)"<<endl; break; }
+			case 5: { file<<"Time integration : Runge Kutta 4 (modified)"<<endl; break; }
 			default: { file<<"Time integration : Default (Euler explicit)"<<endl; break; }
 		}
 

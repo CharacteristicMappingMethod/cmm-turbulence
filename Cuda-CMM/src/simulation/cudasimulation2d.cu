@@ -439,54 +439,24 @@ __global__ void kernel_apply_map_stack_to_W_custom(double *ChiX_stack, double *C
 	
 }
 
-/*
-void kernel_apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *ChiX_stack_RAM, double *ChiY_stack_RAM, double *W_real, cufftDoubleComplex *Dev_Complex_fine, int stack_length, int map_stack_length, int stack_length_RAM, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double *W_initial)
-{
-	
-	kernel_apply_map_stack_to_W_part_1<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX, ChiY, Dev_Complex_fine, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h);
-	for(int K = stack_length_RAM; K >= 0; K--){
-	 	cudaMemcpy(ChiX_stack, &ChiX_stack_RAM[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-		cudaMemcpy(ChiY_stack, &ChiY_stack_RAM[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-		if (K == stack_length_RAM){
-			for(int k = stack_length - stack_length_RAM*map_stack_length - 1; k >= 0; k--){
-				kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX_stack, ChiY_stack, Dev_Complex_fine, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, k);
-			}
-		}
-		else{
-			for(int k = map_stack_length - 1; k >= 0; k--){
-				kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX_stack, ChiY_stack, Dev_Complex_fine, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, k);
-			}
-		}
-	}
-	kernel_apply_map_stack_to_W_part_3<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_real, Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, W_initial);
-	
-}*/
 
-
-void kernel_apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1, double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3, double *W_real, cufftDoubleComplex *Dev_Complex_fine, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double *W_initial, int simulation_num)
+void apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY,
+		double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1,
+		double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3,
+		double *W_real, cufftDoubleComplex *Dev_Complex_fine, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM,
+		int mem_RAM, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double *bounds, double *W_initial, int simulation_num)
 {
-	
-	kernel_apply_map_stack_to_W_part_1<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX, ChiY, Dev_Complex_fine, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h);
-	
+	// for normal map stack, bounds has the domain boundaries applied
+	kernel_apply_map_stack_to_W_custom_part_1<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX, ChiY, Dev_Complex_fine, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, bounds[0], bounds[1], bounds[2], bounds[3]);
+
+	// loop over all maps in map stack
 	for(int K_RAM = stack_length_Nb_array_RAM; K_RAM >= 0; K_RAM--){
 		if (K_RAM == stack_length_Nb_array_RAM){
 			for(int K = stack_length_RAM%mem_RAM; K >= 0; K--){
-				if (K_RAM == 0){
-					cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_0[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-					cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_0[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-				}
-				if (K_RAM == 1){
-					cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_1[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-					cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_1[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-				}
-				if (K_RAM == 2){
-					cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_2[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-					cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_2[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-				}
-				if (K_RAM == 3){
-					cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_3[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-					cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_3[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-				}
+				copy_stack_to_device(K_RAM, K*map_stack_length*Grid_coarse->N*4, map_stack_length * 4*Grid_coarse->sizeNReal,
+						ChiX_stack, ChiY_stack,
+						Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1,
+						Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3);
 				if (K == stack_length_RAM%mem_RAM){
 					for(int k = stack_length - stack_length_RAM*map_stack_length - 1; k >= 0; k--){
 						kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX_stack, ChiY_stack, Dev_Complex_fine, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, k);
@@ -501,35 +471,43 @@ void kernel_apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D 
 		}
 		else{
 			for(int K = mem_RAM-1; K >= 0; K--){
-				if (K_RAM == 0){
-					cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_0[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-					cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_0[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-				}
-				if (K_RAM == 1){
-					cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_1[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-					cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_1[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-				}
-				if (K_RAM == 2){
-					cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_2[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-					cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_2[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-				}
-				if (K_RAM == 3){
-					cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_3[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-					cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_3[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-				}
+				copy_stack_to_device(K_RAM, K*map_stack_length*Grid_coarse->N*4, map_stack_length * 4*Grid_coarse->sizeNReal,
+						ChiX_stack, ChiY_stack,
+						Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1,
+						Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3);
 				for(int k = map_stack_length - 1; k >= 0; k--){
 					kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX_stack, ChiY_stack, Dev_Complex_fine, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, k);
 				}
 			}
 		}
 	}
-	
+
+	// initial condition
 	kernel_apply_map_stack_to_W_part_3<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_real, Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, W_initial, simulation_num);
-	
+
+}
+
+void copy_stack_to_device(int K_RAM, long int index, long int length_bytes, double *ChiX_stack, double *ChiY_stack, double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1, double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3) {
+	if (K_RAM == 0){
+		cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_0[index], length_bytes, cudaMemcpyHostToDevice);
+		cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_0[index], length_bytes, cudaMemcpyHostToDevice);
+	}
+	if (K_RAM == 1){
+		cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_1[index], length_bytes, cudaMemcpyHostToDevice);
+		cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_1[index], length_bytes, cudaMemcpyHostToDevice);
+	}
+	if (K_RAM == 2){
+		cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_2[index], length_bytes, cudaMemcpyHostToDevice);
+		cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_2[index], length_bytes, cudaMemcpyHostToDevice);
+	}
+	if (K_RAM == 3){
+		cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_3[index], length_bytes, cudaMemcpyHostToDevice);
+		cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_3[index], length_bytes, cudaMemcpyHostToDevice);
+	}
 }
 
 
-__global__ void kernel_apply_map_stack_to_W_part_1(double *ChiX, double *ChiY, cufftDoubleComplex *x_y, int NXc, int NYc, double hc, int NXs, int NYs, double hs)
+__global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *ChiY, cufftDoubleComplex *x_y, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double xl, double xr, double yl, double yr)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -540,15 +518,17 @@ __global__ void kernel_apply_map_stack_to_W_part_1(double *ChiX, double *ChiY, c
 	
 	int In = iY*NXs + iX;
 	
+	double htemp = (xr - xl)/NXs;
+
 	//position
-	double x = iX*hs;
-	double y = iY*hs;
+	double x = xl + iX*htemp;
+	double y = yl + iY*htemp;
 	
 	device_diffeo_interpolate(ChiX, ChiY, x, y, &x, &y, NXc, NYc, hc);
 	
 	x_y[In].x = x;
 	x_y[In].y = y;
-	
+
 }
 
 __global__ void kernel_apply_map_stack_to_W_part_2(double *ChiX_stack, double *ChiY_stack, cufftDoubleComplex *x_y, int NXc, int NYc, double hc, int NXs, int NYs, int k)
@@ -588,98 +568,6 @@ __global__ void kernel_apply_map_stack_to_W_part_3(double *ws, cufftDoubleComple
 	#endif
 	
 }
-
-
-void kernel_apply_map_stack_to_W_custom_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1, double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3, double *W_real, cufftDoubleComplex *Dev_Complex_fine, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double xl, double xr, double yl, double yr, double *W_initial, int simulation_num)
-{
-	
-	kernel_apply_map_stack_to_W_custom_part_1<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX, ChiY, Dev_Complex_fine, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, xl, xr, yl, yr);
-	
-	for(int K_RAM = stack_length_Nb_array_RAM; K_RAM >= 0; K_RAM--){
-		if (K_RAM == stack_length_Nb_array_RAM){
-			for(int K = stack_length_RAM%mem_RAM; K >= 0; K--){
-				if (K_RAM == 0){
-					cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_0[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-					cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_0[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-				}
-				if (K_RAM == 1){
-					cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_1[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-					cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_1[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-				}
-				if (K_RAM == 2){
-					cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_2[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-					cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_2[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-				}
-				if (K_RAM == 3){
-					cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_3[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-					cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_3[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-				}
-				if (K == stack_length_RAM%mem_RAM){
-					for(int k = stack_length - stack_length_RAM*map_stack_length - 1; k >= 0; k--){
-						kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX_stack, ChiY_stack, Dev_Complex_fine, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, k);
-					}
-				}
-				else{
-					for(int k = map_stack_length - 1; k >= 0; k--){
-						kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX_stack, ChiY_stack, Dev_Complex_fine, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, k);
-					}
-				}
-			}
-		}
-		else{
-			for(int K = mem_RAM-1; K >= 0; K--){
-				if (K_RAM == 0){
-					cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_0[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-					cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_0[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-				}
-				if (K_RAM == 1){
-					cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_1[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-					cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_1[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-				}
-				if (K_RAM == 2){
-					cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_2[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-					cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_2[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-				}
-				if (K_RAM == 3){
-					cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_3[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-					cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_3[K*map_stack_length*Grid_coarse->N*4], map_stack_length * 4*Grid_coarse->sizeNReal, cudaMemcpyHostToDevice);
-				}
-				for(int k = map_stack_length - 1; k >= 0; k--){
-					kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX_stack, ChiY_stack, Dev_Complex_fine, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, k);
-				}
-			}
-		}
-	}
-	
-	kernel_apply_map_stack_to_W_part_3<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_real, Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, W_initial, simulation_num);
-	
-}
-
-
-__global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *ChiY, cufftDoubleComplex *x_y, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double xl, double xr, double yl, double yr)
-{
-	//index
-	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
-	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-	
-	if(iX >= NXs || iY >= NYs)
-		return;
-	
-	int In = iY*NXs + iX;
-	
-	double htemp = (xr - xl)/NXs;
-	
-	//position
-	double x = xl + iX*htemp;
-	double y = yl + iY*htemp;
-	
-	device_diffeo_interpolate(ChiX, ChiY, x, y, &x, &y, NXc, NYc, hc);
-	
-	x_y[In].x = x;
-	x_y[In].y = y;
-	
-}
-
 
 
 /*******************************************************************

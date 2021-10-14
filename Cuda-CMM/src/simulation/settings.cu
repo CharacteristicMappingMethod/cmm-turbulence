@@ -26,7 +26,7 @@ void SettingsCMM::setPresets() {
 	// set time properties
 	double final_time = 4;  // end of computation
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this is the factor for it
-	int steps_per_sec = 64;  // how many steps do we want per seconds?
+	int steps_per_sec = 32;  // how many steps do we want per seconds?
 	bool set_dt_by_steps = true;  // choose wether we want to set dt by steps or by grid
 	// dt will be set in cudaeuler, so that all changes can be applied there
 	int snapshots_per_sec = 1;  // how many times do we want to save data per sec?
