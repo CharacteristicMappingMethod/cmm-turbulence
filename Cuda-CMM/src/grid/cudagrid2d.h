@@ -34,12 +34,8 @@ using namespace std;
 	#define twoPI 	6.283185307179586476925286766559005768394338798750211641949889184615632812572417997256069650684234136
 
 	#define sm_50  // for Julius, because he has a shitty graphics card
-	// #define skip_remapping  // in case we want to skip the remapping for convergence purposes
 
 	//#define DISCRET
-
-	//active le temps
-	//#define TIME_TESTING
 
 	enum color_map_choice
 	{

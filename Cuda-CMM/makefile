@@ -24,7 +24,7 @@ SimulationCuda2d.out: settings.o cudagrid2d.o cmm-io.o cmm-fft.o cudahermite2d.o
 	#
 	# Remove all intermediate targets
 	#
-	rm -rf *.o
+	# rm -rf *.o # disabled
 
 all: SimulationCuda2d.out
 

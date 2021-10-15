@@ -35,6 +35,7 @@ private:
 	int molly_stencil;
 	int upsample_version;
 	double freq_cut_psi;
+	bool skip_remapping;
 	// particles
 	bool particles;
 	int particles_num;
@@ -113,8 +114,8 @@ public:
 		map_update_order = mapUpdateOrder;
 		// tied to num, for faster handling
 		if (mapUpdateOrder == "2nd") map_update_order_num = 0;
-		else if (mapUpdateOrder == "3rd") map_update_order_num = 1;
-		else if (mapUpdateOrder == "4th") map_update_order_num = 2;
+		else if (mapUpdateOrder == "4th") map_update_order_num = 1;
+		else if (mapUpdateOrder == "6th") map_update_order_num = 2;
 		else map_update_order_num = -1;
 	}
 	int getMapUpdateOrderNum() const { return map_update_order_num; }
@@ -144,6 +145,10 @@ public:
 		else time_integration_num = -1;
 	}
 	int getTimeIntegrationNum() const { return time_integration_num; }
+
+	// skip remapping
+	bool getSkipRemapping() const { return skip_remapping; }
+	void setSkipRemapping(bool skipRemapping) { skip_remapping = skipRemapping; }
 
 	// particles
 	bool getParticles() const { return particles; }

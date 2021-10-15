@@ -34,7 +34,7 @@ void recompute_output_files();	//read binary files storing diffeos and recompute
 	void apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY,
 			double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1,
 			double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3,
-			double *W_real, cufftDoubleComplex *Dev_Complex_fine, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM,
+			double *W_real, double *Dev_Complex_fine, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM,
 			int mem_RAM, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double *bounds, double *W_initial, int simulation_num);
 	void copy_stack_to_device(int K_RAM, long int index, long int length_bytes, double *ChiX_stack, double *ChiY_stack, double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1, double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3);
 
@@ -45,9 +45,9 @@ void recompute_output_files();	//read binary files storing diffeos and recompute
 	__global__ void kernel_compare_map_stack_with_identity(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *error, int stack_length, int NXc, int NYc, double hc, int NXs, int NYs, double hs);
 	__global__ void kernel_compare_vorticity_with_initial(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *error, int stack_length, int NXc, int NYc, double hc, int NXs, int NYs, double hs, int simulation_num);
 	
-	__global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *ChiY, cufftDoubleComplex *x_y, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double xl, double xr, double yl, double yr);
-	__global__ void kernel_apply_map_stack_to_W_part_2(double *ChiX_stack, double *ChiY_stack, cufftDoubleComplex *x_y, int NXc, int NYc, double hc, int NXs, int NYs, int k);
-	__global__ void kernel_apply_map_stack_to_W_part_3(double *ws, cufftDoubleComplex *x_y, int NXs, int NYs, double hs, double *W_initial, int simulation_num);
+	__global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *ChiY, double *x_y, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double xl, double xr, double yl, double yr);
+	__global__ void kernel_apply_map_stack_to_W_part_2(double *ChiX_stack, double *ChiY_stack, double *x_y, int NXc, int NYc, double hc, int NXs, int NYs, int k);
+	__global__ void kernel_apply_map_stack_to_W_part_3(double *ws, double *x_y, int NXs, int NYs, double hs, double *W_initial, int simulation_num);
 	
 	
 	

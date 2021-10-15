@@ -189,6 +189,21 @@ void readAllRealFromBinaryFile(int Len, double *var, string workspace, string si
 	}
 #endif
 
+
+// script to save only one of the variables, needed because we need temporal arrays to save
+void writeTimeVariable(string workspace, string sim_name, string file_name, string i_num, double *Host_save, double *Dev_save, TCudaGrid2D *Grid_save) {
+	// create new subfolder for current timestep, doesn't matter if we try to create it several times
+	string sub_folder_name = "/Timestep_data/Timestep_" + i_num;
+	string folder_name_now = workspace + "data/" + sim_name + sub_folder_name;
+	mkdir(folder_name_now.c_str(), 0700);
+
+	// copy and save
+	cudaMemcpy(Host_save, Dev_save, Grid_save->sizeNReal, cudaMemcpyDeviceToHost);
+	writeAllRealToBinaryFile(Grid_save->N, Host_save, workspace, sim_name, sub_folder_name + "/" + file_name);
+}
+
+
+
 /*
  * Write particle positions
  */

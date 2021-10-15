@@ -100,34 +100,18 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 	double k1_x, k1_y, k2_x, k2_y, k3_x, k3_y; // different intermediate functions for RKThree
 
 	// factors on how the map will be updated in the end
-	double c1[3], c2[3], c3[3];
-	// 4th order interpolation
-	if (map_update_order_num == 2) {
-		// 4th order values factors for inner, middle and outer points
-		c1[0] = +3.0/(8.0); 			c1[1] = -3.0/(20.0);			c1[2] = +1.0/(40.0);  // 0th order
-		c2[0] = +29.0/(252.0)/ep; 		c2[1] = +67.0/(504.0)/ep;		c2[2] = -11.0/(252.0)/ep;  // 1th order
-		c3[0] = +251.0/(6288.0)/ep/ep;	c3[1] = +607.0/(6288.0)/ep/ep;	c3[2] = -41.0/(2096.0)/ep/ep; // 1th order cross
-	}
-	// 3rd order interpolation
-	else if (map_update_order_num == 1) {
-		// 3rd order values factors for inner and outer points
-		c1[0] = +1.0/(3.0); 		c1[1] = -1.0/(12.0);  // 0th order
-		c2[0] = +1.0/(3.0)/ep; 		c2[1] = -1.0/(24.0)/ep;  // 1th order
-		c3[0] = +1.0/(68.0)/ep/ep;	c3[1] = +1.0/(17.0)/ep/ep;  // 1th order cross
-	}
-	// 2nd order interpolation
-	else if (map_update_order_num == 0) {
-		// 2rd order values factors for middle points
-		c1[0] = +1.0/(4.0);  // 0th order
-		c2[0] = +1.0/(4.0)/ep;  // 0th order
-		c3[0] = +1.0/(4.0)/ep/ep;  // 0th order
-	}
-	// zero
-	else {
-		c1[0] = c1[1] = c1[2] = c2[0] = c2[1] = c2[2] = c3[0] = c3[1] = c3[2] = 0;
+	double c[3];
+	switch (map_update_order_num) {
+		// 6th order interpolation
+		case 2: { c[0] = +3.0/8.0; c[1] = -3.0/20.0; c[2] = +1.0/40.0; break; }
+		// 4th order interpolation
+		case 1: { c[0] = +1.0/3.0; c[1] = -1.0/12.0; break; }
+		// 2th order interpolation
+		case 0: { c[0] = +1.0/4.0; break; }
+		default: { c[0] = c[1] = c[2] = 0; break; }
 	}
 
-	// repeat for all footpoints, 4 for 3th order, 8 for 4th order and 12 for 5th order
+	// repeat for all footpoints, 4 for 2th order, 8 for 4th order and 12 for 6th order
 	int k_total;
 	if (map_update_order_num == 2) {
 		k_total = 12;
@@ -140,10 +124,13 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 	// footpoint loop
 	#pragma unroll
 	for (int k_foot = 0; k_foot<k_total; k_foot++) {
+		int i_foot_now = (k_foot/4);  // used for getting
+		double i_dist_now = i_foot_now+1;
+
 		// get position of footpoint, NE, SE, SW, NW
 		// for higher orders repeat cross shape stencil with more points
-		xep = iX*hc + (1 + k_foot/4) * ep*(1 - 2*((k_foot/2)%2));
-		yep = iY*hc + (1 + k_foot/4) * ep*(1 - 2*(((k_foot+1)/2)%2));
+		xep = iX*hc + i_dist_now * ep*(1 - 2*((k_foot/2)%2));
+		yep = iY*hc + i_dist_now * ep*(1 - 2*(((k_foot+1)/2)%2));
 
 		xf = xep;
 		yf = yep;
@@ -342,20 +329,20 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 
 		// directly apply map update
 		// chi values - central average with stencil +NE +SE +SW +NW
-		Chi_full_x[0] += xf * c1[k_foot/4];
-		Chi_full_y[0] += yf * c1[k_foot/4];
+		Chi_full_x[0] += xf * c[i_foot_now];
+		Chi_full_y[0] += yf * c[i_foot_now];
 
 		// chi grad x - central differences with stencil +NE +SE -SW -NW
-		Chi_full_x[1] += xf * c2[k_foot/4] * (1 - 2*((k_foot/2)%2));
-		Chi_full_y[1] += yf * c2[k_foot/4] * (1 - 2*((k_foot/2)%2));
+		Chi_full_x[1] += xf * c[i_foot_now] * (1 - 2*((k_foot/2)%2)) /ep/i_dist_now;
+		Chi_full_y[1] += yf * c[i_foot_now] * (1 - 2*((k_foot/2)%2)) /ep/i_dist_now;
 
 		// chi grad y - central differences with stencil +NE -SE -SW +NW
-		Chi_full_x[2] += xf * c2[k_foot/4] * (1 - 2*(((k_foot+1)/2)%2));
-		Chi_full_y[2] += yf * c2[k_foot/4] * (1 - 2*(((k_foot+1)/2)%2));
+		Chi_full_x[2] += xf * c[i_foot_now] * (1 - 2*(((k_foot+1)/2)%2)) /ep/i_dist_now;
+		Chi_full_y[2] += yf * c[i_foot_now] * (1 - 2*(((k_foot+1)/2)%2)) /ep/i_dist_now;
 
 		// chi grad x y - cross central differences with stencil +NE -SE +SW -NW
-		Chi_full_x[3] += xf * c3[k_foot/4] * (1 - 2*(k_foot%2));
-		Chi_full_y[3] += yf * c3[k_foot/4] * (1 - 2*(k_foot%2));
+		Chi_full_x[3] += xf * c[i_foot_now] * (1 - 2*(k_foot%2)) /ep/ep/i_dist_now/i_dist_now;
+		Chi_full_y[3] += yf * c[i_foot_now] * (1 - 2*(k_foot%2)) /ep/ep/i_dist_now/i_dist_now;
 	}
 
 	// can't use Chi because we still use it for diffeo_interpolate
@@ -443,11 +430,11 @@ __global__ void kernel_apply_map_stack_to_W_custom(double *ChiX_stack, double *C
 void apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY,
 		double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1,
 		double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3,
-		double *W_real, cufftDoubleComplex *Dev_Complex_fine, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM,
+		double *W_real, double *Dev_Temp, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM,
 		int mem_RAM, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double *bounds, double *W_initial, int simulation_num)
 {
 	// for normal map stack, bounds has the domain boundaries applied
-	kernel_apply_map_stack_to_W_custom_part_1<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX, ChiY, Dev_Complex_fine, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, bounds[0], bounds[1], bounds[2], bounds[3]);
+	kernel_apply_map_stack_to_W_custom_part_1<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, bounds[0], bounds[1], bounds[2], bounds[3]);
 
 	// loop over all maps in map stack
 	for(int K_RAM = stack_length_Nb_array_RAM; K_RAM >= 0; K_RAM--){
@@ -459,12 +446,12 @@ void apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_f
 						Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3);
 				if (K == stack_length_RAM%mem_RAM){
 					for(int k = stack_length - stack_length_RAM*map_stack_length - 1; k >= 0; k--){
-						kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX_stack, ChiY_stack, Dev_Complex_fine, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, k);
+						kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX_stack, ChiY_stack, Dev_Temp, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, k);
 					}
 				}
 				else{
 					for(int k = map_stack_length - 1; k >= 0; k--){
-						kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX_stack, ChiY_stack, Dev_Complex_fine, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, k);
+						kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX_stack, ChiY_stack, Dev_Temp, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, k);
 					}
 				}
 			}
@@ -476,38 +463,44 @@ void apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_f
 						Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1,
 						Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3);
 				for(int k = map_stack_length - 1; k >= 0; k--){
-					kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX_stack, ChiY_stack, Dev_Complex_fine, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, k);
+					kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX_stack, ChiY_stack, Dev_Temp, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, k);
 				}
 			}
 		}
 	}
 
 	// initial condition
-	kernel_apply_map_stack_to_W_part_3<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_real, Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, W_initial, simulation_num);
+	kernel_apply_map_stack_to_W_part_3<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_real, Dev_Temp, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, W_initial, simulation_num);
 
 }
 
 void copy_stack_to_device(int K_RAM, long int index, long int length_bytes, double *ChiX_stack, double *ChiY_stack, double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1, double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3) {
-	if (K_RAM == 0){
-		cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_0[index], length_bytes, cudaMemcpyHostToDevice);
-		cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_0[index], length_bytes, cudaMemcpyHostToDevice);
-	}
-	if (K_RAM == 1){
-		cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_1[index], length_bytes, cudaMemcpyHostToDevice);
-		cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_1[index], length_bytes, cudaMemcpyHostToDevice);
-	}
-	if (K_RAM == 2){
-		cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_2[index], length_bytes, cudaMemcpyHostToDevice);
-		cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_2[index], length_bytes, cudaMemcpyHostToDevice);
-	}
-	if (K_RAM == 3){
-		cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_3[index], length_bytes, cudaMemcpyHostToDevice);
-		cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_3[index], length_bytes, cudaMemcpyHostToDevice);
+	switch (K_RAM) {
+		case 0: {
+			cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_0[index], length_bytes, cudaMemcpyHostToDevice);
+			cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_0[index], length_bytes, cudaMemcpyHostToDevice);
+			break;
+		}
+		case 1: {
+			cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_1[index], length_bytes, cudaMemcpyHostToDevice);
+			cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_1[index], length_bytes, cudaMemcpyHostToDevice);
+			break;
+		}
+		case 2: {
+			cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_2[index], length_bytes, cudaMemcpyHostToDevice);
+			cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_2[index], length_bytes, cudaMemcpyHostToDevice);
+			break;
+		}
+		case 3: {
+			cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_3[index], length_bytes, cudaMemcpyHostToDevice);
+			cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_3[index], length_bytes, cudaMemcpyHostToDevice);
+			break;
+		}
 	}
 }
 
 
-__global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *ChiY, cufftDoubleComplex *x_y, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double xl, double xr, double yl, double yr)
+__global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *ChiY, double *x_y, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double xl, double xr, double yl, double yr)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -526,12 +519,13 @@ __global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *
 	
 	device_diffeo_interpolate(ChiX, ChiY, x, y, &x, &y, NXc, NYc, hc);
 	
-	x_y[In].x = x;
-	x_y[In].y = y;
+	// save in two points in array
+	x_y[2*In  ] = x;
+	x_y[2*In+1] = y;
 
 }
 
-__global__ void kernel_apply_map_stack_to_W_part_2(double *ChiX_stack, double *ChiY_stack, cufftDoubleComplex *x_y, int NXc, int NYc, double hc, int NXs, int NYs, int k)
+__global__ void kernel_apply_map_stack_to_W_part_2(double *ChiX_stack, double *ChiY_stack, double *x_y, int NXc, int NYc, double hc, int NXs, int NYs, int k)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -544,11 +538,11 @@ __global__ void kernel_apply_map_stack_to_W_part_2(double *ChiX_stack, double *C
 	long int N = NXc*NYc;	
 	
 	//for(int k = stack_length - 1; k >= 0; k--)
-	device_diffeo_interpolate(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x_y[In].x, x_y[In].y, &x_y[In].x, &x_y[In].y, NXc, NYc, hc);
+	device_diffeo_interpolate(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x_y[2*In], x_y[2*In+1], &x_y[2*In], &x_y[2*In+1], NXc, NYc, hc);
 	
 }
 
-__global__ void kernel_apply_map_stack_to_W_part_3(double *ws, cufftDoubleComplex *x_y, int NXs, int NYs, double hs, double *W_initial, int simulation_num)
+__global__ void kernel_apply_map_stack_to_W_part_3(double *ws, double *x_y, int NXs, int NYs, double hs, double *W_initial, int simulation_num)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -560,11 +554,11 @@ __global__ void kernel_apply_map_stack_to_W_part_3(double *ws, cufftDoubleComple
 	int In = iY*NXs + iX;
 	
 	#ifndef DISCRET
-		ws[In] = device_initial_W(x_y[In].x, x_y[In].y, simulation_num);
+		ws[In] = device_initial_W(x_y[2*In], x_y[2*In+1], simulation_num);
 	#endif
 	
 	#ifdef DISCRET
-		ws[In] = device_hermite_interpolate(W_initial, x_y[In].x, x_y[In].y, NXs, NYs, hs);
+		ws[In] = device_hermite_interpolate(W_initial, x_y[2*In], x_y[2*In+1], NXs, NYs, hs);
 	#endif
 	
 }
@@ -646,8 +640,8 @@ __global__ void kernel_apply_map_and_sample_from_hermite(double *ChiX, double *C
 		double moll_add = 0;  // other values will be added on here
 		for (int i_molly = 0; i_molly < 9; i_molly++) {
 			// choose 9 points in between the grid: SW, S, SE, W, C, E, NW, N, NE
-			x2 = x + hs*(-1 + i_molly%3)/3.0;
-			y2 = y + hs*(-1 + i_molly/3)/3.0;
+			x2 = x + hs*(-1 + i_molly%3)/2.0;
+			y2 = y + hs*(-1 + i_molly/3)/2.0;
 
 			device_diffeo_interpolate(ChiX, ChiY, x2, y2, &x2, &y2, NXc, NYc, hc);
 			moll_add += (1 + (i_molly%3)%2) * (1 + (i_molly/3)%2) * device_hermite_interpolate(H, x2, y2, NXh, NYh, hh)/16.0;

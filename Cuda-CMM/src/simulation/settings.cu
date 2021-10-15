@@ -46,8 +46,8 @@ void SettingsCMM::setPresets() {
 //	string time_integration = "RKThree";
 	string time_integration = "RKThreeMod";  // slightly faster with a bit better convergence
 
-	// mapupdate order, "2nd", "3rd", "4th"
-	string map_update_order = "3rd";
+	// mapupdate order, "2nd", "4th", "6th"
+	string map_update_order = "4th";
 
 	// mollification settings, stencil size, 0, 4, 8
 	int molly_stencil = 0;
@@ -56,6 +56,9 @@ void SettingsCMM::setPresets() {
 	int upsample_version = 1;
 	// in addition to the upsampling, we want to lowpass in fourier space by cutting high frequencies
 	double freq_cut_psi = (double)(grid_psi)/2.0;  // take into account, that frequencies are symmetric around N/2
+
+	// skip remapping, usefull for convergence tests
+	bool skip_remapping = false;
 
 	// set particles settings
 	bool particles = false;  // en- or disable particles
@@ -87,6 +90,7 @@ void SettingsCMM::setPresets() {
 	setMollyStencil(molly_stencil);
 	setUpsampleVersion(upsample_version);
 	setFreqCutPsi(freq_cut_psi);
+	setSkipRemapping(skip_remapping);
 	setParticles(particles);
 	setParticlesNum(particles_num);
 	setParticlesTimeIntegration(particles_time_integration);
@@ -134,6 +138,10 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "molly_stencil") setMollyStencil(stoi(value));
 			else if (command == "upsample_version") setUpsampleVersion(stoi(value));
 			else if (command == "freq_cut_psi") setFreqCutPsi(stod(value));
+			else if (command == "skip_remapping") {
+				if (value == "true" || value == "True" || value == "1") setSkipRemapping(true);
+				else if (value == "false" || value == "False" || value == "0") setSkipRemapping(false);
+			}
 			// true false handling
 			else if (command == "particles") {
 				if (value == "true" || value == "True" || value == "1") setParticles(true);
