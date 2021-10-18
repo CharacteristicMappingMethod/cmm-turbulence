@@ -16,11 +16,11 @@ endif
 
 
 # main targets
-SimulationCuda2d.out: settings.o cudagrid2d.o cmm-io.o cmm-fft.o cmm-hermite.o cmm-timestep.o cudaparticle2d.o cudamesure2d.o cudasimulation2d.o cudaeuler2d.o main2d.o 
+SimulationCuda2d.out: settings.o cudagrid2d.o cmm-io.o cmm-fft.o cmm-hermite.o cmm-timestep.o cmm-particles.o cudamesure2d.o cudasimulation2d.o cudaeuler2d.o main2d.o 
 	#
 	# Build main programm
 	#
-	$(NVCC_PATH) -O3 -g -lineinfo -o SimulationCuda2d.out settings.o cudagrid2d.o cmm-io.o cmm-fft.o cmm-hermite.o cmm-timestep.o cudaparticle2d.o cudamesure2d.o cudasimulation2d.o cudaeuler2d.o main2d.o -arch=$(GPU_ARCH) -lcufft -lcudadevrt -lcurand
+	$(NVCC_PATH) -O3 -g -lineinfo -o SimulationCuda2d.out settings.o cudagrid2d.o cmm-io.o cmm-fft.o cmm-hermite.o cmm-timestep.o cmm-particles.o cudamesure2d.o cudasimulation2d.o cudaeuler2d.o main2d.o -arch=$(GPU_ARCH) -lcufft -lcudadevrt -lcurand
 	#
 	# Remove all intermediate targets
 	#
@@ -49,8 +49,8 @@ cmm-hermite.o: src/numerical/cmm-hermite.cu src/numerical/cmm-hermite.h
 cmm-timestep.o: src/numerical/cmm-timestep.cu src/numerical/cmm-timestep.h
 	$(NVCC_PATH) -O3 -c -g -lineinfo src/numerical/cmm-timestep.cu -o cmm-timestep.o -arch=$(GPU_ARCH) --relocatable-device-code true 
 
-cudaparticle2d.o: src/particle/cudaparticle2d.cu src/particle/cudaparticle2d.h
-	$(NVCC_PATH) -O3 -c -g -lineinfo src/particle/cudaparticle2d.cu -o cudaparticle2d.o -arch=$(GPU_ARCH) --relocatable-device-code true                                              
+cmm-particles.o: src/numerical/cmm-particles.cu src/numerical/cmm-particles.h
+	$(NVCC_PATH) -O3 -c -g -lineinfo src/numerical/cmm-particles.cu -o cmm-particles.o -arch=$(GPU_ARCH) --relocatable-device-code true                                              
 	
 cudamesure2d.o: src/simulation/cudamesure2d.cu src/simulation/cudamesure2d.h
 	$(NVCC_PATH) -O3 -c -g -lineinfo src/simulation/cudamesure2d.cu -o cudamesure2d.o -arch=$(GPU_ARCH) --relocatable-device-code true                                              

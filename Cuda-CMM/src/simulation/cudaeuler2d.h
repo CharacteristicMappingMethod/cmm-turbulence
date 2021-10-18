@@ -5,7 +5,7 @@
 #include "../simulation/cmm-io.h"
 #include "../simulation/cudasimulation2d.h"
 #include "../grid/cudagrid2d.h"
-#include "../particle/cudaparticle2d.h"
+#include "../numerical/cmm-particles.h"
 #include "../simulation/cudamesure2d.h"
 #include "../simulation/cmm-fft.h"
 
