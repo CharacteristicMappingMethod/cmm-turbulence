@@ -1,43 +1,6 @@
 #include "cudagrid2d.h"
 
 
-Logger::Logger(string simulationName)
-{
-	fileName = "data/" + simulationName + "/log.txt";
-	file.open(fileName.c_str(), ios::out);
-	
-	if(!file)
-	{
-		cout<<"Unable to open log file.. exitting\n";
-		exit(0);
-	}
-	else
-	{
-		file<<simulationName<<endl;
-		file.close();
-	}
-}
-
-
-void Logger::push(string message)
-{
-	file.open(fileName.c_str(), ios::out | ios::app);
-	
-	if(file)
-	{
-		file<<"["<<currentDateTime()<<"]\t";
-		file<<message<<endl;
-		file.close(); 
-	}
-}
-
-
-void Logger::push()
-{
-	push(buffer);
-}
-
-
 TCudaGrid2D::TCudaGrid2D(int NX, int NY, double xRange)
 {
 	this->NX = NX;
@@ -136,17 +99,3 @@ __global__ void Dev_get_max_min(int len, double *var, double *min, double *max)
 	min[In] = var_min;
 	max[In] = var_max;
 }
-
-
-const std::string currentDateTime() {
-    time_t     now = time(0);
-    struct tm  tstruct;
-    char       buf[80];
-    tstruct = *localtime(&now);
-    // Visit http://en.cppreference.com/w/cpp/chrono/c/strftime
-    // for more information about date/time format
-    strftime(buf, sizeof(buf), "%Y-%m-%d.%X", &tstruct);
-
-    return buf;
-}
-

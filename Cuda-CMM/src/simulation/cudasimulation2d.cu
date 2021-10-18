@@ -18,10 +18,11 @@ __global__ void kernel_init_diffeo(double *ChiX, double *ChiY, int NX, int NY, d
 	ChiX[In] = iX*h;
 	ChiY[In] = iY*h;
 	
-	ChiX[1*N+In] = ChiY[2*N+In] = 1; 
+	// x dx = y dy = 1
+	ChiX[1*N+In] = ChiY[2*N+In] = 1;
 	
-	ChiX[2*N+In] = ChiY[1*N+In] = 
-	ChiX[3*N+In] = ChiY[3*N+In] = 0;
+	// x dy = y dx = dxdy = 0
+	ChiX[2*N+In] = ChiY[1*N+In] = ChiX[3*N+In] = ChiY[3*N+In] = 0;
 }
 
 
@@ -40,7 +41,7 @@ __global__ void k_sample(double *ChiX, double *ChiY, double *ChiX_s, double *Chi
 	double x = iX*hs;
 	double y = iY*hs;
 	
-	device_diffeo_interpolate(ChiX, ChiY, x, y, &x, &y, NXc, NYc, hc);		
+	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, NXc, NYc, hc);
 	
 	ChiX_s[In] = x;
 	ChiY_s[In] = y;
@@ -62,7 +63,7 @@ __global__ void kernel_incompressibility_check(double *ChiX, double *ChiY, doubl
 	double x = iX*hs + 0.5*hs;
 	double y = iY*hs + 0.5*hs;
 	
-	gradChi[In] = device_diffeo_grad(ChiX, ChiY, x, y, NXc, NYc, hc);
+	gradChi[In] = device_diffeo_grad_2D(ChiX, ChiY, x, y, NXc, NYc, hc);
 }
 
 
@@ -72,7 +73,7 @@ __global__ void kernel_incompressibility_check(double *ChiX, double *ChiY, doubl
  * For each foot point: advect using the stream function and time stepping scheme
  * At the end: combine results of all footpoints using specific map update scheme
  */
-__global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *phi, double *phi_p, double *phi_p_p, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num)			// time cost
+__global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *phi, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num)			// time cost
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -89,15 +90,11 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 	long int N = NXc*NYc;
 
 	//running through neighbours (unrolled loops)
-	double xep, yep;
-    double xf, yf;  // coordinates in loop
+	double x_ep[2], x_f[2];
 
 	// initialize new intermediate values as zeros, helpfull to not write to array every point
 	double Chi_full_x[4] = {0, 0, 0, 0};
 	double Chi_full_y[4] = {0, 0, 0, 0};
-
-	double u, v, u_p, v_p, u_p_p, v_p_p;  // velocity at current and previous time steps
-	double k1_x, k1_y, k2_x, k2_y, k3_x, k3_y; // different intermediate functions for RKThree
 
 	// factors on how the map will be updated in the end
 	double c[3];
@@ -113,13 +110,11 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 
 	// repeat for all footpoints, 4 for 2th order, 8 for 4th order and 12 for 6th order
 	int k_total;
-	if (map_update_order_num == 2) {
-		k_total = 12;
+	switch (map_update_order_num) {
+		case 2: { k_total = 12; break; }
+		case 1: { k_total = 8; break; }
+		case 0: { k_total = 4; break; }
 	}
-	else if (map_update_order_num == 1) {
-		k_total = 8;
-	}
-	else k_total = 4;
 
 	// footpoint loop
 	#pragma unroll
@@ -129,220 +124,48 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 
 		// get position of footpoint, NE, SE, SW, NW
 		// for higher orders repeat cross shape stencil with more points
-		xep = iX*hc + i_dist_now * ep*(1 - 2*((k_foot/2)%2));
-		yep = iY*hc + i_dist_now * ep*(1 - 2*(((k_foot+1)/2)%2));
-
-		xf = xep;
-		yf = yep;
+		x_ep[0] = iX*hc + i_dist_now * ep*(1 - 2*((k_foot/2)%2));
+		x_ep[1] = iY*hc + i_dist_now * ep*(1 - 2*(((k_foot+1)/2)%2));
 
 		// time integration - note, we go backwards in time!
 		switch (time_integration_num) {
-			case 0:  // EulerExp
-			{
-				device_hermite_interpolate_dx_dy_1(phi, xf, yf, &u, &v, NX_psi, NY_psi, h_psi);
-				xf = xep - dt * u;
-				yf = yep - dt * v;
-				break;
-			}
-			// Adam-Bashfords of order two, where a fixed point iteration with 10 iterations
-			case 1:  // ABTwo
-			{
-				double xf_p, yf_p;  // variables used for fixed-point iteration
-
-				// fixed point iteration for xf,yf using previous foot points (self-correction)
-	            #pragma unroll 10
-				for(int ctr = 0; ctr<10; ctr++)
-	            {
-					//step 1
-	                device_hermite_interpolate_dx_dy_1(phi_p, xf_p, yf_p, &u_p, &v_p, NX_psi, NY_psi, h_psi);
-
-	                xf_p = xf - dt * u_p;
-	                yf_p = yf - dt * v_p;
-
-					//step 2
-	                device_hermite_interpolate_dx_dy_1(phi_p, xf_p, yf_p, &u_p, &v_p, NX_psi, NY_psi, h_psi);
-	                device_hermite_interpolate_dx_dy_1(phi, xf , yf, &u, &v, NX_psi, NY_psi, h_psi);
-
-	                xf = xep - dt * (1.5*u - 0.5*u_p);
-	                yf = yep - dt * (1.5*v - 0.5*v_p);
-
-	            }
-	            break;
-			}
-			/*
-			 *  RKThree time step utilizing some intermediate steps
-			 *  Butcher tableau:
-			 *  1/2 | 1/2
-			 *   1  | -1   2
-			 *      | 1/6 2/3 1/6
-			 */
-			case 2:  // RKThree
-			{
-				// compute u_tilde(X,t_n+1)
-				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep, yep, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
-
-				// k1 = u_tilde(x,t_n+1) = 3*u_n - 3*u_n-1 + 1*u_n-2
-				k1_x = 3 * u + -3 * u_p + u_p_p;
-				k1_y = 3 * v + -3 * v_p + v_p_p;
-
-				// compute u_tilde(x - dt*k1/2, t_n+1 - dt/2)
-				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k1_x/2, yep - dt*k1_y/2, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
-
-				//k2 = u_tilde(x - k1 dt/2, t_n+1 - dt/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
-				k2_x = 1.875 * u + -1.25 * u_p + 0.375 * u_p_p;
-				k2_y = 1.875 * v + -1.25 * v_p + 0.375 * v_p_p;
-
-				//compute u_tilde(x + dt * k1 - 2*dt*k2, t_n+1 - dt)
-				device_hermite_interpolate_dx_dy_1(phi, xep + dt*k1_x - 2*dt*k2_x, yep + dt*k1_y - 2*dt*k2_y, &u, &v, NX_psi, NY_psi, h_psi);
-
-				// k3 = u_tilde(x = k1 dt - 2 k2 dt, t_n) = u
-
-				// build all RK-steps together
-				xf = xep - dt * (k1_x + 4*k2_x + u)/6.0;
-				yf = yep - dt * (k1_y + 4*k2_y + v)/6.0;
-				break;
-			}
-			/*
-			 *  classical RKFour time step
-			 *  Butcher tableau:
-			 *  1/2 | 1/2
-			 *  1/2 |  0  1/2
-			 *   1  |  0   0   1
-			 *      | 1/6 1/3 1/3 1/6
-			 */
-			case 3:  // RKFour
-			{
-				// compute u_tilde(X,t_n+1)
-				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep, yep, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
-
-				// k1 = u_tilde(x,t_n+1) = 3*u_n - 3*u_n-1 + 1*u_n-2
-				k1_x = 3 * u + -3 * u_p + u_p_p;
-				k1_y = 3 * v + -3 * v_p + v_p_p;
-
-				// compute u_tilde(x - dt*k1/2, t_n+1 - dt/2)
-				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k1_x/2.0, yep - dt*k1_y/2.0, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
-
-				//k2 = u_tilde(x - k1 dt/2, t_n+1 - dt/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
-				k2_x = 1.875 * u + -1.25 * u_p + 0.375 * u_p_p;
-				k2_y = 1.875 * v + -1.25 * v_p + 0.375 * v_p_p;
-
-				// compute u_tilde(x - dt*k2/2, t_n+1 - dt/2)
-				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k2_x/2.0, yep - dt*k2_y/2.0, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
-
-				//k3 = u_tilde(x - k2 dt/2, t_n+1 - dt/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
-				k3_x = 1.875 * u + -1.25 * u_p + 0.375 * u_p_p;
-				k3_y = 1.875 * v + -1.25 * v_p + 0.375 * v_p_p;
-
-				//compute u_tilde(x - dt*k3, t_n+1 - dt)
-				device_hermite_interpolate_dx_dy_1(phi, xep - dt*k3_x, yep - dt*k3_y, &u, &v, NX_psi, NY_psi, h_psi);
-
-				// k3 = u_tilde(x - k3 dt, t_n) = u
-
-				// build all RK-steps together
-				xf = xep - dt * (k1_x + 2*k2_x + 2*k3_x + u)/6.0;
-				yf = yep - dt * (k1_y + 2*k2_y + 2*k3_y + v)/6.0;
-				break;
-			}
-			/*
-			 * Modified RKThree with negative times, faster than classical
-			 * Butcher tableau:
-			 * 1 |  1
-			 * 2 |  4    -2
-			 *   | 5/12 -2/3 1/12
-			 */
-			case 4: // custom RKThree
-			{
-				// compute u_tilde(X,t_n+1)
-				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep, yep, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
-				// k1 = u_tilde(X, t_n+1) = 3*u_n - 3*u_n-1 + 1*u_n-2
-				k1_x = 3 * u + -3 * u_p + u_p_p;
-				k1_y = 3 * v + -3 * v_p + v_p_p;
-
-				// compute u_tilde(X - dt*k1, t_n)
-				device_hermite_interpolate_dx_dy_1(phi, xep - dt*k1_x, yep - dt*k1_y, &u, &v, NX_psi, NY_psi, h_psi);
-				// k2 = u_tilde(X - dt*k1, t_n)
-				k2_x = u;
-				k2_y = v;
-
-				// compute u_tilde(X - 4*dt*k1 + 2*dt*k2, t_n-1)
-				device_hermite_interpolate_dx_dy_1(phi_p, xep - 4*dt*k1_x + 2*dt*k2_x, yep - 4*dt*k1_y + 2*dt*k2_y, &u_p, &v_p, NX_psi, NY_psi, h_psi);
-				// k3 = u_tilde(X - 4*dt*k1 + 2*dt*k2, t_n-1)
-				k3_x = u_p;
-				k3_y = v_p;
-
-				// build all RK-steps together
-				// x = x_n - dt (5*k1 + 8*k2 - k3)/12
-				xf = xep - dt * (5*k1_x + 8*k2_x - k3_x)/12.0;
-				yf = yep - dt * (5*k1_y + 8*k2_y - k3_y)/12.0;
-				break;
-			}
-			/*
-			 *  modified RKFour time step of case IV with b=1/4 (Butcher (2016)), is faster than classical
-			 *  Butcher tableau:
-			 *   1 |   1
-			 *  1/2 | 3/8  1/8
-			 *   1  |  0  -1/3  4/3
-			 *      | 1/6 -1/12 2/3 1/4
-			 */
-			case 5:  // custom RKFour case IV
-			{
-				// compute u_tilde(X, t_n+1)
-				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep, yep, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
-
-				// k1 = u_tilde(X, t_n+1) = 3*u_n - 3*u_n-1 + 1*u_n-2
-				k1_x = 3 * u + -3 * u_p + u_p_p;
-				k1_y = 3 * v + -3 * v_p + v_p_p;
-
-				// compute u_tilde(X - dt*k1, t_n)
-				device_hermite_interpolate_dx_dy_1(phi, xep - dt*k1_x, yep - dt*k1_y, &u, &v, NX_psi, NY_psi, h_psi);
-				//k2 = u_tilde(X - k1 dt, t_n)
-				k2_x = u;
-				k2_y = v;
-
-				// compute u_tilde(X - 3/8 dt*k1 - 1/8 dt*k2, t_n+1/2)
-				device_hermite_interpolate_dx_dy_3(phi_p_p, phi_p, phi, xep - dt*k1_x*3.0/8.0 - dt*k2_x*1.0/8.0, yep - dt*k1_y*3.0/8.0 - dt*k2_y*1.0/8.0, &u_p_p, &v_p_p, &u_p, &v_p, &u, &v, NX_psi, NY_psi, h_psi);
-
-				//k3 = u_tilde(X - 3/8 dt*k1 - 1/8 dt*k2, t_n+1/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
-				k3_x = 1.875 * u + -1.25 * u_p + 0.375 * u_p_p;
-				k3_y = 1.875 * v + -1.25 * v_p + 0.375 * v_p_p;
-
-				//compute u_tilde(X + 1/3 dt*k2 - 4/3 dt*k3, t_n)
-				device_hermite_interpolate_dx_dy_1(phi, xep + dt*k2_x/3.0 - dt*k3_x*4.0/3.0, yep + dt*k2_y/3.0 - dt*k3_y*4.0/3.0, &u, &v, NX_psi, NY_psi, h_psi);
-
-				// k3 = u_tilde(X + 1/3 dt*k2 - 4/3 dt*k3, t_n) = u
-
-				// build all RK-steps together
-				// x = x_n - dt (2*k1 - k2 + 8*k3 + 3*k4)/12
-				xf = xep - dt * (2*k1_x - k2_x + 8*k3_x + 3*u)/12.0;
-				yf = yep - dt * (2*k1_y - k2_y + 8*k3_y + 3*v)/12.0;
-				break;
-			}
-			default:  // EulerExp on default
-			{
-				device_hermite_interpolate_dx_dy_1(phi, xf, yf, &u, &v, NX_psi, NY_psi, h_psi);
-				xf = xep - dt * u; yf = yep - dt * v;
-				break;
-			}
+			// EulerExp
+			case 10: { euler_exp(phi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+			// ABTwo
+			case 20: { adam_bashford_2_pc(phi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+			// ABTwo
+			case 21: { RK2_heun(phi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+			// RKThree
+			case 30: { RK3_classical(phi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+			// RKFour
+			case 40: { RK4_classical(phi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+			// custom RKThree
+			case 31: { RK3_optimized(phi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+			// custom RKFour case IV
+			case 41: { RK4_optimized(phi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+			// zero on default
+			default: { x_f[0] = x_f[1] = 0; }
 		}
+
 		// apply map deformation
-		device_diffeo_interpolate(ChiX, ChiY, xf, yf, &xf, &yf, NXc, NYc, hc);
+		device_diffeo_interpolate_2D(ChiX, ChiY, x_f[0], x_f[1], &x_f[0], &x_f[1], NXc, NYc, hc);
 
 		// directly apply map update
 		// chi values - central average with stencil +NE +SE +SW +NW
-		Chi_full_x[0] += xf * c[i_foot_now];
-		Chi_full_y[0] += yf * c[i_foot_now];
+		Chi_full_x[0] += x_f[0] * c[i_foot_now];
+		Chi_full_y[0] += x_f[1] * c[i_foot_now];
 
 		// chi grad x - central differences with stencil +NE +SE -SW -NW
-		Chi_full_x[1] += xf * c[i_foot_now] * (1 - 2*((k_foot/2)%2)) /ep/i_dist_now;
-		Chi_full_y[1] += yf * c[i_foot_now] * (1 - 2*((k_foot/2)%2)) /ep/i_dist_now;
+		Chi_full_x[1] += x_f[0] * c[i_foot_now] * (1 - 2*((k_foot/2)%2)) /ep/i_dist_now;
+		Chi_full_y[1] += x_f[1] * c[i_foot_now] * (1 - 2*((k_foot/2)%2)) /ep/i_dist_now;
 
 		// chi grad y - central differences with stencil +NE -SE -SW +NW
-		Chi_full_x[2] += xf * c[i_foot_now] * (1 - 2*(((k_foot+1)/2)%2)) /ep/i_dist_now;
-		Chi_full_y[2] += yf * c[i_foot_now] * (1 - 2*(((k_foot+1)/2)%2)) /ep/i_dist_now;
+		Chi_full_x[2] += x_f[0] * c[i_foot_now] * (1 - 2*(((k_foot+1)/2)%2)) /ep/i_dist_now;
+		Chi_full_y[2] += x_f[1] * c[i_foot_now] * (1 - 2*(((k_foot+1)/2)%2)) /ep/i_dist_now;
 
 		// chi grad x y - cross central differences with stencil +NE -SE +SW -NW
-		Chi_full_x[3] += xf * c[i_foot_now] * (1 - 2*(k_foot%2)) /ep/ep/i_dist_now/i_dist_now;
-		Chi_full_y[3] += yf * c[i_foot_now] * (1 - 2*(k_foot%2)) /ep/ep/i_dist_now/i_dist_now;
+		Chi_full_x[3] += x_f[0] * c[i_foot_now] * (1 - 2*(k_foot%2)) /ep/ep/i_dist_now/i_dist_now;
+		Chi_full_y[3] += x_f[1] * c[i_foot_now] * (1 - 2*(k_foot%2)) /ep/ep/i_dist_now/i_dist_now;
 	}
 
 	// can't use Chi because we still use it for diffeo_interpolate
@@ -375,16 +198,16 @@ __global__ void kernel_apply_map_stack_to_W(double *ChiX_stack, double *ChiY_sta
 	double x = iX*hs;
 	double y = iY*hs;
 	
-	device_diffeo_interpolate(ChiX, ChiY, x, y, &x, &y, NXc, NYc, hc);		
+	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, NXc, NYc, hc);
 	for(int k = stack_length - 1; k >= 0; k--)
-		device_diffeo_interpolate(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x, y, &x, &y, NXc, NYc, hc);		
+		device_diffeo_interpolate_2D(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x, y, &x, &y, NXc, NYc, hc);
 	
 	#ifndef DISCRET
 		ws[In] = device_initial_W(x, y, simulation_num);
 	#endif
 	
 	#ifdef DISCRET
-		ws[In] = device_hermite_interpolate(W_initial, x, y, NXs, NYs, hs);
+		ws[In] = device_hermite_interpolate_2D(W_initial, x, y, NXs, NYs, hs);
 		//ws[In] = device_initial_W_discret(x, y, W_initial, NXs, NYs);
 	#endif
 	
@@ -409,9 +232,9 @@ __global__ void kernel_apply_map_stack_to_W_custom(double *ChiX_stack, double *C
 	double x = xl + iX*htemp;
 	double y = yl + iY*htemp;
 	
-	device_diffeo_interpolate(ChiX, ChiY, x, y, &x, &y, NXc, NYc, hc);
+	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, NXc, NYc, hc);
 	for(int k = stack_length - 1; k >= 0; k--)
-		device_diffeo_interpolate(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x, y, &x, &y, NXc, NYc, hc);
+		device_diffeo_interpolate_2D(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x, y, &x, &y, NXc, NYc, hc);
 		
 	ws[In] = device_initial_W(x, y, simulation_num); //device_initial_W_discret(x, y)
 	
@@ -420,7 +243,7 @@ __global__ void kernel_apply_map_stack_to_W_custom(double *ChiX_stack, double *C
 	#endif
 	
 	#ifdef DISCRET
-		ws[In] = device_hermite_interpolate(W_initial, x, y, NXs, NYs, hs);
+		ws[In] = device_hermite_interpolate_2D(W_initial, x, y, NXs, NYs, hs);
 		//ws[In] = device_initial_W_discret(x, y, W_initial, NXs, NYs);
 	#endif
 	
@@ -517,7 +340,7 @@ __global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *
 	double x = xl + iX*htemp;
 	double y = yl + iY*htemp;
 	
-	device_diffeo_interpolate(ChiX, ChiY, x, y, &x, &y, NXc, NYc, hc);
+	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, NXc, NYc, hc);
 	
 	// save in two points in array
 	x_y[2*In  ] = x;
@@ -538,7 +361,7 @@ __global__ void kernel_apply_map_stack_to_W_part_2(double *ChiX_stack, double *C
 	long int N = NXc*NYc;	
 	
 	//for(int k = stack_length - 1; k >= 0; k--)
-	device_diffeo_interpolate(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x_y[2*In], x_y[2*In+1], &x_y[2*In], &x_y[2*In+1], NXc, NYc, hc);
+	device_diffeo_interpolate_2D(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x_y[2*In], x_y[2*In+1], &x_y[2*In], &x_y[2*In+1], NXc, NYc, hc);
 	
 }
 
@@ -558,7 +381,7 @@ __global__ void kernel_apply_map_stack_to_W_part_3(double *ws, double *x_y, int 
 	#endif
 	
 	#ifdef DISCRET
-		ws[In] = device_hermite_interpolate(W_initial, x_y[2*In], x_y[2*In+1], NXs, NYs, hs);
+		ws[In] = device_hermite_interpolate_2D(W_initial, x_y[2*In], x_y[2*In+1], NXs, NYs, hs);
 	#endif
 	
 }
@@ -585,9 +408,9 @@ __global__ void kernel_compare_vorticity_with_initial(double *ChiX_stack, double
 	double x = iX*hs;
 	double y = iY*hs;
 	
-	device_diffeo_interpolate(ChiX, ChiY, x, y, &x, &y, NXc, NYc, hc);		
+	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, NXc, NYc, hc);
 	for(int k = stack_length - 1; k >= 0; k--)
-		device_diffeo_interpolate(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x, y, &x, &y, NXc, NYc, hc);		
+		device_diffeo_interpolate_2D(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x, y, &x, &y, NXc, NYc, hc);
 	
 	error[In] = fabs(device_initial_W(x, y, simulation_num) - device_initial_W(iX*hs, iY*hs, simulation_num));
 }
@@ -618,15 +441,15 @@ __global__ void kernel_apply_map_and_sample_from_hermite(double *ChiX, double *C
 	 */
 	if (molly_stencil == 4) {
 		// compute main points
-		device_diffeo_interpolate(ChiX, ChiY, x, y, &x2, &y2, NXc, NYc, hc);
-		double moll_add = device_hermite_interpolate(H, x2, y2, NXh, NYh, hh)/3.0;  // other values will be added on here
+		device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x2, &y2, NXc, NYc, hc);
+		double moll_add = device_hermite_interpolate_2D(H, x2, y2, NXh, NYh, hh)/3.0;  // other values will be added on here
 		for (int i_molly = 0; i_molly < 4; i_molly++) {
 			// choose 4 points in between the grid: W, E, S, N
 			x2 = x + hs/2.0*((i_molly/2+1)%2) * (-1 + 2*(i_molly%2));  // -1 +1  0  0
 			y2 = y + hs/2.0*((i_molly/2  )%2) * (-1 + 2*(i_molly%2));  //  0  0 -1 +1
 
-			device_diffeo_interpolate(ChiX, ChiY, x2, y2, &x2, &y2, NXc, NYc, hc);
-			moll_add += device_hermite_interpolate(H, x2, y2, NXh, NYh, hh)/6.0;
+			device_diffeo_interpolate_2D(ChiX, ChiY, x2, y2, &x2, &y2, NXc, NYc, hc);
+			moll_add += device_hermite_interpolate_2D(H, x2, y2, NXh, NYh, hh)/6.0;
 		}
 		fs[In] = moll_add;
 	}
@@ -643,16 +466,16 @@ __global__ void kernel_apply_map_and_sample_from_hermite(double *ChiX, double *C
 			x2 = x + hs*(-1 + i_molly%3)/2.0;
 			y2 = y + hs*(-1 + i_molly/3)/2.0;
 
-			device_diffeo_interpolate(ChiX, ChiY, x2, y2, &x2, &y2, NXc, NYc, hc);
-			moll_add += (1 + (i_molly%3)%2) * (1 + (i_molly/3)%2) * device_hermite_interpolate(H, x2, y2, NXh, NYh, hh)/16.0;
+			device_diffeo_interpolate_2D(ChiX, ChiY, x2, y2, &x2, &y2, NXc, NYc, hc);
+			moll_add += (1 + (i_molly%3)%2) * (1 + (i_molly/3)%2) * device_hermite_interpolate_2D(H, x2, y2, NXh, NYh, hh)/16.0;
 		}
 		fs[In] = moll_add;
 	}
 	// else, assume no mollification
 	else {
 		double x2, y2;
-		device_diffeo_interpolate(ChiX, ChiY, x, y, &x2, &y2, NXc, NYc, hc);
-		fs[In] = device_hermite_interpolate(H, x2, y2, NXh, NYh, hh);
+		device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x2, &y2, NXc, NYc, hc);
+		fs[In] = device_hermite_interpolate_2D(H, x2, y2, NXh, NYh, hh);
 	}
 }
 
@@ -671,8 +494,10 @@ __device__ double device_initial_W(double x, double y, int simulation_num)
 	switch (simulation_num) {
 		case 0:  // 4_nodes
 		{
-			x = x - (x>0)*((int)(x/twoPI))*twoPI - (x<0)*((int)(x/twoPI)-1)*twoPI;
-			y = y - (y>0)*((int)(y/twoPI))*twoPI - (y<0)*((int)(y/twoPI)-1)*twoPI;
+			x -= floor(x/twoPI)*twoPI;
+			y -= floor(y/twoPI)*twoPI;
+//			x += x - (x>0)*((int)(x/twoPI))*twoPI - (x<0)*((int)(x/twoPI)-1)*twoPI;
+//			y += y - (y>0)*((int)(y/twoPI))*twoPI - (y<0)*((int)(y/twoPI)-1)*twoPI;
 
 			return cos(x) + cos(y) + 0.6*cos(2*x) + 0.2*cos(3*x);
 			break;
@@ -743,10 +568,12 @@ __device__ double device_initial_W(double x, double y, int simulation_num)
 		}
 		case 5:  // turbulence_gaussienne
 		{
-			x = fmod(x, twoPI);
-			x = (x < 0)*(twoPI+x) + (x > 0)*(x);
-			y = fmod(y, twoPI);
-			y = (y < 0)*(twoPI+y) + (y > 0)*(y);
+			x -= floor(x/twoPI)*twoPI;
+			y -= floor(y/twoPI)*twoPI;
+//			x = fmod(x, twoPI);
+//			x = (x < 0)*(twoPI+x) + (x > 0)*(x);
+//			y = fmod(y, twoPI);
+//			y = (y < 0)*(twoPI+y) + (y > 0)*(y);
 			int NB_gaus = 8;		//NB_gaus = 6;sigma = 0.24;
 			double sigma = 0.2;
 			double ret = 0;
@@ -770,6 +597,20 @@ __device__ double device_initial_W(double x, double y, int simulation_num)
 			//curand_init(floor(y * 16384) * 16384 + floor(x * 16384), 0, 0, &state);
 			//ret *= 1+((double)(curand(&state)%1000)-500)/100000;
 			return ret - 0.008857380480028442;
+			break;
+		}
+		// u(x,y)= - y 1/(nu^2 t^2) exp(-(x^2+y^2)/(4 nu t))
+		// v(x,y)= + x 1/(nu^2 t^2) exp(-(x^2+y^2)/(4 nu t))
+		case 6:  // shielded vortex
+		{
+			double nu = 5e-1;
+			double t = 1;
+
+			// compute distance from center
+			double x_r = PI-x; double y_r = PI-y;
+
+			// build vorticity
+			return (4*nu*t - x_r*x_r - y_r*y_r) / (2*nu*nu*nu*t*t*t) * exp(-(x_r*x_r + y_r*y_r)/(4*nu*t));
 			break;
 		}
 		default:  //default case goes to stationary

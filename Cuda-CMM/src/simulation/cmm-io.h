@@ -45,6 +45,20 @@ using namespace std;
 	void writeTimeVariable(string workspace, string sim_name, string file_name, string i_num, double *Host_save, double *Dev_save, TCudaGrid2D *Grid_save);
 	void writeParticles(SettingsCMM SettingsMain, string file_name, string i_num, double *Host_particles_pos, double *Dev_particles_pos, double *Tau_p, int Nb_Tau_p);
 
+	class Logger
+	{
+	public:
+		Logger(string simulationName);
+		void push(string message);
+		void push();
+		char buffer[1024];
+
+	private:
+		string fileName;
+		ofstream file;
+	};
+
+	const string currentDateTime();
 #endif
 
 #endif

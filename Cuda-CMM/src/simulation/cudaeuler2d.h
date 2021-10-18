@@ -9,6 +9,9 @@
 #include "../simulation/cudamesure2d.h"
 #include "../simulation/cmm-fft.h"
 
+#define COPY_OLD_1
+//#define COPY_OLD_2
+
 #ifdef __CUDACC__
 
 //calculate a new inital condition for hermite	by applying full map stack

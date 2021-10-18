@@ -31,6 +31,7 @@ private:
 	int Nb_array_RAM;
 	// specific
 	string time_integration; int time_integration_num;
+	int lagrange_order;
 	string map_update_order; int map_update_order_num;
 	int molly_stencil;
 	int upsample_version;
@@ -90,6 +91,7 @@ public:
 		else if(initialCondition == "three_vortices") initial_condition_num = 3;
 		else if(initialCondition == "single_shear_layer") initial_condition_num = 4;
 		else if(initialCondition == "turbulence_gaussienne") initial_condition_num = 5;
+		else if(initialCondition == "shielded_vortex") initial_condition_num = 6;
 		else initial_condition_num = -1;
 	}
 	int getInitialConditionNum() const { return initial_condition_num; }
@@ -136,15 +138,19 @@ public:
 	string getTimeIntegration() const { return time_integration; }
 	void setTimeIntegration(string timeIntegration) {
 		time_integration = timeIntegration;
-		if (timeIntegration == "EulerExp") time_integration_num = 0;
-		else if (timeIntegration == "ABTwo") time_integration_num = 1;
-		else if (timeIntegration == "RKThree") time_integration_num = 2;
-		else if (timeIntegration == "RKFour") time_integration_num = 3;
-		else if (timeIntegration == "RKThreeMod") time_integration_num = 4;
-		else if (timeIntegration == "RKFourMod") time_integration_num = 5;
+		if (timeIntegration == "EulerExp") { time_integration_num = 10; if (getLagrangeOrder() < 1) lagrange_order = 1; }
+		else if (timeIntegration == "RK2") { time_integration_num = 21; if (getLagrangeOrder() < 2) lagrange_order = 2; }
+		else if (timeIntegration == "AB2") { time_integration_num = 20; if (getLagrangeOrder() < 2) lagrange_order = 2; }
+		else if (timeIntegration == "RK3") { time_integration_num = 30; if (getLagrangeOrder() < 3) lagrange_order = 3; }
+		else if (timeIntegration == "RK4") { time_integration_num = 40; if (getLagrangeOrder() < 4) lagrange_order = 4; }
+		else if (timeIntegration == "RK3Mod") { time_integration_num = 31; if (getLagrangeOrder() < 3) lagrange_order = 3; }
+		else if (timeIntegration == "RK4Mod") { time_integration_num = 41; if (getLagrangeOrder() < 4) lagrange_order = 4; }
 		else time_integration_num = -1;
 	}
 	int getTimeIntegrationNum() const { return time_integration_num; }
+
+	// lagrange order set indirectly from map and particle time integration
+	int getLagrangeOrder() const { return lagrange_order; }
 
 	// skip remapping
 	bool getSkipRemapping() const { return skip_remapping; }
@@ -156,13 +162,13 @@ public:
 	int getParticlesNum() const { return particles_num; }
 	void setParticlesNum(int particlesNum) { particles_num = particlesNum; }
 	string getParticlesTimeIntegration() const { return particles_time_integration; }
-	void setParticlesTimeIntegration(string particlesTimeIntegration) {
-		particles_time_integration = particlesTimeIntegration;
-		if (particlesTimeIntegration == "EulerExp") particles_time_integration_num = 0;
-		else if (particlesTimeIntegration == "EulerMid") particles_time_integration_num = 1;
-		else if (particlesTimeIntegration == "RKThree") particles_time_integration_num = 2;
-		else if (particlesTimeIntegration == "NicolasMid") particles_time_integration_num = -2;
-		else if (particlesTimeIntegration == "NicolasRKThree") particles_time_integration_num = -3;
+	void setParticlesTimeIntegration(string pTimeIntegration) {
+		particles_time_integration = pTimeIntegration;
+		if (pTimeIntegration == "EulerExp") { particles_time_integration_num = 10; if (getLagrangeOrder() < 1) lagrange_order = 1; }
+		else if (pTimeIntegration == "Heun") { particles_time_integration_num = 20; if (getLagrangeOrder() < 2) lagrange_order = 2; }
+		else if (pTimeIntegration == "RK3") { particles_time_integration_num = 30; if (getLagrangeOrder() < 3) lagrange_order = 3; }
+		else if (pTimeIntegration == "NicolasMid") { particles_time_integration_num = 25; if (getLagrangeOrder() < 2) lagrange_order = 2; }
+		else if (pTimeIntegration == "NicolasRK3") { particles_time_integration_num = 35; if (getLagrangeOrder() < 3) lagrange_order = 3; }
 		else particles_time_integration_num = -1;
 	}
 	int getParticlesTimeIntegrationNum() const { return particles_time_integration_num; }

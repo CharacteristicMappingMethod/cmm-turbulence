@@ -77,7 +77,7 @@ void Compute_Palinstrophy(TCudaGrid2D *Grid_coarse, double *Pal, double *W_real,
 
 	double *Host_W_coarse_real_dx_dy = new double[2*Grid_coarse->N];
 	
-	k_real_to_comp<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(W_real, Dev_Hat, Grid_coarse->NX, Grid_coarse->NY);
+	real_to_comp(W_real, Dev_Hat, Grid_coarse->N);
 	cufftExecZ2Z(cufftPlan_coarse, Dev_Hat, Dev_Complex, CUFFT_FORWARD);	
 	k_normalize<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Complex, Grid_coarse->NX, Grid_coarse->NY);
 	
@@ -101,7 +101,7 @@ void Compute_Palinstrophy(TCudaGrid2D *Grid_coarse, double *Pal, double *W_real,
 }
 
 
-// compute palinstrophy using fourier transformations - a bit expensive but ca marche
+// compute palinstrophy using fourier transformations - a bit expensive with two temporary arrays but ca marche
 void Compute_Palinstrophy_fourier(TCudaGrid2D *Grid_coarse, double *Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftDoubleComplex *Dev_Temp_C2, cufftHandle cufftPlan_coarse){
 
 	double *Host_W_coarse_real_dx_dy = new double[2*Grid_coarse->N];
@@ -246,13 +246,13 @@ __global__ void iNDFT_2D(cufftDoubleComplex *X_k, double *x_n, double *p_n, int 
 
 void Laplacian_vort(TCudaGrid2D *Grid_fine, double *Dev_W_fine, cufftDoubleComplex *Dev_Complex_fine, cufftDoubleComplex *Dev_Hat_fine, double *Dev_lap_fine_real, cufftDoubleComplex *Dev_lap_fine_complex, cufftDoubleComplex *Dev_lap_fine_hat, cufftHandle cufftPlan_fine){
 
-    k_real_to_comp<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_W_fine, Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY);
+    real_to_comp(Dev_W_fine, Dev_Complex_fine, Grid_fine->N);
     cufftExecZ2Z(cufftPlan_fine, Dev_Complex_fine, Dev_Hat_fine, CUFFT_FORWARD);
     k_normalize<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY);
 
     k_fft_lap<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Hat_fine, Dev_lap_fine_hat, Grid_fine->NX, Grid_fine->NY, Grid_fine->h);
     cufftExecZ2Z(cufftPlan_fine, Dev_lap_fine_hat, Dev_lap_fine_complex, CUFFT_INVERSE);
-    k_comp_to_real<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_lap_fine_complex, Dev_lap_fine_real, Grid_fine->NX, Grid_fine->NY);
+    comp_to_real(Dev_lap_fine_complex, Dev_lap_fine_real, Grid_fine->N);
 
 }
 

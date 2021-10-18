@@ -20,6 +20,8 @@
 	//	__device__ cufftComplex CB_Input_iLap(void *dataIn, size_t offset, void *callerInfo, void *sharedPtr);
 
 	//variable type conversion
+	void real_to_comp(double *varR, cufftDoubleComplex *varC, long int N);
+	void comp_to_real(cufftDoubleComplex *varC, double *varR, long int N);
 	__global__ void k_real_to_comp(double *varR, cufftDoubleComplex *varC, int NX, int NY);
 	__global__ void k_comp_to_real(cufftDoubleComplex *varC, double *varR, int NX, int NY);
 	__global__ void k_real_to_comp_H(double *varR, cufftDoubleComplex *varC, int NX, int NY);

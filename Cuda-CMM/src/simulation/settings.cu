@@ -42,9 +42,14 @@ void SettingsCMM::setPresets() {
 
 
 	// set specific settings
-	// Time integration, define by name, "RKThree", "ABTwo", "EulerExp", "RKFour"
-//	string time_integration = "RKThree";
-	string time_integration = "RKThreeMod";  // slightly faster with a bit better convergence
+	/*
+	 * Time integration
+	 * First order: "EulerExp"
+	 * Second order: "AB2", "RK2"
+	 * Third order: "RK3", "RK3Mod"
+	 * Fourth order: "RK4", "RK4Mod"
+	 */
+	string time_integration = "RK3";
 
 	// mapupdate order, "2nd", "4th", "6th"
 	string map_update_order = "4th";
@@ -55,36 +60,31 @@ void SettingsCMM::setPresets() {
 	// for now we have two different upsample versions, upsample on vorticity and psi (1) or only psi (0)
 	int upsample_version = 1;
 	// in addition to the upsampling, we want to lowpass in fourier space by cutting high frequencies
-	double freq_cut_psi = (double)(grid_psi)/2.0;  // take into account, that frequencies are symmetric around N/2
+	double freq_cut_psi = (double)(grid_coarse)/2.0;  // take into account, that frequencies are symmetric around N/2
 
 	// skip remapping, usefull for convergence tests
 	bool skip_remapping = false;
 
 	// set particles settings
 	bool particles = false;  // en- or disable particles
-	// tau_p has to be modified in code, since it contains an array and i dont want to hardcode it here
+	// tau_p has to be modified in cudaeuler, since it contains an array and i dont want to hardcode it here
 	int particles_num = 1000;  // number of particles
-	// Time integration for particles, define by name, "EulerExp", "EulerMid", "RKThree", "NicolasMid", "NicolasRKThree"
-	string particles_time_integration = "RKThree";
+	// Time integration for particles, define by name, "EulerExp", "Heun", "RK3", "NicolasMid", "NicolasRK3"
+	string particles_time_integration = "RK3";
 
 
+	// make sure that not initialized values are set
+	lagrange_order = 0;
 	// now set everything
-	setWorkspace(workspace);
-	setSimName(sim_name);
-	setGridCoarse(grid_coarse);
-	setGridFine(grid_fine);
-	setGridPsi(grid_psi);
+	setWorkspace(workspace); setSimName(sim_name);
+	setGridCoarse(grid_coarse); setGridFine(grid_fine); setGridPsi(grid_psi);
 	setFinalTime(final_time);
-	setFactorDtByGrid(factor_dt_by_grid);
-	setStepsPerSec(steps_per_sec);
-	setSnapshotsPerSec(snapshots_per_sec);
-	setSetDtBySteps(set_dt_by_steps);
+	setFactorDtByGrid(factor_dt_by_grid); setStepsPerSec(steps_per_sec);
+	setSnapshotsPerSec(snapshots_per_sec); setSetDtBySteps(set_dt_by_steps);
 	setInitialCondition(initial_condition);
 	setIncompThreshold(incomp_threshhold);
 	setMapEpsilon(map_epsilon);
-	setMemRamGpuRemaps(mem_RAM_GPU_remaps);
-	setMemRamCpuRemaps(mem_RAM_CPU_remaps);
-	setNbArrayRam(Nb_array_RAM);
+	setMemRamGpuRemaps(mem_RAM_GPU_remaps); setMemRamCpuRemaps(mem_RAM_CPU_remaps); setNbArrayRam(Nb_array_RAM);
 	setTimeIntegration(time_integration);
 	setMapUpdateOrder(map_update_order);
 	setMollyStencil(molly_stencil);
@@ -92,8 +92,10 @@ void SettingsCMM::setPresets() {
 	setFreqCutPsi(freq_cut_psi);
 	setSkipRemapping(skip_remapping);
 	setParticles(particles);
-	setParticlesNum(particles_num);
-	setParticlesTimeIntegration(particles_time_integration);
+	if (particles) {
+		setParticlesNum(particles_num);
+		setParticlesTimeIntegration(particles_time_integration);
+	}
 }
 
 

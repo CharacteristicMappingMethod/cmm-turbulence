@@ -25,22 +25,22 @@
 	//a jump is added to diffeo on warping points
 	
 	
-	__device__ double device_hermite_mult(double *H, double b[][4], int I[], long int N, double h);
-	__device__ double device_hermite_mult(double *H, double bX[], double bY[], int I[], long int N, double h);
-		
-//	__global__ void kernel_hermite_interpolation(double *H, double *F, int NXH, int NYH, int NXF, int NYF, double hH, double hF);		//interpolation test
-	
-	__device__ double device_hermite_interpolate   (double *H, double x, double y, int NX, int NY, double h);
-	__device__ double device_hermite_interpolate_dx(double *H, double x, double y, int NX, int NY, double h);
-	__device__ double device_hermite_interpolate_dy(double *H, double x, double y, int NX, int NY, double h);
-	
-	__device__ void  device_hermite_interpolate_dx_dy(double *H1, double x, double y, double *fx, double *fy, int NX, int NY, double h);
-	__device__ void  device_hermite_interpolate_dx_dy_1(double *H1, double x, double y, double *u1, double *v1, int NX, int NY, double h);  // make it easier for RKthree, avoid redundant operations
-	__device__ void  device_hermite_interpolate_dx_dy_3(double *H1, double *H2, double *H3, double x, double y, double *u1, double *v1, double *u2, double *v2, double *u3, double *v3, int NX, int NY, double h);  // make it easier for RKthree, avoid redundant operations
-
-	__device__ void  device_diffeo_interpolate(double *Hx, double *Hy, double x, double y, double *x2,  double *y2, int NX, int NY, double h);
-	__device__ double device_diffeo_grad(double *Hx, double *Hy, double x, double y, int NX, int NY, double h);
-	
+//	__device__ double device_hermite_mult(double *H, double b[][4], int I[], long int N, double h);
+//	__device__ double device_hermite_mult(double *H, double bX[], double bY[], int I[], long int N, double h);
+//
+////	__global__ void kernel_hermite_interpolation(double *H, double *F, int NXH, int NYH, int NXF, int NYF, double hH, double hF);		//interpolation test
+//
+//	__device__ double device_hermite_interpolate   (double *H, double x, double y, int NX, int NY, double h);
+//	__device__ double device_hermite_interpolate_dx(double *H, double x, double y, int NX, int NY, double h);
+//	__device__ double device_hermite_interpolate_dy(double *H, double x, double y, int NX, int NY, double h);
+//
+//	__device__ void  device_hermite_interpolate_dx_dy(double *H1, double x, double y, double *fx, double *fy, int NX, int NY, double h);
+//
+//	__device__ void device_hermite_interpolate_dx_dy_l(double *H, double *x, double *u, int NX, int NY, double h, int n_l);
+//
+//	__device__ void device_diffeo_interpolate(double *Hx, double *Hy, double x, double y, double *x2,  double *y2, int NX, int NY, double h);
+//	__device__ double device_diffeo_grad(double *Hx, double *Hy, double x, double y, int NX, int NY, double h);
+//
 	
 #endif
 

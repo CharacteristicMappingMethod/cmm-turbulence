@@ -3,8 +3,6 @@
 
 
 
-
-
 /******************************************************************************************************************************
 *	
 * 	The original version of the Cuda code has been developed by Badal Yadav at Mc Gill U, Montreal, Canada.

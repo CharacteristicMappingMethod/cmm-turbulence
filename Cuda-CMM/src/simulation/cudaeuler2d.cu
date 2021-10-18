@@ -132,87 +132,6 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 
 	
 	/*******************************************************************
-	*								Test NDFT						   *
-	*******************************************************************/
-	
-	/*
-	printf("NDFT\n");
-	
-	int Np_particles = 16384;
-	int iNDFT_block, iNDFT_thread = 256;
-	iNDFT_block = Np_particles/256;
-	int *f_k, *Dev_f_k;
-	double *x_1_n, *x_2_n, *p_n, *Dev_x_1_n, *Dev_x_2_n, *Dev_p_n, *X_k_bis;
-	cufftDoubleComplex *X_k, *Dev_X_k, *Dev_X_k_derivative;
-	
-	x_1_n = new double[Np_particles];
-	x_2_n = new double[Np_particles];
-	p_n = new double[2*Np_particles];
-	f_k = new int[Grid_NDFT.NX];
-	X_k = new cufftDoubleComplex[Grid_NDFT.N];
-	X_k_bis = new double[2*Grid_NDFT.N];
-	cudaMalloc((void**)&Dev_x_1_n, sizeof(double)*Np_particles);
-	cudaMalloc((void**)&Dev_x_2_n, sizeof(double)*Np_particles);
-	cudaMalloc((void**)&Dev_p_n, sizeof(double)*2*Np_particles);
-	cudaMalloc((void**)&Dev_f_k, sizeof(int)*Np_particles);
-	cudaMalloc((void**)&Dev_X_k, Grid_NDFT.sizeNComplex);
-	cudaMalloc((void**)&Dev_X_k_derivative, Grid_NDFT.sizeNComplex);
-	
-	readRealToBinaryAnyFile(Np_particles, x_1_n, "src/Initial_W_discret/x1.data");
-	readRealToBinaryAnyFile(Np_particles, x_2_n, "src/Initial_W_discret/x2.data");
-	readRealToBinaryAnyFile(2*Np_particles, p_n, "src/Initial_W_discret/p.data");
-	
-	for(int i = 0; i < Grid_NDFT.NX; i+=1)
-		f_k[i] = i;
-	
-	cudaMemcpy(Dev_x_1_n, x_1_n, sizeof(double)*Np_particles, cudaMemcpyHostToDevice);
-	cudaMemcpy(Dev_x_2_n, x_2_n, sizeof(double)*Np_particles, cudaMemcpyHostToDevice);
-	cudaMemcpy(Dev_p_n, p_n, sizeof(double)*2*Np_particles, cudaMemcpyHostToDevice);
-	cudaMemcpy(Dev_f_k, f_k, sizeof(int)*Grid_NDFT.NX, cudaMemcpyHostToDevice);
-	
-	printf("NDFT v_x\n");
-	NDFT_2D<<<Grid_NDFT.blocksPerGrid, Grid_NDFT.threadsPerBlock>>>(Dev_X_k, Dev_x_1_n, Dev_p_n, Dev_f_k, Grid_NDFT.NX, Np_particles);
-	printf("iNDFT v_x\n");
-	iNDFT_2D<<<iNDFT_block, iNDFT_thread>>>(Dev_X_k, Dev_x_1_n, Dev_p_n, Dev_f_k, Grid_NDFT.NX);
-	cudaMemcpy(x_1_n, Dev_x_1_n, sizeof(double)*Np_particles, cudaMemcpyDeviceToHost);
-	writeRealToBinaryAnyFile(Np_particles, x_1_n, "src/Initial_W_discret/x_1_ifft.data");
-	
-	printf("k_fft_dx\n");
-	k_fft_dx<<<Grid_NDFT.blocksPerGrid, Grid_NDFT.threadsPerBlock>>>(Dev_X_k, Dev_X_k_derivative, Grid_NDFT.NX, Grid_NDFT.NY, Grid_NDFT.h);
-	printf("iNDFT v_x/dx\n");
-	iNDFT_2D<<<iNDFT_block, iNDFT_thread>>>(Dev_X_k_derivative, Dev_x_1_n, Dev_p_n, Dev_f_k, Grid_NDFT.NX);
-	cudaMemcpy(x_1_n, Dev_x_1_n, sizeof(double)*Np_particles, cudaMemcpyDeviceToHost);
-	writeRealToBinaryAnyFile(Np_particles, x_1_n, "src/Initial_W_discret/x_1_dx_ifft.data");
-	
-	cudaMemcpy(X_k, Dev_X_k_derivative, Grid_NDFT.sizeNComplex, cudaMemcpyDeviceToHost);
-	printf("%lf %lf %lf\n", X_k[0].x, X_k[1].x, X_k[Grid_NDFT.N-1].x);
-	//writeRealToBinaryAnyFile(2*Np_particles, X_k, "src/Initial_W_discret/X_k.data");
-	
-	for(int i = 0; i < Grid_NDFT.N; i+=1){
-		X_k_bis[2*i] 	= 	X_k[i].x;
-		X_k_bis[2*i+1] 	= 	X_k[i].y;
-	}
-	writeRealToBinaryAnyFile(2*Grid_NDFT.N, X_k_bis, "src/Initial_W_discret/X_k.data");
-	
-	
-	printf("NDFT v_y\n");
-	NDFT_2D<<<Grid_NDFT.blocksPerGrid, Grid_NDFT.threadsPerBlock>>>(Dev_X_k, Dev_x_2_n, Dev_p_n, Dev_f_k, Grid_NDFT.NX, Np_particles);
-	printf("iNDFT v_y\n");
-	iNDFT_2D<<<iNDFT_block, iNDFT_thread>>>(Dev_X_k, Dev_x_2_n, Dev_p_n, Dev_f_k, Grid_NDFT.NX);
-	cudaMemcpy(x_2_n, Dev_x_2_n, sizeof(double)*Np_particles, cudaMemcpyDeviceToHost);
-	writeRealToBinaryAnyFile(Np_particles, x_2_n, "src/Initial_W_discret/x_2_ifft.data");
-	
-	printf("k_fft_dy\n");
-	k_fft_dy<<<Grid_NDFT.blocksPerGrid, Grid_NDFT.threadsPerBlock>>>(Dev_X_k, Dev_X_k_derivative, Grid_NDFT.NX, Grid_NDFT.NY, Grid_NDFT.h);
-	printf("iNDFT v_y/dy\n");
-	iNDFT_2D<<<iNDFT_block, iNDFT_thread>>>(Dev_X_k_derivative, Dev_x_2_n, Dev_p_n, Dev_f_k, Grid_NDFT.NX);
-	cudaMemcpy(x_2_n, Dev_x_2_n, sizeof(double)*Np_particles, cudaMemcpyDeviceToHost);
-	writeRealToBinaryAnyFile(Np_particles, x_2_n, "src/Initial_W_discret/x_2_dy_ifft.data");
-	
-	printf("Fini NDFT\n");
-	*/
-	
-	/*******************************************************************
 	*							  Chi								   *
 	* 	Chi is an array that contains Chi, x1-derivative,		       *
 	* 	x2-derivative and x1x2-derivative   					       *
@@ -314,12 +233,9 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	* 																   *
 	*******************************************************************/
 	
-	//stream hermite on coarse computational grid
-	double *Dev_Psi_real, *Dev_Psi_real_previous, *Dev_Psi_real_previous_p;
-
-	cudaMalloc((void**) &Dev_Psi_real, 4*Grid_psi.sizeNReal);
-	cudaMalloc((void**) &Dev_Psi_real_previous, 4*Grid_psi.sizeNReal);
-	cudaMalloc((void**) &Dev_Psi_real_previous_p, 4*Grid_psi.sizeNReal);
+	//stream hermite on coarse computational grid, previous timesteps for lagrange interpolation included in array
+	double *Dev_Psi_real;
+	cudaMalloc((void**) &Dev_Psi_real, 4*SettingsMain.getLagrangeOrder()*Grid_psi.sizeNReal);
 
 	
 	/*******************************************************************
@@ -499,8 +415,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			Dev_ChiX, Dev_ChiY, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu,
 			Dev_W_H_fine_real, cufftPlan_fine, bounds, Dev_W_H_initial, SettingsMain.getInitialConditionNum(), Dev_Temp_C1, Dev_Temp_C2);
 	
-	// we need psi, psi_p and psi_p_p for particle initialization
-	// compute psi and store it in psi_p
+	// compute first psi
 	// compute stream hermite from vorticity, we have two different versions avaiable
 	if (SettingsMain.getUpsampleVersion() == 0) {
 		evaluate_stream_hermite(&Grid_coarse, &Grid_fine, &Grid_psi, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufftPlan_coarse, cufftPlan_psi, Dev_Temp_C1, Dev_Temp_C2, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
@@ -509,10 +424,13 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		evaluate_stream_hermite_2(&Grid_coarse, &Grid_fine, &Grid_psi, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufftPlan_coarse, cufftPlan_psi, Dev_Temp_C1, Dev_Temp_C2, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi(), Host_save);
 	}
     //evaulate_stream_hermite(&Grid_2048, &Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_2048, Dev_Psi_2048_previous, cufftPlan_2048, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
-    // set psi_p_p and psi_p after psi
-    cudaMemcpy(Dev_Psi_real_previous, Dev_Psi_real, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice);
-    cudaDeviceSynchronize();
-    cudaMemcpyAsync(Dev_Psi_real_previous_p, Dev_Psi_real_previous, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice, streams[1]);
+    // set previous psi value to first psi value
+	for (int i_lagrange = 1; i_lagrange < SettingsMain.getLagrangeOrder(); i_lagrange++) {
+		cudaMemcpyAsync(Dev_Psi_real + 4*Grid_psi.N*i_lagrange, Dev_Psi_real, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice, streams[i_lagrange]);
+	}
+//    if (lagrange_order > 1) cudaMemcpyAsync(Dev_Psi_real_p, Dev_Psi_real, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice, streams[1]);
+//    if (lagrange_order > 2) cudaMemcpyAsync(Dev_Psi_real_pp, Dev_Psi_real, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice, streams[2]);
+//	if (lagrange_order > 3) cudaMemcpyAsync(Dev_Psi_real_ppp, Dev_Psi_real, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice, streams[3]);
 
    /* cudaMemcpy(Dev_Psi_2048_previous_p, Dev_Psi_2048_previous, 4*Grid_2048.sizeNReal, cudaMemcpyDeviceToDevice);
     cudaDeviceSynchronize();*/
@@ -587,7 +505,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 
 		for(int index_tau_p = 1; index_tau_p < Nb_Tau_p; index_tau_p+=1){
 			Rescale<<<particle_block, particle_thread>>>(Nb_particles, LX, &Dev_particles_pos[2*Nb_particles*index_tau_p]);
-			Particle_advect_iner_ini<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h);
+			Particle_advect_inertia_init<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h);
 
 		}
 
@@ -655,32 +573,31 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 
 		// Particles advection
 	    if (SettingsMain.getParticles()) {
-			Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos, Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, SettingsMain.getParticlesTimeIntegrationNum());
+			Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos, Dev_Psi_real,
+					Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, SettingsMain.getParticlesTimeIntegrationNum());
+			// copy fine particle positions
 			cudaMemcpy(&Dev_particles_pos_fine_dt[(loop_ctr * Nb_fine_dt_particles * 2) % (2*prod_fine_dt_particles)], &Dev_particles_pos[2*Nb_particles*taup_fine_particles], 2*Nb_fine_dt_particles*sizeof(double), cudaMemcpyDeviceToDevice);
 			// loop for all tau p
-			for(int index_tau_p = 1; index_tau_p < Nb_Tau_p; index_tau_p+=1){
-
-				Particle_advect_inertia_2<<<particle_block, particle_thread>>>(Nb_particles, dt,
-						&Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p],
-						Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p,
-						Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h,
-						Tau_p[index_tau_p], SettingsMain.getParticlesTimeIntegrationNum());
+			for(int i_tau_p = 1; i_tau_p < Nb_Tau_p; i_tau_p+=1){
+				Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt,
+						Dev_particles_pos + 2*Nb_particles*i_tau_p, Dev_particles_vel + 2*Nb_particles*i_tau_p, Dev_Psi_real,
+						Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, Tau_p[i_tau_p], SettingsMain.getParticlesTimeIntegrationNum());
 			}
 		}
 
 		// map advection
 		kernel_advect_using_stream_hermite<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C2,
-				Dev_Psi_real, Dev_Psi_real_previous, Dev_Psi_real_previous_p, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_psi.NX, Grid_psi.NY, Grid_psi.h,
-				t, dt, SettingsMain.getMapEpsilon(), SettingsMain.getTimeIntegrationNum(), SettingsMain.getMapUpdateOrderNum());	// time cost
+				Dev_Psi_real, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_psi.NX, Grid_psi.NY, Grid_psi.h,
+				t, dt, SettingsMain.getMapEpsilon(), SettingsMain.getTimeIntegrationNum(), SettingsMain.getMapUpdateOrderNum());
 		// copy new map values onto the existing map
 		cudaMemcpyAsync(Dev_ChiX, (cufftDoubleReal*)Dev_Temp_C1, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice, streams[2]);
 		cudaMemcpyAsync(Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C2, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice, streams[3]);
 
         //copy Psi to Psi_previous and Psi_previous to Psi_previous_previous
-        cudaMemcpy(Dev_Psi_real_previous_p, Dev_Psi_real_previous, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice);
-        cudaDeviceSynchronize();
-        cudaMemcpyAsync(Dev_Psi_real_previous, Dev_Psi_real, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice, streams[1]);
-		
+		for (int i_lagrange = 1; i_lagrange < SettingsMain.getLagrangeOrder(); i_lagrange++) {
+			cudaMemcpy(Dev_Psi_real + 4*Grid_psi.N*(SettingsMain.getLagrangeOrder()-i_lagrange),
+					   Dev_Psi_real + 4*Grid_psi.N*(SettingsMain.getLagrangeOrder()-i_lagrange-1), 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice);
+		}
 
         /*cudaMemcpy(Dev_Psi_2048_previous_p, Dev_Psi_2048_previous, 4*Grid_2048.sizeNReal, cudaMemcpyDeviceToDevice);
         cudaDeviceSynchronize();
@@ -1060,8 +977,6 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 
 	// Psi
 	cudaFree(Dev_Psi_real);
-	cudaFree(Dev_Psi_real_previous);
-	cudaFree(Dev_Psi_real_previous_p);
 	
 	cudaFree(Dev_w_min);
 	cudaFree(Dev_w_max);
@@ -1129,7 +1044,11 @@ void translate_initial_condition_through_map_stack(TCudaGrid2D *Grid_coarse, TCu
 //			W_initial, simulation_num_c);
 	//kernel_apply_map_stack_to_W<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, W_real, stack_length, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, W_initial);
 	
-	k_real_to_comp<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>((cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C2, Grid_fine->NX, Grid_fine->NY);
+	#ifndef COPY_OLD_1
+		real_to_comp((cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C2, Grid_fine->N);
+	#else
+		k_real_to_comp<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>((cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C2, Grid_fine->NX, Grid_fine->NY);
+	#endif
 	cufftExecZ2Z(cufftPlan_fine, Dev_Temp_C2, Dev_Temp_C1, CUFFT_FORWARD);
 	k_normalize<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Temp_C1, Grid_fine->NX, Grid_fine->NY);
 
@@ -1163,16 +1082,17 @@ void evaluate_stream_hermite(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, T
 	// use Psi grid here for intermediate storage
 //	k_fft_cut_off_scale<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Temp_C2, Grid_coarse->NX, (double)(Grid_psi->NX)/3.0);
 
-	// cut high frequencies in fourier space, however not that much happens after zero move add from coarse grid
-	k_fft_cut_off_scale<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Temp_C2, Grid_psi->NX, freq_cut_psi);
 
 	cufftExecZ2Z(cufftPlan_coarse, Dev_Temp_C2, (cufftDoubleComplex*)Psi_real, CUFFT_INVERSE);
-	k_comp_to_real<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>((cufftDoubleComplex*)Psi_real, W_real, Grid_coarse->NX, Grid_coarse->NY);
+	comp_to_real((cufftDoubleComplex*)Psi_real, W_real, Grid_coarse->N);
 
 	// zero padding by moving all entries and creating a middle zone with zeros
-	// initialize zeros for padding for trash variable to be used, Grid_psi is needed but it can be set for fine too
-	cudaMemset(Dev_Temp_C1, 0, Grid_fine->sizeNComplex);
+	// initialize zeros for padding for trash variable to be used
+	cudaMemset(Dev_Temp_C1, 0, Grid_psi->sizeNComplex);
 	k_fft_grid_add<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid_coarse->NX, Grid_psi->NX);
+
+	// cut high frequencies in fourier space, however not that much happens after zero move add from coarse grid
+	k_fft_cut_off_scale<<<Grid_psi->blocksPerGrid, Grid_psi->threadsPerBlock>>>(Dev_Temp_C2, Grid_psi->NX, freq_cut_psi);
 
 	// Forming Psi hermite now on psi grid
 	k_fft_iLap<<<Grid_psi->blocksPerGrid, Grid_psi->threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C2, Grid_psi->NX, Grid_psi->NY, Grid_psi->h);												// Inverse laplacian in Fourier space
@@ -1198,12 +1118,12 @@ void evaluate_stream_hermite_2(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine,
 	// use Psi grid here for intermediate storage
 //	k_fft_cut_off_scale<<<Grid_psi->blocksPerGrid, Grid_psi->threadsPerBlock>>>(Dev_Temp_C2, Grid_psi->NX, (double)(Grid_psi->NX)/3.0);
 
-	// cut high frequencies in fourier space
-	k_fft_cut_off_scale<<<Grid_psi->blocksPerGrid, Grid_psi->threadsPerBlock>>>(Dev_Temp_C2, Grid_psi->NX, freq_cut_psi);
-
 	k_fft_grid_remove<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid_coarse->NX, Grid_psi->NX);
 	cufftExecZ2Z(cufftPlan_coarse, Dev_Temp_C1, (cufftDoubleComplex*)Psi_real, CUFFT_INVERSE);
-	k_comp_to_real<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>((cufftDoubleComplex*)Psi_real, W_real, Grid_coarse->NX, Grid_coarse->NY);
+	comp_to_real((cufftDoubleComplex*)Psi_real, W_real, Grid_coarse->N);
+
+	// cut high frequencies in fourier space
+	k_fft_cut_off_scale<<<Grid_psi->blocksPerGrid, Grid_psi->threadsPerBlock>>>(Dev_Temp_C2, Grid_psi->NX, freq_cut_psi);
 
 	// Forming Psi hermite on psi grid
 	k_fft_iLap<<<Grid_psi->blocksPerGrid, Grid_psi->threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid_psi->NX, Grid_psi->NY, Grid_psi->h);												// Inverse laplacian in Fourier space
@@ -1217,6 +1137,7 @@ void evaluate_stream_hermite_2(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine,
 // sample psi on a fixed grid
 void psi_upsampling(TCudaGrid2D *Grid, double *Dev_W,cufftDoubleComplex *Dev_Temp_C1, cufftDoubleComplex *Dev_Temp_C2, double *Dev_Psi, cufftHandle cufftPlan){
 	k_real_to_comp<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(Dev_W, Dev_Temp_C1, Grid->NX, Grid->NY);
+
 	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_FORWARD);
 	k_normalize<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(Dev_Temp_C2, Grid->NX, Grid->NY);
 
@@ -1233,18 +1154,21 @@ void fourier_hermite(TCudaGrid2D *Grid, cufftDoubleComplex *Dev_Temp_C1, double 
 	// start with dy derivative and store in position 3/4
 	k_fft_dy<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C2, Grid->NX, Grid->NY, Grid->h);													// y-derivative of the vorticity in Fourier space
 	cufftExecZ2Z(cufftPlan, Dev_Temp_C2, (cufftDoubleComplex*)Dev_Output, CUFFT_INVERSE);
-	k_comp_to_real<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>((cufftDoubleComplex*)Dev_Output, &Dev_Output[2*Grid->N], Grid->NX, Grid->NY);
+	comp_to_real((cufftDoubleComplex*)Dev_Output, Dev_Output + 2*Grid->N, Grid->N);
+
 	// reuse values from Trash_C2 and create dxdy, store in position 4/4
 	k_fft_dx<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(Dev_Temp_C2, (cufftDoubleComplex*)Dev_Output, Grid->NX, Grid->NY, Grid->h);
 	cufftExecZ2Z(cufftPlan, (cufftDoubleComplex*)Dev_Output, Dev_Temp_C2, CUFFT_INVERSE);
-	k_comp_to_real<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(Dev_Temp_C2, &Dev_Output[3*Grid->N], Grid->NX, Grid->NY);
+	comp_to_real(Dev_Temp_C2, Dev_Output + 3*Grid->N, Grid->N);
+
 	// we can go back to Trash_C1 and store the other two values normally, first normal values
 	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_INVERSE);
-	k_comp_to_real<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(Dev_Temp_C2, Dev_Output, Grid->NX, Grid->NY);
+	comp_to_real(Dev_Temp_C2, Dev_Output, Grid->N);
+
 	// now compute dx derivative and store it
 	k_fft_dx<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C2, Grid->NX, Grid->NY, Grid->h);													// x-derivative of the vorticity in Fourier space
 	cufftExecZ2Z(cufftPlan, Dev_Temp_C2, Dev_Temp_C1, CUFFT_INVERSE);
-	k_comp_to_real<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(Dev_Temp_C1, &Dev_Output[Grid->N], Grid->NX, Grid->NY);
+	comp_to_real(Dev_Temp_C1, Dev_Output + Grid->N, Grid->N);
 }
 
 

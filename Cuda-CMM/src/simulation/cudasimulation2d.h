@@ -1,13 +1,12 @@
 #ifndef __CUDA_SIMULATION_2D_H__
 #define __CUDA_SIMULATION_2D_H__
 
-#include "../hermite/cudahermite2d.h"
+#include "../numerical/cmm-hermite.h"
 #include "../grid/cudagrid2d.h"
+#include "../numerical/cmm-timestep.h"
 
-//fft operations testing
-void test_fft_operations();
-
-void recompute_output_files();	//read binary files storing diffeos and recompute output
+#include <curand.h>
+#include <curand_kernel.h>
 
 #ifdef __CUDACC__
 
@@ -27,7 +26,7 @@ void recompute_output_files();	//read binary files storing diffeos and recompute
 	
 	//map advection 
 	__global__ void kernel_advect_using_velocity_function(double *ChiX, double *ChiY, double *ChiDualX, double *ChiDualY, int NXc, int NYc, double hc, double t, double dt, double ep);
-	__global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *phi, double *phi_p, double *phi_p_p, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num);
+	__global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *phi, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num);
 	
 	
 	//map applications

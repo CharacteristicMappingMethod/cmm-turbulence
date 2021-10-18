@@ -16,11 +16,11 @@ endif
 
 
 # main targets
-SimulationCuda2d.out: settings.o cudagrid2d.o cmm-io.o cmm-fft.o cudahermite2d.o cudaparticle2d.o cudamesure2d.o cudasimulation2d.o cudaeuler2d.o main2d.o 
+SimulationCuda2d.out: settings.o cudagrid2d.o cmm-io.o cmm-fft.o cmm-hermite.o cmm-timestep.o cudaparticle2d.o cudamesure2d.o cudasimulation2d.o cudaeuler2d.o main2d.o 
 	#
 	# Build main programm
 	#
-	$(NVCC_PATH) -O3 -g -lineinfo -o SimulationCuda2d.out settings.o cudagrid2d.o cmm-io.o cmm-fft.o cudahermite2d.o cudaparticle2d.o cudamesure2d.o cudasimulation2d.o cudaeuler2d.o main2d.o -arch=$(GPU_ARCH) -lcufft -lcudadevrt -lcurand
+	$(NVCC_PATH) -O3 -g -lineinfo -o SimulationCuda2d.out settings.o cudagrid2d.o cmm-io.o cmm-fft.o cmm-hermite.o cmm-timestep.o cudaparticle2d.o cudamesure2d.o cudasimulation2d.o cudaeuler2d.o main2d.o -arch=$(GPU_ARCH) -lcufft -lcudadevrt -lcurand
 	#
 	# Remove all intermediate targets
 	#
@@ -41,10 +41,14 @@ cmm-io.o: src/simulation/cmm-io.cu src/simulation/cmm-fft.h
 cmm-fft.o: src/simulation/cmm-fft.cu src/simulation/cmm-fft.h
 	$(NVCC_PATH) -O3 -c -g -lineinfo src/simulation/cmm-fft.cu -o cmm-fft.o -arch=$(GPU_ARCH) --relocatable-device-code true 
 	
-cudahermite2d.o: src/hermite/cudahermite2d.cu src/hermite/cudahermite2d.h
-	$(NVCC_PATH) -O3 -c -g -lineinfo src/hermite/cudahermite2d.cu -o cudahermite2d.o -arch=$(GPU_ARCH) --relocatable-device-code true 
+cmm-hermite.o: src/numerical/cmm-hermite.cu src/numerical/cmm-hermite.h
+	$(NVCC_PATH) -O3 -c -g -lineinfo src/numerical/cmm-hermite.cu -o cmm-hermite.o -arch=$(GPU_ARCH) --relocatable-device-code true 
+
 
 # sub targets, dependent on other files
+cmm-timestep.o: src/numerical/cmm-timestep.cu src/numerical/cmm-timestep.h
+	$(NVCC_PATH) -O3 -c -g -lineinfo src/numerical/cmm-timestep.cu -o cmm-timestep.o -arch=$(GPU_ARCH) --relocatable-device-code true 
+
 cudaparticle2d.o: src/particle/cudaparticle2d.cu src/particle/cudaparticle2d.h
 	$(NVCC_PATH) -O3 -c -g -lineinfo src/particle/cudaparticle2d.cu -o cudaparticle2d.o -arch=$(GPU_ARCH) --relocatable-device-code true                                              
 	
