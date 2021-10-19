@@ -1,8 +1,4 @@
 #include "cudamesure2d.h"
-#include "../hermite/cudahermite2d.h"
-#include "../grid/cudagrid2d.h"
-
-
 
 
 __global__ void Compute_Energy(double *E, double *psi, int N, int NX, int NY, double h){

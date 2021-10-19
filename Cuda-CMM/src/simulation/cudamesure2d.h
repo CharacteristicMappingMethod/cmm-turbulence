@@ -2,6 +2,7 @@
 #define __CUDA_MESURE_2D_H__
 #include "../grid/cudagrid2d.h"
 #include "../simulation/cmm-fft.h"
+#include "../grid/cudagrid2d.h"
 
 
 //Lagrange polynomial with stencil

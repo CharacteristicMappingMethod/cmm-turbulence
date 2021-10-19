@@ -21,3 +21,6 @@
 
 # ignore all python scripts
 /Python/
+
+# ignore bin directory, because it's just going to be empty anyways for uploading
+/bin/
