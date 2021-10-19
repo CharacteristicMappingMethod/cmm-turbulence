@@ -1,12 +1,12 @@
 #include "cudaeuler2d.h"
-#include <unistd.h>
 
 
 void cuda_euler_2d(SettingsCMM SettingsMain)
 {
 	
 	// start clock as first thing to measure initializations too
-	clock_t begin = clock();
+	auto begin = std::chrono::high_resolution_clock::now();
+	// clock_t begin = clock();
 
 	/*******************************************************************
 	*						 	 Constants							   *
@@ -193,36 +193,19 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		Host_W_initial = new double[Grid_fine.N];
 		cudaMalloc((void**)&Dev_W_H_initial, 4*Grid_fine.sizeNReal);
 		
-		std::ostringstream fine_grid_scale_nb;
-		fine_grid_scale_nb<<fine_grid_scale;
+		readRealToBinaryAnyFile(Grid_fine.N, Host_W_initial, "src/Initial_W_discret/file2D_" + to_str(NX_fine) + ".bin");
 		
-		readRealToBinaryAnyFile(Grid_fine.N, Host_W_initial, "src/Initial_W_discret/file2D_" + fine_grid_scale_nb.str() + ".bin");
+		cudaMemcpy(Dev_W_H_initial, Host_W_initial, Grid_fine.sizeNReal, cudaMemcpyHostToDevice);
 		
-		cudaMemcpy(Dev_W_fine, Host_W_initial, Grid_fine.sizeNReal, cudaMemcpyHostToDevice);
-		
-		k_real_to_comp<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_W_fine, Dev_Complex_fine, Grid_fine.NX, Grid_fine.NY);
+		k_real_to_comp<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_W_H_initial, Dev_Complex_fine, Grid_fine.NX, Grid_fine.NY);
 		cufftExecZ2Z(cufftPlan_fine, Dev_Complex_fine, Dev_Temp_C1, CUFFT_FORWARD);
 		k_normalize<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_Temp_C1, Grid_fine.NX, Grid_fine.NY);
 		
 		// Hermite vorticity array : [vorticity, x-derivative, y-derivative, xy-derivative]
-		cudaMemcpy(Dev_W_H_initial, Dev_W_fine, Grid_fine.sizeNReal, cudaMemcpyDeviceToDevice);
-		
-		k_fft_dy<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_Temp_C1, Dev_Hat_fine_bis, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);													// y-derivative of the vorticity in Fourier space
-		cufftExecZ2Z(cufftPlan_fine, Dev_Hat_fine_bis, Dev_Complex_fine, CUFFT_INVERSE);
-		k_comp_to_real  <<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(&Dev_W_H_initial[2*Grid_fine.N], Dev_Complex_fine, Grid_fine.NX, Grid_fine.NY);
-		
-		k_fft_dx<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_Temp_C1, Dev_Hat_fine_bis, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);													// x-derivative of the vorticity in Fourier space
-		cufftExecZ2Z(cufftPlan_fine, Dev_Hat_fine_bis, Dev_Complex_fine, CUFFT_INVERSE);
-		k_comp_to_real  <<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(&Dev_W_H_initial[Grid_fine.N], Dev_Complex_fine, Grid_fine.NX, Grid_fine.NY);
-		
-		k_fft_dy<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_Hat_fine_bis, Dev_Temp_C1, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);													// y-derivative of x-derivative of of the vorticity in Fourier space
-		cufftExecZ2Z(cufftPlan_fine, Dev_Temp_C1, Dev_Complex_fine, CUFFT_INVERSE);
-		k_comp_to_real  <<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(&Dev_W_H_initial[3*Grid_fine.N], Dev_Complex_fine, Grid_fine.NX, Grid_fine.NY);
-		
+		fourier_hermite(Grid_fine, Dev_Temp_C1, Dev_W_H_initial, Dev_Temp_C2, cufftPlan_fine);
 		delete [] Host_W_initial;
 		
-		cout<<cudaGetErrorName (cudaGetLastError());
-		printf("\n");
+		message = cudaGetErrorName(cudaGetLastError()); cout<<message+"\n\n"; logger.push(message);
 		
 	#endif
 	
@@ -529,18 +512,11 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	int old_ctr = 0;
 
 	message = "dt = " + to_str(dt); cout<<message+"\n"; logger.push(message);
-	
-	#ifdef TIME_TESTING
-	
-		cout<<"Starting time test...\n";
-		clock_t begin = clock();
-		
-	#endif
 
 	// first timing save before loop - this is the initialization time
 	{
-		clock_t step = clock();
-		double diff = double(step - begin)/CLOCKS_PER_SEC;
+		auto step = std::chrono::high_resolution_clock::now();
+		double diff = std::chrono::duration_cast<std::chrono::microseconds>(step - begin).count()/1e6;
 		time_values[loop_ctr] = diff; // loop_ctr was already increased
 	}
 	message = "Initialization Time = " + to_str(time_values[loop_ctr]); cout<<message+"\n"; logger.push(message);
@@ -635,13 +611,11 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 				break;
 			}
 			
-			#ifndef TIME_TESTING
-				message = "Refining Map - ctr = " + to_str(loop_ctr) + " \t map_stack_ctr = "
-						+ to_str(map_stack_ctr) + " ; " + to_str(stack_length_RAM) + " ; "
-						+ to_str(stack_length_Nb_array_RAM) + " \t gap = " + to_str(loop_ctr - old_ctr);
-				cout<<message+"\n"; logger.push(message);
-				old_ctr = loop_ctr;
-			#endif
+			message = "Refining Map - ctr = " + to_str(loop_ctr) + " \t map_stack_ctr = "
+					+ to_str(map_stack_ctr) + " ; " + to_str(stack_length_RAM) + " ; "
+					+ to_str(stack_length_Nb_array_RAM) + " \t gap = " + to_str(loop_ctr - old_ctr);
+			cout<<message+"\n"; logger.push(message);
+			old_ctr = loop_ctr;
 			
 			//adjusting initial conditions, compute vorticity hermite
 			translate_initial_condition_through_map_stack(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack,
@@ -693,12 +667,9 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			map_stack_ctr++;
 		}
 		
-		//loop counters
+		//loop counters are increased after computation
 		t += dt;
 		loop_ctr ++;
-		
-
-		#ifndef TIME_TESTING
 			
 			/*******************************************************************
 			*							 Save snap shot						   *
@@ -714,39 +685,39 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 //                writeAllRealToBinaryFile(Grid_2048.N, Host_2048_4, simulationName, "vorticity_fine/w_1024_" + std::to_string(loop_ctr));
 //            }
 
-			if( loop_ctr % save_buffer_count == 0 )
-			{
-				message = "Saving Image - ctr = " + to_str(loop_ctr) + " \t save_ctr = " + to_str(save_ctr)
-						+ " \t time = " + to_str(t) + " \t Compute time = " + to_str(double(clock()-begin)/CLOCKS_PER_SEC);
-				cout<<message+"\n"; logger.push(message);
+		if( loop_ctr % save_buffer_count == 0 )
+		{
+			message = "Saving Image - ctr = " + to_str(loop_ctr) + " \t save_ctr = " + to_str(save_ctr)
+					+ " \t time = " + to_str(t) + " \t Compute time = " + to_str(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+			cout<<message+"\n"; logger.push(message);
 
-				// save function to save variables, combined so we always save in the same way and location
-				apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY,
-						Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1,
-						Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3,
-						(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C2, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu,
-						Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h, bounds, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
-				writeTimeStep(workspace, file_name, to_str(save_ctr), Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real, Dev_ChiX, Dev_ChiY, &Grid_fine, &Grid_coarse, &Grid_psi);
-			    // compute conservation for first step
-			    compute_conservation_targets(&Grid_fine, &Grid_coarse, &Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, cufftPlan_coarse, cufftPlan_fine, Dev_Temp_C1, Dev_Temp_C2, Mesure, Mesure_fine, count_mesure);
-			    count_mesure+=1;
+			// save function to save variables, combined so we always save in the same way and location
+			apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY,
+					Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1,
+					Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3,
+					(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C2, map_stack_ctr, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, frac_mem_cpu_to_gpu,
+					Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h, bounds, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
+			writeTimeStep(workspace, file_name, to_str(save_ctr), Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real, Dev_ChiX, Dev_ChiY, &Grid_fine, &Grid_coarse, &Grid_psi);
+			// compute conservation for first step
+			compute_conservation_targets(&Grid_fine, &Grid_coarse, &Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, cufftPlan_coarse, cufftPlan_fine, Dev_Temp_C1, Dev_Temp_C2, Mesure, Mesure_fine, count_mesure);
+			count_mesure+=1;
 
-				// save particle positions
-				if (SettingsMain.getParticles()) {
-					// safe fine particles, 1 file for all positions
-                    cudaMemcpy(Host_particles_pos_fine_dt, Dev_particles_pos_fine_dt, 2*prod_fine_dt_particles*sizeof(double), cudaMemcpyDeviceToHost);
-                    writeAllRealToBinaryFile(2*prod_fine_dt_particles, Host_particles_pos_fine_dt, workspace, file_name, "/Particle_data/Fluid_fine/Particles_pos_" + to_str(save_ctr));
+			// save particle positions
+			if (SettingsMain.getParticles()) {
+				// safe fine particles, 1 file for all positions
+				cudaMemcpy(Host_particles_pos_fine_dt, Dev_particles_pos_fine_dt, 2*prod_fine_dt_particles*sizeof(double), cudaMemcpyDeviceToHost);
+				writeAllRealToBinaryFile(2*prod_fine_dt_particles, Host_particles_pos_fine_dt, workspace, file_name, "/Particle_data/Fluid_fine/Particles_pos_" + to_str(save_ctr));
 
-                    if (save_ctr>=1){
-                        if (save_ctr%1==0){
-                        	writeParticles(SettingsMain, file_name, to_str(save_ctr), Host_particles_pos, Dev_particles_pos, Tau_p, Nb_Tau_p);
-                        }
-                    }
-                }
+				if (save_ctr>=1){
+					if (save_ctr%1==0){
+						writeParticles(SettingsMain, file_name, to_str(save_ctr), Host_particles_pos, Dev_particles_pos, Tau_p, Nb_Tau_p);
+					}
+				}
+			}
 
-				if (save_ctr%1==0){
+			if (save_ctr%1==0){
 
-                    if (use_set_grid == 1) {
+				if (use_set_grid == 1) {
 //						kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_2048, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY,
 //								Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1,
 //								Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3,
@@ -754,7 +725,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 //								Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_2048.NX, Grid_2048.NY, Grid_2048.h, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
 //						cudaMemcpy(Host_2048_4, Dev_W_2048, Grid_2048.sizeNReal, cudaMemcpyDeviceToHost);
 //						writeAllRealToBinaryFile(Grid_2048.N, Host_2048_4, workspace, file_name, "vorticity_fine/w_1024_" + ss.str());
-                    }
+				}
 
 //                    kernel_apply_map_stack_to_W_part_All(&Grid_coarse, &Grid_plot, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY,
 //                    		Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1,
@@ -764,51 +735,49 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 //                    cudaMemcpy(Host_W_plot, Dev_W_plot, Grid_plot.sizeNReal, cudaMemcpyDeviceToHost);
 //                    cudaDeviceSynchronize();
 //                    writeAllRealToBinaryFile(Grid_plot.N, Host_W_plot, simulationName, "vorticity_fine/w_plot_" + ss.str());
-				}
-				/*
-				if (save_ctr%50==0){
-					for(int index_tau_p = 1; index_tau_p < Nb_Tau_p; index_tau_p+=1)
-						cudaMemcpy(&Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_pos[0], 2*Nb_particles*sizeof(double), cudaMemcpyDeviceToDevice);
-				}
-	            */
-				save_ctr++;
+			}
+			/*
+			if (save_ctr%50==0){
+				for(int index_tau_p = 1; index_tau_p < Nb_Tau_p; index_tau_p+=1)
+					cudaMemcpy(&Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_pos[0], 2*Nb_particles*sizeof(double), cudaMemcpyDeviceToDevice);
+			}
+			*/
+			save_ctr++;
 
-                //Laplacian_vort(&Grid_fine, Dev_W_fine, Dev_Complex_fine, Dev_Hat_fine, Dev_lap_fine_real, Dev_lap_fine_complex, Dev_lap_fine_hat, cufftPlan_fine);
+			//Laplacian_vort(&Grid_fine, Dev_W_fine, Dev_Complex_fine, Dev_Hat_fine, Dev_lap_fine_real, Dev_lap_fine_complex, Dev_lap_fine_hat, cufftPlan_fine);
 
-                //cudaMemcpy(Host_lap_fine, Dev_lap_fine_real, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
-                //cudaDeviceSynchronize();
-                //writeAllRealToBinaryFile(Grid_fine.N, Host_lap_fine, simulationName, "vorticity_fine_lagrangian/w_lagr_" + ss.str());
+			//cudaMemcpy(Host_lap_fine, Dev_lap_fine_real, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
+			//cudaDeviceSynchronize();
+			//writeAllRealToBinaryFile(Grid_fine.N, Host_lap_fine, simulationName, "vorticity_fine_lagrangian/w_lagr_" + ss.str());
 
 
-                 //Laplacian initial
+			 //Laplacian initial
 
-				if (use_set_grid == 1) {
+			if (use_set_grid == 1) {
 //					Laplacian_vort(&Grid_2048, Dev_W_2048, Dev_Complex_fine_2048, Dev_Hat_fine_2048, Dev_lap_fine_2048_real, Dev_lap_fine_2048_complex, Dev_lap_fine_2048_hat, cufftPlan_2048);
 //					cudaMemcpy(Host_lap_fine_2048, Dev_lap_fine_2048_real, Grid_2048.sizeNReal, cudaMemcpyDeviceToHost);
 //					cudaDeviceSynchronize();
 //					writeAllRealToBinaryFile(Grid_2048.N, Host_lap_fine_2048, workspace, file_name, "vorticity_fine_lagrangian/w_lagr_" + ss.str());
-				}
+			}
 
-			}
-			
-			int error = cudaGetLastError();
-			//cudaError_t err = cudaGetLastError();
-			//if (err != cudaSuccess){
-			//	  printf("%s\n", cudaGetErrorString(err));
-			//}
-			if(error != 0)
-			{
-				message = "Exited early; Last Cuda Error : " + to_str(error); cout<<message+"\n"; logger.push(message);
-				exit(0);
-				break;
-			}
+		}
 		
-		#endif
+		int error = cudaGetLastError();
+		//cudaError_t err = cudaGetLastError();
+		//if (err != cudaSuccess){
+		//	  printf("%s\n", cudaGetErrorString(err));
+		//}
+		if(error != 0)
+		{
+			message = "Exited early; Last Cuda Error : " + to_str(error); cout<<message+"\n"; logger.push(message);
+			exit(0);
+			break;
+		}
 
 		// save timing at last part of a step to take everything into account
 		{
-			clock_t step = clock();
-			double diff = double(step - begin)/CLOCKS_PER_SEC;
+			auto step = std::chrono::high_resolution_clock::now();
+			double diff = std::chrono::duration_cast<std::chrono::microseconds>(step - begin).count()/1e6;
 			time_values[loop_ctr] = diff; // loop_ctr was already increased but first entry is init time
 		}
 		message = "Step : " + to_str(loop_ctr) + " ,\t Incomp Error : " + to_str(incomp_error[loop_ctr-1])
@@ -908,15 +877,6 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	/*******************************************************************
 	*						 Finalisation							   *
 	*******************************************************************/
-	
-	
-	#ifdef TIME_TESTING
-	
-		clock_t end = clock();
-		double diff = double(end - begin)/CLOCKS_PER_SEC;
-		printf("End.\nTotal time = %f\n", diff);
-	
-	#endif
 
 	/*
 	kernel_compare_vorticity_with_initial<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Dev_W_fine, map_stack_ctr, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);
@@ -1000,14 +960,14 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 
 	// save timing at last part of a step to take everything into account
     {
-		clock_t step = clock();
-		double diff = double(step - begin)/CLOCKS_PER_SEC;
+		auto step = std::chrono::high_resolution_clock::now();
+		double diff = std::chrono::duration_cast<std::chrono::microseconds>(step - begin).count()/1e6;
 		time_values[loop_ctr+1] = diff;
     }
     // save timing to file
 	writeAllRealToBinaryFile(iterMax+2, time_values, workspace, file_name, "/Timing_Values");
 
-	message = "Finished - Last Cuda Error = " + to_str(cudaGetLastError()) + " , Time = " + to_str(double(clock()-begin)/CLOCKS_PER_SEC); cout<<message+"\n"; logger.push(message);
+	message = "Finished - Last Cuda Error = " + to_str(cudaGetLastError()) + " , Time = " + to_str(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6); cout<<message+"\n"; logger.push(message);
 }
 
 

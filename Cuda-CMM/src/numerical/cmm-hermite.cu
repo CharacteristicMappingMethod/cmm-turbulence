@@ -5,7 +5,7 @@
 *						  Hermite interpolation					   *
 *******************************************************************/
 // this computation is used very often, using it as a function greatly reduces code-redundancy
-// however, here we have 8 scattered memory accesses I[0] - I[1] and I[2] - I[3] ar paired
+// however, here we have 8 scattered memory accesses I[0] - I[1] and I[2] - I[3] are paired (in theory)
 __device__ double device_hermite_mult_2D(double *H, double b[][4], int I[], long int N, double h)
 {
 	return b[0][0]* H[    I[0]] + b[0][1]* H[    I[1]] + b[1][0]* H[    I[2]] + b[1][1]* H[    I[3]] // Point interpolation
@@ -25,87 +25,95 @@ __device__ double device_hermite_mult_2D(double *H, double bX[], double bY[], in
 }
 
 
-
-__device__ double device_hermite_interpolate_2D(double *H, double x, double y, int NX, int NY, double h)
-{
+// combine the build of the index vector to reduce redundant code
+__device__ void device_init_ind(int *I, double *dxy, double x, double y, int NX, int NY, double h) {
 	//cell index
-	int Ix0 = floor(x/h);
-	int Iy0 = floor(y/h);
-	int Ix1 = Ix0 + 1;
-	int Iy1 = Iy0 + 1;
+	int Ix0 = floor(x/h); int Iy0 = floor(y/h);
+	int Ix1 = Ix0 + 1; int Iy1 = Iy0 + 1;
 
 	//dx, dy
-	double dx = x/h - Ix0;
-	double dy = y/h - Iy0;
-
-	long int N = NX*NY;
+	dxy[0] = x/h - Ix0; dxy[1] = y/h - Iy0;
 
 	// project into domain, 100 is chosen so that all values are positiv, since negativ values return negativ reminder
 	Ix0 = (Ix0+100 * NX)%NX; Iy0 = (Iy0+100 * NY)%NY;
 	Ix1 = (Ix1+100 * NX)%NX; Iy1 = (Iy1+100 * NY)%NY;
 
 	// I00, I10, I01, I11 in Vector to shorten function calls
-	int I[4] = {Iy0 * NX + Ix0, Iy0 * NX + Ix1, Iy1 * NX + Ix0, Iy1 * NX + Ix1};
+	I[0] = Iy0 * NX + Ix0; I[1] = Iy0 * NX + Ix1; I[2] = Iy1 * NX + Ix0; I[3] = Iy1 * NX + Ix1;
+}
 
-	double bX[4] = {H_f1_3(dx), H_f1_3(1-dx), H_f2_3(dx), -H_f2_3(1-dx)};
-	double bY[4] = {H_f1_3(dy), H_f1_3(1-dy), H_f2_3(dy), -H_f2_3(1-dy)};
 
-	return device_hermite_mult_2D(H, bX, bY, I, N, h);
+// combine the build of the cubic vectors to reduce redundant code, build from later matrixes due to less computations
+__device__ void device_build_b(double *bX, double *bY, double dx, double dy) {
+	bX[0] = H_f3_3(1-dx); bX[1] = H_f3_3(dx); bX[2] = -H_f4_3(1-dx); bX[3] = H_f4_3(dx);
+	bY[0] = H_f3_3(1-dy); bY[1] = H_f3_3(dy); bY[2] = -H_f4_3(1-dy); bY[3] = H_f4_3(dy);
+//	bX[0] = H_f1_3(dx); bX[1] = H_f1_3(1-dx); bX[2] = H_f2_3(dx); bX[3] = -H_f2_3(1-dx);
+//	bY[0] = H_f1_3(dy); bY[1] = H_f1_3(1-dy); bY[2] = H_f2_3(dy); bY[3] = -H_f2_3(1-dy);
+}
+__device__ void device_build_bx(double *bX, double *bY, double dx, double dy) {
+	bX[0] = -H_f3x_3(1-dx); bX[1] = H_f3x_3(dx); bX[2] =  H_f4x_3(1-dx); bX[3] = H_f4x_3(dx);
+	bY[0] =  H_f3_3(1-dy);  bY[1] = H_f3_3(dy);  bY[2] = -H_f4_3(1-dy);  bY[3] = H_f4_3(dy);
+//	bX[0] = H_f1x_3(dx); bX[1] = -H_f1x_3(1-dx); bX[2] = H_f2x_3(dx); bX[3] =  H_f2x_3(1-dx);
+//	bY[0] = H_f1_3(dy);  bY[1] =  H_f1_3(1-dy);  bY[2] = H_f2_3(dy);  bY[3] = -H_f2_3(1-dy);
+}
+__device__ void device_build_by(double *bX, double *bY, double dx, double dy) {
+	bX[0] =  H_f3_3(1-dx);  bX[1] = H_f3_3(dx);  bX[2] = -H_f4_3(1-dx);  bX[3] = H_f4_3(dx);
+	bY[0] = -H_f3x_3(1-dy); bY[1] = H_f3x_3(dy); bY[2] =  H_f4x_3(1-dy); bY[3] = H_f4x_3(dy);
+//	bX[0] = H_f1_3(dx);  bX[1] =  H_f1_3(1-dx);  bX[2] = H_f2_3(dx);  bX[3] = -H_f2_3(1-dx);
+//	bY[0] = H_f1x_3(dy); bY[1] = -H_f1x_3(1-dy); bY[2] = H_f2x_3(dy); bY[3] =  H_f2x_3(1-dy);
+}
+// combine the build of the quintic vectors to reduce redundant code, build from later matrixes due to less computations
+__device__ void device_build_b_5(double *bX, double *bY, double dx, double dy) {
+	bX[0] = H_f4_5(1-dx); bX[1] = H_f4_5(dx); bX[2] = -H_f5_5(1-dx); bX[3] = H_f5_5(dx); bX[4] = H_f6_5(1-dx); bX[5] = H_f6_5(dx);
+	bY[0] = H_f4_5(1-dy); bY[1] = H_f4_5(dy); bY[2] = -H_f5_5(1-dy); bY[3] = H_f5_5(dy); bY[4] = H_f6_5(1-dy); bY[5] = H_f6_5(dy);
+}
+__device__ void device_build_bx_5(double *bX, double *bY, double dx, double dy) {
+	bX[0] = -H_f4x_5(1-dx); bX[1] = H_f4x_5(dx); bX[2] =  H_f5x_5(1-dx); bX[3] = H_f5x_5(dx); bX[4] = -H_f6x_5(1-dx); bX[5] = H_f6x_5(dx);
+	bY[0] =  H_f4_5(1-dy);  bY[1] = H_f4_5(dy);  bY[2] = -H_f5_5(1-dy);  bY[3] = H_f5_5(dy);  bY[4] =  H_f6_5(1-dy);  bY[5] = H_f6_5(dy);
+}
+__device__ void device_build_by_5(double *bX, double *bY, double dx, double dy) {
+	bX[0] =  H_f4_5(1-dx);  bX[1] = H_f4_5(dx);  bX[2] = -H_f5_5(1-dx);  bX[3] = H_f5_5(dx);  bX[4] =  H_f6_5(1-dx);  bX[5] = H_f6_5(dx);
+	bY[0] = -H_f4x_5(1-dy); bY[1] = H_f4x_5(dy); bY[2] =  H_f5x_5(1-dy); bY[3] = H_f5x_5(dy); bY[4] = -H_f6x_5(1-dy); bY[5] = H_f6x_5(dy);
+}
+
+
+
+__device__ double device_hermite_interpolate_2D(double *H, double x, double y, int NX, int NY, double h)
+{
+	// init array containing the indexes and finite differences dx dy to neighbours
+	int I[4]; double dxy[2];
+	device_init_ind(I, dxy, x, y, NX, NY, h);
+
+	double bX[4], bY[4];
+	device_build_b(bX, bY, dxy[0], dxy[1]);
+
+	return device_hermite_mult_2D(H, bX, bY, I, NX*NY, h);
 }
 
 
 __device__ double device_hermite_interpolate_dx_2D(double *H, double x, double y, int NX, int NY, double h)
 {
-	//cell index
-	int Ix0 = floor(x/h);
-	int Iy0 = floor(y/h);
-	int Ix1 = Ix0 + 1;
-	int Iy1 = Iy0 + 1;
+	// init array containing the indexes and finite differences dx dy to neighbours
+	int I[4]; double dxy[2];
+	device_init_ind(I, dxy, x, y, NX, NY, h);
 
-	//dx, dy
-	double dx = x/h - Ix0;
-	double dy = y/h - Iy0;
+	double bX[4], bY[4];
+	device_build_bx(bX, bY, dxy[0], dxy[1]);
 
-	long int N = NX*NY;
-
-	// project into domain, 100 is chosen so that all values are positiv, since negativ values return negativ reminder
-	Ix0 = (Ix0+100 * NX)%NX; Iy0 = (Iy0+100 * NY)%NY;
-	Ix1 = (Ix1+100 * NX)%NX; Iy1 = (Iy1+100 * NY)%NY;
-
-	// I00, I10, I01, I11 in Vector to shorten function calls
-	int I[4] = {Iy0 * NX + Ix0, Iy0 * NX + Ix1, Iy1 * NX + Ix0, Iy1 * NX + Ix1};
-
-	double bX[4] = {H_f1x_3(dx), -H_f1x_3(1-dx), H_f2x_3(dx), H_f2x_3(1-dx)};
-	double bY[4] = {H_f1_3(dy), H_f1_3(1-dy), H_f2_3(dy), -H_f2_3(1-dy)};
-
-	return device_hermite_mult_2D(H, bX, bY, I, N, h)/h;
+	return device_hermite_mult_2D(H, bX, bY, I, NX*NY, h)/h;
 }
 
 
 __device__ double device_hermite_interpolate_dy_2D(double *H, double x, double y, int NX, int NY, double h)
 {
-	// build up all needed positioning
-	//cell index of footpoints
-	int Ix0 = floor(x/h); int Iy0 = floor(y/h);
-	int Ix1 = Ix0 + 1; int Iy1 = Iy0 + 1;
+	// init array containing the indexes and finite differences dx dy to neighbours
+	int I[4]; double dxy[2];
+	device_init_ind(I, dxy, x, y, NX, NY, h);
 
-	//dx, dy, distance to footpoints
-	double dx = x/h - Ix0;
-	double dy = y/h - Iy0;
+	double bX[4], bY[4];
+	device_build_by(bX, bY, dxy[0], dxy[1]);
 
-	long int N = NX*NY;
-
-	// project into domain, 100 is chosen so that all values are positiv, since negativ values return negativ reminder
-	Ix0 = (Ix0+100 * NX)%NX; Iy0 = (Iy0+100 * NY)%NY;
-	Ix1 = (Ix1+100 * NX)%NX; Iy1 = (Iy1+100 * NY)%NY;
-
-	// I00, I10, I01, I11 in Vector to shorten function calls
-	int I[4] = {Iy0 * NX + Ix0, Iy0 * NX + Ix1, Iy1 * NX + Ix0, Iy1 * NX + Ix1};
-
-	double bX[4] = {H_f1_3(dx), H_f1_3(1-dx), H_f2_3(dx), -H_f2_3(1-dx)};
-	double bY[4] = {H_f1x_3(dy), -H_f1x_3(1-dy), H_f2x_3(dy), H_f2x_3(1-dy)};
-
-	return device_hermite_mult_2D(H, bX, bY, I, N, h)/h;
+	return device_hermite_mult_2D(H, bX, bY, I, NX*NY, h)/h;
 }
 
 
@@ -119,28 +127,14 @@ __device__ void device_hermite_interpolate_dx_dy_2D(double *H, double x, double 
 // special function for map advection to compute dx and dy directly at the same positions with variable setting amount
 __device__ void device_hermite_interpolate_grad_2D(double *H, double *x, double *u, int NX, int NY, double h, int n_l)
 {
-	// build up all needed positioning
-	//cell index of footpoints
-	int Ix0 = floor(x[0]/h); int Iy0 = floor(x[1]/h);
-	int Ix1 = Ix0 + 1; int Iy1 = Iy0 + 1;
-
-	//dx, dy, distance to footpoints
-	double dx = x[0]/h - Ix0;
-	double dy = x[1]/h - Iy0;
-
-	long int N = NX*NY;
-
-	// project into domain, 100 is chosen so that all values are positiv, since negativ values return negativ reminder
-	Ix0 = (Ix0+100 * NX)%NX; Iy0 = (Iy0+100 * NY)%NY;
-	Ix1 = (Ix1+100 * NX)%NX; Iy1 = (Iy1+100 * NY)%NY;
-
-	// I00, I10, I01, I11 in Vector to shorten function calls
-	int I[4] = {Iy0 * NX + Ix0, Iy0 * NX + Ix1, Iy1 * NX + Ix0, Iy1 * NX + Ix1};
+	// init array containing the indexes and finite differences dx dy to neighbours
+	int I[4]; double dxy[2];
+	device_init_ind(I, dxy, x[0], x[1], NX, NY, h);
 
 	// computing all dx-interpolations, giving -v
 	{
-		double bX[4] = {H_f1x_3(dx), -H_f1x_3(1-dx), H_f2x_3(dx), H_f2x_3(1-dx)};
-		double bY[4] = {H_f1_3(dy), H_f1_3(1-dy), H_f2_3(dy), -H_f2_3(1-dy)};
+		double bX[4], bY[4];
+		device_build_bx(bX, bY, dxy[0], dxy[1]);
 
 		double b[4][4] = {
 							bX[0]*bY[0], bX[1]*bY[0], bX[2]*bY[0], bX[3]*bY[0],
@@ -149,13 +143,14 @@ __device__ void device_hermite_interpolate_grad_2D(double *H, double *x, double 
 							bX[0]*bY[3], bX[1]*bY[3], bX[2]*bY[3], bX[3]*bY[3]
 						};
 
-		for (int i_l = 0; i_l < n_l; i_l++) u[2*i_l+1] = -device_hermite_mult_2D(H + 4*N*i_l, b, I, N, h)/h;
+		for (int i_l = 0; i_l < n_l; i_l++) u[2*i_l+1] = -device_hermite_mult_2D(H + 4*NX*NY*i_l, b, I, NX*NY, h)/h;
+//		for (int i_l = 0; i_l < n_l; i_l++) u[2*i_l+1] = -device_hermite_mult_2D(H + 4*NX*NY*i_l, bX, bY, I, NX*NY, h)/h;
 
 	}
 	// compute all dy-interpolations, giving u
 	{
-		double bX[4] = {H_f1_3(dx), H_f1_3(1-dx), H_f2_3(dx), -H_f2_3(1-dx)};
-		double bY[4] = {H_f1x_3(dy), -H_f1x_3(1-dy), H_f2x_3(dy), H_f2x_3(1-dy)};
+		double bX[4], bY[4];
+		device_build_by(bX, bY, dxy[0], dxy[1]);
 
 		double b[4][4] = {
 							bX[0]*bY[0], bX[1]*bY[0], bX[2]*bY[0], bX[3]*bY[0],
@@ -164,7 +159,8 @@ __device__ void device_hermite_interpolate_grad_2D(double *H, double *x, double 
 							bX[0]*bY[3], bX[1]*bY[3], bX[2]*bY[3], bX[3]*bY[3]
 						};
 
-		for (int i_l = 0; i_l < n_l; i_l++) u[2*i_l  ] = device_hermite_mult_2D(H + 4*N*i_l, b, I, N, h)/h;
+		for (int i_l = 0; i_l < n_l; i_l++) u[2*i_l  ] = device_hermite_mult_2D(H + 4*NX*NY*i_l, b, I, NX*NY, h)/h;
+//		for (int i_l = 0; i_l < n_l; i_l++) u[2*i_l  ] = device_hermite_mult_2D(H + 4*NX*NY*i_l, bX, bY, I, NX*NY, h)/h;
 	}
 }
 
@@ -196,8 +192,8 @@ __device__ void  device_diffeo_interpolate_2D(double *Hx, double *Hy, double x, 
 	// I00, I10, I01, I11 in Vector to shorten function calls
 	int I[4] = {Iy0 * NX + Ix0, Iy0 * NX + Ix1, Iy1 * NX + Ix0, Iy1 * NX + Ix1};
 
-	double bX[4] = {H_f1_3(dx), H_f1_3(1-dx), H_f2_3(dx), -H_f2_3(1-dx)};
-	double bY[4] = {H_f1_3(dy), H_f1_3(1-dy), H_f2_3(dy), -H_f2_3(1-dy)};
+	double bX[4], bY[4];
+	device_build_b(bX, bY, dx, dy);
 
 
 	double b[4][4] = {
@@ -249,8 +245,8 @@ __device__ double  device_diffeo_grad_2D(double *Hx, double *Hy, double x, doubl
 	double Xx, Xy, Yx, Yy;  // fx/dx, fx/dy fy/dx fy/dy
 	// compute x derivatives
 	{
-		double bX[4] = {H_f1x_3(dx), -H_f1x_3(1-dx), H_f2x_3(dx), H_f2x_3(1-dx)};
-		double bY[4] = {H_f1_3(dy), H_f1_3(1-dy), H_f2_3(dy), -H_f2_3(1-dy)};
+		double bX[4], bY[4];
+		device_build_bx(bX, bY, dx, dy);
 
 		double b[4][4] = {
 							bX[0]*bY[0], bX[1]*bY[0], bX[2]*bY[0], bX[3]*bY[0],
@@ -271,8 +267,8 @@ __device__ double  device_diffeo_grad_2D(double *Hx, double *Hy, double x, doubl
 	}
 	// compute y derivatives
 	{
-		double bX[4] = {H_f1_3(dx), H_f1_3(1-dx), H_f2_3(dx), -H_f2_3(1-dx)};
-		double bY[4] = {H_f1x_3(dy), -H_f1x_3(1-dy), H_f2x_3(dy), H_f2x_3(1-dy)};
+		double bX[4], bY[4];
+		device_build_by(bX, bY, dx, dy);
 
 		double b[4][4] = {
 							bX[0]*bY[0], bX[1]*bY[0], bX[2]*bY[0], bX[3]*bY[0],

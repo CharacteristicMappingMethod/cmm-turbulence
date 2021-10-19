@@ -34,13 +34,14 @@ void create_directory_structure(SettingsCMM SettingsMain, string file_name, doub
 	{
         file<<"Simulation name \t\t: "<<SettingsMain.getSimName()<<endl;
         switch (SettingsMain.getTimeIntegrationNum()) {
-			case 0: { file<<"Time integration : Euler explicit"<<endl; break; }
-			case 1: { file<<"Time integration : Adam Bashfords 2"<<endl; break; }
-			case 2: { file<<"Time integration : Runge Kutta 3"<<endl; break; }
-			case 3: { file<<"Time integration : Runge Kutta 4"<<endl; break; }
-			case 4: { file<<"Time integration : Runge Kutta 3 (modified)"<<endl; break; }
-			case 5: { file<<"Time integration : Runge Kutta 4 (modified)"<<endl; break; }
-			default: { file<<"Time integration : Default (Euler explicit)"<<endl; break; }
+			case 10: { file<<"Time integration : Euler explicit"<<endl; break; }
+			case 20: { file<<"Time integration : Adam Bashfords 2"<<endl; break; }
+			case 21: { file<<"Time integration : Runge Kutta 2"<<endl; break; }
+			case 30: { file<<"Time integration : Runge Kutta 3"<<endl; break; }
+			case 40: { file<<"Time integration : Runge Kutta 4"<<endl; break; }
+			case 31: { file<<"Time integration : Runge Kutta 3 (modified)"<<endl; break; }
+			case 41: { file<<"Time integration : Runge Kutta 4 (modified)"<<endl; break; }
+			default: { file<<"Time integration : Default (zero)"<<endl; break; }
 		}
 
         file<<"N_coarse(resolution coarse grid) \t\t: "<<SettingsMain.getGridCoarse()<<endl;
@@ -63,12 +64,12 @@ void create_directory_structure(SettingsCMM SettingsMain, string file_name, doub
         	file<<"Particles enabled"<<endl;
         	file<<"Amount of particles : "<<SettingsMain.getParticlesNum()<<endl;
             switch (SettingsMain.getParticlesTimeIntegrationNum()) {
-    			case 0: { file<<"Particles Time integration : Euler explicit"<<endl; break; }
-    			case 1: { file<<"Particles Time integration : Euler midpoint"<<endl; break; }
-    			case 2: { file<<"Particles Time integration : Runge Kutta 3"<<endl; break; }
-    			case 3: { file<<"Particles Time integration : Runge Kutta 4"<<endl; break; }
-    			case -2: { file<<"Particles Time integration : Nicolas Euler midpoint"<<endl; break; }
-    			case -3: { file<<"Particles Time integration : Nicolas Runge Kutta 3"<<endl; break; }
+    			case 10: { file<<"Particles Time integration : Euler explicit"<<endl; break; }
+    			case 20: { file<<"Particles Time integration : Euler midpoint"<<endl; break; }
+    			case 30: { file<<"Particles Time integration : Runge Kutta 3"<<endl; break; }
+    			case 40: { file<<"Particles Time integration : Runge Kutta 4"<<endl; break; }
+    			case 25: { file<<"Particles Time integration : Nicolas Euler midpoint"<<endl; break; }
+    			case 35: { file<<"Particles Time integration : Nicolas Runge Kutta 3"<<endl; break; }
     			default: { file<<"Particles Time integration : Default (Euler explicit)"<<endl; break; }
     		}
         }

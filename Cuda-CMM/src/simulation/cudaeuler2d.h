@@ -9,8 +9,9 @@
 #include "../simulation/cudamesure2d.h"
 #include "../simulation/cmm-fft.h"
 
-#define COPY_OLD_1
-//#define COPY_OLD_2
+#include <unistd.h>
+#include <chrono>
+
 
 #ifdef __CUDACC__
 

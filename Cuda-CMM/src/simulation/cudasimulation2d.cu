@@ -57,7 +57,7 @@ __global__ void kernel_incompressibility_check(double *ChiX, double *ChiY, doubl
 	if(iX >= NXs || iY >= NYs)
 		return;
 	
-	int In = iY*NXs + iX;	
+	int In = iY*NXs + iX;
 	
 	//position
 	double x = iX*hs + 0.5*hs;

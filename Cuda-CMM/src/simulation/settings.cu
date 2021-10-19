@@ -65,6 +65,7 @@ void SettingsCMM::setPresets() {
 	// skip remapping, usefull for convergence tests
 	bool skip_remapping = false;
 
+
 	// set particles settings
 	bool particles = false;  // en- or disable particles
 	// tau_p has to be modified in cudaeuler, since it contains an array and i dont want to hardcode it here
