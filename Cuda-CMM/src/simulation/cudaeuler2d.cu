@@ -42,23 +42,23 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	int mem_RAM_GPU_remaps = SettingsMain.getMemRamGpuRemaps(); 		// mem_index in MB on the GPU
 	int mem_RAM_CPU_remaps = SettingsMain.getMemRamCpuRemaps();			// mem_RAM_CPU_remaps in MB on the CPU
 	int Nb_array_RAM = 4;												// fixed for four different stacks
-	int use_set_grid = 0;  // change later, use 2048 grid thingys or not
+	int use_set_grid = 0;  												// change later, use 2048 grid thingys or not
+
+//	double mb_used_RAM_CPU;
+	double mb_used_RAM_GPU;  // count memory usage by variables in mbyte
 
 	// compute dt, for grid settings we have to use max in case we want to differ NX and NY
 	if (SettingsMain.getSetDtBySteps()) dt = 1.0 / steps_per_sec;  // direct setting of timestep
 	else dt = 1.0 / std::max(NX_coarse, NY_coarse) / grid_by_time;  // setting of timestep by grid and factor
 	
+	double *Dev_W_H_initial; cudaMalloc((void**)Dev_W_H_initial, 8);
+
 	#ifdef DISCRET
 		grid_by_time = 8.0;
 		snapshots_per_second = 1;
 		dt = 1.0/(NX_coarse * grid_by_time);
 		tf = 100;	
 	#endif
-	#ifndef DISCRET
-		double *Dev_W_H_initial;
-		cudaMalloc((void**)&Dev_W_H_initial, 8);
-	#endif
-	
 	
 	//shared parameters
 	iterMax = ceil(tf / dt);
@@ -106,16 +106,60 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	/*******************************************************************
 	*							CuFFT plans							   *
 	* 	Plan use to compute FFT using Cuda library CuFFT	 	       *
+	* 	we never run ffts in parallel, so we can reuse the temp space  *
 	* 																   *
 	*******************************************************************/
 	
 	cufftHandle cufftPlan_coarse, cufftPlan_fine, cufftPlan_psi, cufftPlan_sample;
-	cufftPlan2d(&cufftPlan_coarse, Grid_coarse.NX, Grid_coarse.NY, CUFFT_Z2Z);
-	cufftPlan2d(&cufftPlan_fine, Grid_fine.NX, Grid_fine.NY, CUFFT_Z2Z);
-	cufftPlan2d(&cufftPlan_psi, Grid_psi.NX, Grid_psi.NY, CUFFT_Z2Z);
+	// preinitialize handles
+	cufftCreate(&cufftPlan_coarse); cufftCreate(&cufftPlan_fine);
+	cufftCreate(&cufftPlan_psi); cufftCreate(&cufftPlan_sample);
+
+	// disable auto workspace creation for fft plans
+	cufftSetAutoAllocation(cufftPlan_coarse, 0); cufftSetAutoAllocation(cufftPlan_fine, 0);
+	cufftSetAutoAllocation(cufftPlan_psi, 0); cufftSetAutoAllocation(cufftPlan_sample, 0);
+
+	// create plans and compute needed size of each plan
+	size_t workSize[4];
+	cufftMakePlan2d(cufftPlan_coarse, Grid_coarse.NX, Grid_coarse.NY, CUFFT_Z2Z, &workSize[0]);
+	cufftMakePlan2d(cufftPlan_fine, Grid_fine.NX, Grid_fine.NY, CUFFT_Z2Z, &workSize[1]);
+	cufftMakePlan2d(cufftPlan_psi, Grid_psi.NX, Grid_psi.NY, CUFFT_Z2Z, &workSize[2]);
 	if (SettingsMain.getSampleOnGrid()) {
-		cufftPlan2d(&cufftPlan_sample, Grid_psi.NX, Grid_psi.NY, CUFFT_Z2Z);
+		cufftMakePlan2d(cufftPlan_sample, Grid_sample.NX, Grid_sample.NY, CUFFT_Z2Z, &workSize[3]);
 	}
+
+    // allocate memory to new workarea for cufft plans with maximum size
+	size_t size_max_fft = std::max(workSize[0], workSize[1]);
+	size_max_fft = std::max(size_max_fft, workSize[2]);
+	if (SettingsMain.getSampleOnGrid()) {
+		size_max_fft = std::max(size_max_fft, workSize[3]);
+	}
+	void *fft_work_area;
+	cudaMalloc(&fft_work_area, size_max_fft);
+	mb_used_RAM_GPU = size_max_fft/(double)(1024*1024);
+
+	// set new workarea to plans
+	cufftSetWorkArea(cufftPlan_coarse, fft_work_area); cufftSetWorkArea(cufftPlan_fine, fft_work_area);
+	cufftSetWorkArea(cufftPlan_psi, fft_work_area);
+	if (SettingsMain.getSampleOnGrid()) {
+		cufftSetWorkArea(cufftPlan_sample, fft_work_area);
+	}
+
+////	size_t workSize;
+//	cufftPlan2d(&cufftPlan_coarse, Grid_coarse.NX, Grid_coarse.NY, CUFFT_Z2Z);
+////	cufftGetSize(cufftPlan_coarse, &workSize);
+////	mb_used_RAM_GPU += workSize/(double)(1024*1024);
+//	cufftPlan2d(&cufftPlan_fine, Grid_fine.NX, Grid_fine.NY, CUFFT_Z2Z);
+////	cufftGetSize(cufftPlan_fine, &workSize);
+////	mb_used_RAM_GPU += workSize/(double)(1024*1024);
+//	cufftPlan2d(&cufftPlan_psi, Grid_psi.NX, Grid_psi.NY, CUFFT_Z2Z);
+////	cufftGetSize(cufftPlan_psi, &workSize);
+////	mb_used_RAM_GPU += workSize/(double)(1024*1024);
+//	if (SettingsMain.getSampleOnGrid()) {
+//		cufftPlan2d(&cufftPlan_sample, Grid_psi.NX, Grid_psi.NY, CUFFT_Z2Z);
+////		cufftGetSize(cufftPlan_sample, &workSize);
+////		mb_used_RAM_GPU += workSize/(double)(1024*1024);
+//	}
 	
 	
 	/*******************************************************************
@@ -135,6 +179,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	cufftDoubleComplex *Dev_Temp_C1, *Dev_Temp_C2;
 	cudaMalloc((void**)&Dev_Temp_C1, size_max_c);
 	cudaMalloc((void**)&Dev_Temp_C2, size_max_c);
+	mb_used_RAM_GPU += 2*size_max_c/(double)(1024*1024);
 	
 	// we actually only need one host array, as we always just copy from and to this and never really read files
 	long int size_max_r = std::max(4*Grid_fine.N, 4*Grid_psi.N);
@@ -157,6 +202,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	
 	cudaMalloc((void**)&Dev_ChiX, 4*Grid_coarse.sizeNReal);
 	cudaMalloc((void**)&Dev_ChiY, 4*Grid_coarse.sizeNReal);
+	mb_used_RAM_GPU += 8*Grid_coarse.sizeNReal/(double)(1024*1024);
 	
 	
 	/*******************************************************************
@@ -167,6 +213,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	*******************************************************************/
 	
 	MapStack Map_Stack(&Grid_coarse, frac_mem_cpu_to_gpu, map_stack_length);
+	mb_used_RAM_GPU += 8*Grid_coarse.sizeNReal/(double)(1024*1024);
 	message = "Map Stack Initialized"; cout<<message+"\n"; logger.push(message);
 	
 	
@@ -179,8 +226,10 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	
 	double *Dev_W_coarse, *Dev_W_H_fine_real;
 	cudaMalloc((void**)&Dev_W_coarse, Grid_coarse.sizeNReal);
+	mb_used_RAM_GPU += Grid_coarse.sizeNReal/(double)(1024*1024);
 	//vorticity hermite
 	cudaMalloc((void**)&Dev_W_H_fine_real, 4*Grid_fine.sizeNReal);
+	mb_used_RAM_GPU += 4*Grid_fine.sizeNReal/(double)(1024*1024);
 	
 	
 	/*******************************************************************
@@ -219,6 +268,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	//stream hermite on coarse computational grid, previous timesteps for lagrange interpolation included in array
 	double *Dev_Psi_real;
 	cudaMalloc((void**) &Dev_Psi_real, 4*SettingsMain.getLagrangeOrder()*Grid_psi.sizeNReal);
+	mb_used_RAM_GPU += 4*SettingsMain.getLagrangeOrder()*Grid_psi.sizeNReal/(double)(1024*1024);
 
 	
 	/*******************************************************************
@@ -239,6 +289,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	Host_w_max = new double[grad_block*grad_thread];
 	cudaMalloc((void**) &Dev_w_min, sizeof(double)*grad_block*grad_thread);
 	cudaMalloc((void**) &Dev_w_max, sizeof(double)*grad_block*grad_thread);
+	mb_used_RAM_GPU += 2*sizeof(double)*grad_block*grad_thread/(double)(1024*1024);
 	
 	
 	/*******************************************************************
@@ -249,8 +300,8 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	double *Host_particles_pos ,*Dev_particles_pos;  // position of particles
 	double *Host_particles_vel ,*Dev_particles_vel;  // velocity of particles
 	curandGenerator_t prng;
-	int Nb_fine_dt_particles, freq_fine_dt_particles, prod_fine_dt_particles, taup_fine_particles;
-	double *Dev_particles_pos_fine_dt, *Host_particles_pos_fine_dt;
+	int freq_fine_dt_particles, prod_fine_dt_particles;
+	double *Dev_particles_fine_pos, *Host_particles_fine_pos;
 	// i still dont really get pointers and arrays in c++, so this array will have to stay here for now
 	int Nb_Tau_p = 2;
 //	double Tau_p[Nb_Tau_p] = {0.0, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.125, 0.15, 0.25, 0.5, 0.75, 1, 2, 5, 13};
@@ -265,6 +316,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		Host_particles_vel = new double[2*Nb_particles*Nb_Tau_p];
 		cudaMalloc((void**) &Dev_particles_pos, 2*Nb_particles*Nb_Tau_p*sizeof(double));
 		cudaMalloc((void**) &Dev_particles_vel, 2*Nb_particles*Nb_Tau_p*sizeof(double));
+		mb_used_RAM_GPU += 4*Nb_particles*Nb_Tau_p*sizeof(double)/(double)(1024*1024);
 
 		// create initial positions from random distribution
 		curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_DEFAULT);
@@ -275,18 +327,22 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			cudaMemcpy(&Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_pos[0], 2*Nb_particles*sizeof(double), cudaMemcpyDeviceToDevice);
 
 		// particles where every time step the position will be saved
-		Nb_fine_dt_particles = 1000;
-		Nb_fine_dt_particles = std::min(Nb_fine_dt_particles, Nb_particles);  // make sure we don't exceed particle number
-		freq_fine_dt_particles = save_buffer_count; // redundant
-		prod_fine_dt_particles = Nb_fine_dt_particles * freq_fine_dt_particles;
-		taup_fine_particles = 0;  // little hack to be able to safe fine instances of inertial particles
+		if (snapshots_per_second > 0 && SettingsMain.getSaveFineParticles()) {
+			SettingsMain.setParticlesFineNum(std::min(SettingsMain.getParticlesFineNum(), SettingsMain.getParticlesNum()));
+			freq_fine_dt_particles = save_buffer_count; // save particles at every saving step
+			prod_fine_dt_particles = SettingsMain.getParticlesFineNum() * freq_fine_dt_particles;
 
-		Host_particles_pos_fine_dt = new double[2*prod_fine_dt_particles];
-		cudaMalloc((void**) &Dev_particles_pos_fine_dt, 2*prod_fine_dt_particles*sizeof(double));
+			Host_particles_fine_pos = new double[2*prod_fine_dt_particles];
+			cudaMalloc((void**) &Dev_particles_fine_pos, 2*prod_fine_dt_particles*Nb_Tau_p*sizeof(double));
+			mb_used_RAM_GPU += 2*prod_fine_dt_particles*Nb_Tau_p*sizeof(double)/(double)(1024*1024);
+		}
 
 		create_particle_directory_structure(SettingsMain, file_name, Tau_p, Nb_Tau_p);
 
 		message = "Number of particles = " + to_str(Nb_particles); cout<<message+"\n"; logger.push(message);
+		if (snapshots_per_second > 0 && SettingsMain.getSaveFineParticles()) {
+			message = "Number of fine particles = " + to_str(SettingsMain.getParticlesFineNum()); cout<<message+"\n"; logger.push(message);
+		}
 	}
 
 
@@ -352,6 +408,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 
 	if (SettingsMain.getSampleOnGrid()) {
 		cudaMalloc((void**)&Dev_save_sample, 4*Grid_sample.sizeNReal);
+		mb_used_RAM_GPU += 4*Grid_sample.sizeNReal/(double)(1024*1024);
     }
 
 
@@ -415,7 +472,6 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		for(int index_tau_p = 1; index_tau_p < Nb_Tau_p; index_tau_p+=1){
 			Rescale<<<particle_block, particle_thread>>>(Nb_particles, LX, &Dev_particles_pos[2*Nb_particles*index_tau_p]);
 			Particle_advect_inertia_init<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h);
-
 		}
 
     	writeParticles(SettingsMain, file_name, "0", Host_particles_pos, Dev_particles_pos, Tau_p, Nb_Tau_p);
@@ -437,7 +493,9 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 
 	int old_ctr = 0;
 
-	message = "dt = " + to_str(dt); cout<<message+"\n"; logger.push(message);
+	// print estimated gpu memory usage in mb
+	message = "estimated GPU RAM usage in mb = " + to_str(mb_used_RAM_GPU); cout<<message+"\n"; logger.push(message);
+
 
 	// first timing save before loop - this is the initialization time
 	{
@@ -477,15 +535,17 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	    if (SettingsMain.getParticles()) {
 			Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos, Dev_Psi_real,
 					Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, SettingsMain.getParticlesTimeIntegrationNum());
-			// copy fine particle positions
-			cudaMemcpy(&Dev_particles_pos_fine_dt[(loop_ctr * Nb_fine_dt_particles * 2) % (2*prod_fine_dt_particles)], &Dev_particles_pos[2*Nb_particles*taup_fine_particles], 2*Nb_fine_dt_particles*sizeof(double), cudaMemcpyDeviceToDevice);
 			// loop for all tau p
 			for(int i_tau_p = 1; i_tau_p < Nb_Tau_p; i_tau_p+=1){
 				Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt,
 						Dev_particles_pos + 2*Nb_particles*i_tau_p, Dev_particles_vel + 2*Nb_particles*i_tau_p, Dev_Psi_real,
 						Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, Tau_p[i_tau_p], SettingsMain.getParticlesTimeIntegrationNum());
 			}
-		}
+			// copy fine particle positions
+			if (snapshots_per_second > 0 && SettingsMain.getSaveFineParticles()) {
+				cudaMemcpy(Dev_particles_fine_pos + (loop_ctr*2*Nb_Tau_p*SettingsMain.getParticlesFineNum()*2) % (2*prod_fine_dt_particles), Dev_particles_pos, 2*Nb_Tau_p*SettingsMain.getParticlesFineNum()*sizeof(double), cudaMemcpyDeviceToDevice);
+			}
+	    }
 
 		// map advection
 		kernel_advect_using_stream_hermite<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C2,
@@ -588,15 +648,12 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 
 			// save particle positions
 			if (SettingsMain.getParticles()) {
-				// safe fine particles, 1 file for all positions
-				cudaMemcpy(Host_particles_pos_fine_dt, Dev_particles_pos_fine_dt, 2*prod_fine_dt_particles*sizeof(double), cudaMemcpyDeviceToHost);
-				writeAllRealToBinaryFile(2*prod_fine_dt_particles, Host_particles_pos_fine_dt, workspace, file_name, "/Particle_data/Fluid_fine/Particles_pos_" + to_str(save_ctr));
+				writeParticles(SettingsMain, file_name, to_str(save_ctr/(double)snapshots_per_second), Host_particles_pos, Dev_particles_pos, Tau_p, Nb_Tau_p);
 
-				if (save_ctr>=1){
-					if (save_ctr%1==0){
-						writeParticles(SettingsMain, file_name, to_str(save_ctr/(double)snapshots_per_second), Host_particles_pos, Dev_particles_pos, Tau_p, Nb_Tau_p);
-					}
-				}
+			    // if wanted, save fine particles, 1 file for all positions
+			    if (SettingsMain.getSaveFineParticles()) {
+			    	writeFineParticles(SettingsMain, file_name, to_str(save_ctr/(double)snapshots_per_second), Host_particles_fine_pos, Dev_particles_fine_pos, Tau_p, Nb_Tau_p, prod_fine_dt_particles);
+			    }
 			}
 
 		    // sample if wanted
@@ -759,19 +816,27 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	// CuFFT plans
 	cufftDestroy(cufftPlan_coarse);
 	cufftDestroy(cufftPlan_fine);
+	cufftDestroy(cufftPlan_psi);
+	if (SettingsMain.getSampleOnGrid()) {
+		cufftDestroy(cufftPlan_sample);
+	}
+	cudaFree(fft_work_area);
 
 	if (SettingsMain.getParticles()) {
 	// Particles variables
 	    delete [] Host_particles_pos;
 	    delete [] Host_particles_vel;
-	    delete [] Host_particles_pos_fine_dt;
+	    delete [] Host_particles_fine_pos;
 	    cudaFree(Dev_particles_pos);
         cudaFree(Dev_particles_vel);
-        cudaFree(Dev_particles_pos_fine_dt);
+        cudaFree(Dev_particles_fine_pos);
 	}
 
     cudaFree(Mesure);
     cudaFree(Mesure_fine);
+	if (SettingsMain.getSampleOnGrid()) {
+		cudaFree(Mesure_sample);
+	}
 
 	// save timing at last part of a step to take everything into account
     {

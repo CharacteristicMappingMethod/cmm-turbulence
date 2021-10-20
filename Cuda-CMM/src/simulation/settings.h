@@ -39,8 +39,8 @@ private:
 	bool sample_on_grid;
 	int grid_sample;
 	// particles
-	bool particles;
-	int particles_num;
+	bool particles, save_fine_particles;
+	int particles_num, particles_fine_num;
 	string particles_time_integration; int particles_time_integration_num;
 
 public:
@@ -166,6 +166,14 @@ public:
 	void setParticles(bool Particles) { particles = Particles; }
 	int getParticlesNum() const { return particles_num; }
 	void setParticlesNum(int particlesNum) { particles_num = particlesNum; }
+
+	// fine particles
+	bool getSaveFineParticles() const { return save_fine_particles; }
+	void setSaveFineParticles(bool saveFineParticles) { save_fine_particles = saveFineParticles; }
+	int getParticlesFineNum() const { return particles_fine_num; }
+	void setParticlesFineNum(int particlesFineNum) { particles_fine_num = particlesFineNum; }
+
+	// particle time integration
 	string getParticlesTimeIntegration() const { return particles_time_integration; }
 	void setParticlesTimeIntegration(string pTimeIntegration) {
 		particles_time_integration = pTimeIntegration;

@@ -8,9 +8,9 @@ void SettingsCMM::setPresets() {
 	// grid settings for coarse and fine grid
 	// 32		64		128		256		512		1024		2048		4096		8192		16384
 	// max working on V100 : grid_scale = 4096; fine_grid_scale = 16384;
-	int grid_coarse = 128;
-	int grid_fine = 1024;
-	int grid_psi = 2048;  // psi will be used on this grid
+	int grid_coarse = 512;
+	int grid_fine = 2048;
+	int grid_psi = 1024;  // psi will be used on this grid
 
 	/*
 	 *  Initial conditions
@@ -29,7 +29,7 @@ void SettingsCMM::setPresets() {
 	int steps_per_sec = 64;  // how many steps do we want per seconds?
 	bool set_dt_by_steps = true;  // choose wether we want to set dt by steps or by grid
 	// dt will be set in cudaeuler, so that all changes can be applied there
-	int snapshots_per_sec = 0;  // how many times do we want to save data per sec, set <= 0 to disable
+	int snapshots_per_sec = 1;  // how many times do we want to save data per sec, set <= 0 to disable
 
 	// set minor properties
 	double incomp_threshhold = 1e-4;  // the maximum allowance of map to deviate from grad_chi begin 1
@@ -59,7 +59,7 @@ void SettingsCMM::setPresets() {
 	// for now we have two different upsample versions, upsample on vorticity and psi (1) or only psi (0)
 	int upsample_version = 1;
 	// in addition to the upsampling, we want to lowpass in fourier space by cutting high frequencies
-	double freq_cut_psi = (double)(grid_coarse)/1.0;  // take into account, that frequencies are symmetric around N/2
+	double freq_cut_psi = (double)(grid_coarse)/2.0;  // take into account, that frequencies are symmetric around N/2
 
 	// skip remapping, usefull for convergence tests
 	bool skip_remapping = false;
@@ -74,6 +74,8 @@ void SettingsCMM::setPresets() {
 	bool particles = false;  // en- or disable particles
 	// tau_p has to be modified in cudaeuler, since it contains an array and i dont want to hardcode it here
 	int particles_num = 1000;  // number of particles
+	bool save_fine_particles = false;  // wether or not we want to save fine particles
+	int particles_fine_num = 1000;  // number of particles where every time step the position will be saved
 	// Time integration for particles, define by name, "EulerExp", "Heun", "RK3", "RK4", "NicolasMid", "NicolasRK3"
 	string particles_time_integration = "RK3";
 
@@ -101,6 +103,8 @@ void SettingsCMM::setPresets() {
 	setParticles(particles);
 	if (particles) {
 		setParticlesNum(particles_num);
+		setSaveFineParticles(save_fine_particles);
+		setParticlesFineNum(particles_fine_num);
 		setParticlesTimeIntegration(particles_time_integration);
 	}
 }
@@ -161,6 +165,12 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 				else if (value == "false" || value == "False" || value == "0") setParticles(false);
 			}
 			else if (command == "particles_num") setParticlesNum(stoi(value));
+			// true false handling
+			else if (command == "save_fine_particles") {
+				if (value == "true" || value == "True" || value == "1") setSaveFineParticles(true);
+				else if (value == "false" || value == "False" || value == "0") setSaveFineParticles(false);
+			}
+			else if (command == "particles_fine_num") setParticlesFineNum(stoi(value));
 			else if (command == "particles_time_integration") setParticlesTimeIntegration(value);
 		}
 	}

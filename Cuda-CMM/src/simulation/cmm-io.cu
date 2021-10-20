@@ -90,17 +90,19 @@ void create_particle_directory_structure(SettingsCMM SettingsMain, string file_n
         string fi = folder_name + "/Particle_data";
         mkdir(fi.c_str(), 0700);
 
-        // folder for fine particle data
-        string fi_1 = fi + "/Fluid_fine";
-        mkdir(fi_1.c_str(), 0700);
-
         // folder for fluid particle data
-        fi_1 = fi + "/Fluid";
+        string fi_1 = fi + "/Fluid";
+        mkdir(fi_1.c_str(), 0700);
+        // folder for fine particle data
+        fi_1 = fi + "/Fluid_fine";
         mkdir(fi_1.c_str(), 0700);
 
-        // folder for tau_p particles
+        // folder for tau_p particles together with fine folder
         for(int i = 1; i<Nb_Tau_p; i+=1){
             fi_1 = fi + "/Tau=" + to_str(Tau_p[i]);
+            mkdir(fi_1.c_str(), 0700);
+
+            fi_1 = fi + "/Tau=" + to_str(Tau_p[i]) + "_fine";
             mkdir(fi_1.c_str(), 0700);
         }
 	}
@@ -215,8 +217,17 @@ void writeParticles(SettingsCMM SettingsMain, string file_name, string i_num, do
     //cudaDeviceSynchronize();
     writeAllRealToBinaryFile(2*SettingsMain.getParticlesNum(), Host_particles_pos, SettingsMain.getWorkspace(), file_name, "/Particle_data/Fluid/Particles_pos_" + i_num);
     for(int i = 1; i < Nb_Tau_p; i+=1)
-        writeAllRealToBinaryFile(2*SettingsMain.getParticlesNum(), &Host_particles_pos[i * 2*SettingsMain.getParticlesNum()], SettingsMain.getWorkspace(), file_name, "/Particle_data/Tau=" + to_str(Tau_p[i]) + "/Particles_pos_" + i_num);
+        writeAllRealToBinaryFile(2*SettingsMain.getParticlesNum(), Host_particles_pos + i * 2*SettingsMain.getParticlesNum(), SettingsMain.getWorkspace(), file_name, "/Particle_data/Tau=" + to_str(Tau_p[i]) + "/Particles_pos_" + i_num);
+}
 
+void writeFineParticles(SettingsCMM SettingsMain, string file_name, string i_num, double *Host_particles_fine_pos, double *Dev_particles_fine_pos, double *Tau_p, int Nb_Tau_p, int fine_particle_steps) {
+	cudaMemcpy(Host_particles_fine_pos, Dev_particles_fine_pos, 2*fine_particle_steps*sizeof(double), cudaMemcpyDeviceToHost);
+	writeAllRealToBinaryFile(2*fine_particle_steps, Host_particles_fine_pos, SettingsMain.getWorkspace(), file_name, "/Particle_data/Fluid_fine/Particles_pos_" + i_num);
+
+    for(int i = 1; i < Nb_Tau_p; i+=1) {
+		cudaMemcpy(Host_particles_fine_pos, Dev_particles_fine_pos + 2*i*fine_particle_steps, 2*fine_particle_steps*sizeof(double), cudaMemcpyDeviceToHost);
+		writeAllRealToBinaryFile(2*fine_particle_steps, Host_particles_fine_pos, SettingsMain.getWorkspace(), file_name, "/Particle_data/Tau="+to_str(Tau_p[i])+"_fine/Particles_pos_" + i_num);
+    }
 }
 
 

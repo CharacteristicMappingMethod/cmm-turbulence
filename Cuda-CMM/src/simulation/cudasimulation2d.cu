@@ -1,7 +1,5 @@
 #include "cudasimulation2d.h"
 
-#include <stdio.h>
-
 ////////////////////////////////////////////////////////////////////////
 __global__ void kernel_init_diffeo(double *ChiX, double *ChiY, int NX, int NY, double h)
 {
