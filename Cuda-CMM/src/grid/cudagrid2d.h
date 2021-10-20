@@ -39,6 +39,28 @@ class TCudaGrid2D
 		TCudaGrid2D(int NX, int NY, double xRange);
 };
 
+// class for map stack thingies, because I am always just transferring this everywhere
+class MapStack {
+public:
+	double *Host_ChiX_stack_RAM_0, *Host_ChiY_stack_RAM_0,
+		   *Host_ChiX_stack_RAM_1, *Host_ChiY_stack_RAM_1,
+		   *Host_ChiX_stack_RAM_2, *Host_ChiY_stack_RAM_2,
+		   *Host_ChiX_stack_RAM_3, *Host_ChiY_stack_RAM_3,
+		   *Dev_ChiX_stack, *Dev_ChiY_stack;
+	int map_stack_length, frac_mem_cpu_to_gpu, Nb_array_RAM;
+	int map_stack_ctr, stack_length_RAM, stack_length_Nb_array_RAM;
+
+	TCudaGrid2D *Grid;
+
+	MapStack(TCudaGrid2D *Grid, int frac_mem_cpu_to_gpu, int map_stack_length);
+
+	void copy_map_to_host(double *Dev_ChiX, double *Dev_ChiY);
+	void copy_map_to_device(int K_RAM, int K);
+
+	void free_res();
+};
+
+
 void get_max_min(TCudaGrid2D *G, double *var, double *min, double *max);
 void Host_get_max_min(int len, double *Var_min, double *Var_max, double *min, double *max);
 

@@ -84,6 +84,37 @@ __global__ void Particle_advect(int Nb_particle, double dt, double *particles_po
 
 			break;
 		}
+		// runge kutta 4 for fluid particles
+		case 40: {
+			double u[8];
+			// k1 = u_tilde(x, t_n ) = u_n
+			device_hermite_interpolate_grad_2D(psi + 4*N, particles_pos + 2*i, u+2, NX, NY, h, 1);
+			double k1[2] = {u[2], u[3]};
+
+			// k2 = u_tilde(x + dt*k1/2, t_n + dt/2) = 0.3125*u_n+1 + 0.9375*u_n - 0.3125*u_n-1 + 0.0625*u_n-2;
+			double k2[2] = {particles_pos[2*i] + dt*k1[0]/2.0, particles_pos[2*i+1] + dt*k1[1]/2.0};
+			device_hermite_interpolate_grad_2D(psi, k2, u, NX, NY, h, 4);
+			// x_n+q = x_n + dt k2
+			k2[0] = 0.3125 * u[0] + 0.9375 * u[2] + -0.3125 * u[4] + 0.0625 * u[6];
+			k2[1] = 0.3125 * u[1] + 0.9375 * u[3] + -0.3125 * u[5] + 0.0625 * u[7];
+
+			// k2 = u_tilde(x + dt*k2/2, t_n + dt/2) = 0.3125*u_n+1 + 0.9375*u_n - 0.3125*u_n-1 + 0.0625*u_n-2;
+			double k3[2] = {particles_pos[2*i] + dt*k2[0]/2.0, particles_pos[2*i+1] + dt*k2[1]/2.0};
+			device_hermite_interpolate_grad_2D(psi, k3, u, NX, NY, h, 4);
+			// x_n+q = x_n + dt k2
+			k3[0] = 0.3125 * u[0] + 0.9375 * u[2] + -0.3125 * u[4] + 0.0625 * u[6];
+			k3[1] = 0.3125 * u[1] + 0.9375 * u[3] + -0.3125 * u[5] + 0.0625 * u[7];
+
+			// k3 = u_tilde(x + k3 dt, t_n+1) = u_n+1
+			double k4[2] = {particles_pos[2*i] + dt*k3[0], particles_pos[2*i+1] + dt*k3[1]};
+			device_hermite_interpolate_grad_2D(psi, k4, u, NX, NY, h, 1);
+
+			particles_pos[2*i  ] += dt * (k1[0] + 2*k2[0] + 2*k3[0] + u[0])/6;
+			particles_pos[2*i+1] += dt * (k1[1] + 2*k2[1] + 2*k3[1] + u[1])/6;
+
+
+			break;
+		}
 		// explicit midpoint rule from nicolas, first order despite two step method
 		case 25: {
 			double psi_x, psi_y, psi_x_p, psi_y_p;
@@ -253,11 +284,64 @@ __global__ void Particle_advect_inertia(int Nb_particle, double dt, double *part
 
 			// x_n+1 = x_n + dt/6 (k1 + 4*k2 + k3)
 			particles_pos[2*i  ] += dt/6.0 * (kp1[0] + 4*kp2[0] + kp3[0]);
-			particles_pos[2*i+1] += dt/6.0 * (kp2[1] + 4*kp2[1] + kp3[1]);
+			particles_pos[2*i+1] += dt/6.0 * (kp1[1] + 4*kp2[1] + kp3[1]);
 
 			// x_n+1 = x_n + dt/6 (k1 + 4*k2 + k3)
-			particles_vel[2*i  ] += dt/6.0 * (k1[0] + k2[0] + k3[0]);
-			particles_vel[2*i+1] += dt/6.0 * (k1[1] + k2[1] + k3[1]);
+			particles_vel[2*i  ] += dt/6.0 * (k1[0] + 4*k2[0] + k3[0]);
+			particles_vel[2*i+1] += dt/6.0 * (k1[1] + 4*k2[1] + k3[1]);
+
+			break;
+		}
+		// runge kutta 4
+		case 40: {
+			double u[8];
+			// kp1 = F_p(p_n, v_n, t_n) = v_n
+			double kp1[2] = {particles_vel[2*i  ], particles_vel[2*i+1]};
+			// compute u(p_n,t_n)
+			device_hermite_interpolate_grad_2D(psi + 4*N, particles_pos + 2*i, u+2, NX, NY, h, 1);
+			// kv1 = F_v(p_n, v_n, t_n) = - (v_n - u(p_n, t_n)) / tau_p
+			double k1[2] = {- (kp1[0] - u[2])/tau_p, - (kp1[1] - u[3])/tau_p};
+
+
+			// kp2 = F_p(p_n + h/2 kp_1, v_n + h/2 kv_1, t_n+1/2) = v_n + h/2 kv_1
+			double kp2[2] = {kp1[0] + dt/2.0 * k1[0], kp1[1] + dt/2.0 * k1[1]};
+
+			// compute u(p_n + h/2 kp1, t_n+1/2)
+			double k2[2] = {particles_pos[2*i  ] + dt/2.0 * kp1[0], particles_pos[2*i+1] + dt/2.0 * kp1[1]};
+			device_hermite_interpolate_grad_2D(psi, k2, u, NX, NY, h, 4);
+			// kv2 = F_v(p_n + h/2 kp_1, v_n + h/2 kv_1, t_n+1/2) = - (v_n + h/2 kv_1 - u(p_n + h/2kp1, t_n+1/2)) / tau_p with u_n+1/2 = 0.3125*u_n+1 + 0.9375*u_n - 0.3125*u_n-1 + 0.0625*u_n-2
+			k2[0] = - (kp1[0] + dt/2.0*k1[0] - (0.3125 * u[0] + 0.9375 * u[2] + -0.3125 * u[4] + 0.0625 * u[6])) / tau_p;
+			k2[1] = - (kp1[1] + dt/2.0*k1[1] - (0.3125 * u[0] + 0.9375 * u[2] + -0.3125 * u[4] + 0.0625 * u[6])) / tau_p;
+
+
+			// kp3 = F_p(p_n + h/2 kp_2, v_n + h/2 kv_2, t_n+1/2) = v_n + h/2 kv_2
+			double kp3[2] = {kp1[0] + dt/2.0 * k1[0], kp1[1] + dt/2.0 * k2[1]};
+
+			// compute u(p_n + h/2 kp2, t_n+1/2)
+			double k3[2] = {particles_pos[2*i  ] + dt/2.0 * kp2[0], particles_pos[2*i+1] + dt/2.0 * kp2[1]};
+			device_hermite_interpolate_grad_2D(psi, k3, u, NX, NY, h, 4);
+			// kv3 = F_v(p_n + h/2 kp_2, v_n + h/2 kv_2, t_n+1/2) = - (v_n + h/2 kv_2 - u(p_n + h/2kp2, t_n+1/2)) / tau_p with u_n+1/2 = 0.3125*u_n+1 + 0.9375*u_n - 0.3125*u_n-1 + 0.0625*u_n-2
+			k3[0] = - (kp1[0] + dt/2.0*k2[0] - (0.3125 * u[0] + 0.9375 * u[2] + -0.3125 * u[4] + 0.0625 * u[6])) / tau_p;
+			k3[1] = - (kp1[1] + dt/2.0*k2[1] - (0.3125 * u[0] + 0.9375 * u[2] + -0.3125 * u[4] + 0.0625 * u[6])) / tau_p;
+
+
+			// kp4 = F_p(p_n + h kp_3, v_n + h kv_3, t_n+1) = v_n + h* kv_3
+			double kp4[2] = {kp1[0] + dt * k3[0], kp1[1] + dt * k3[1]};
+
+			// compute u(p_n + h kp3, t_n+1)
+			double k4[2] = {particles_pos[2*i  ] + dt*kp3[0], particles_pos[2*i+1] + dt*kp3[1]};
+			device_hermite_interpolate_grad_2D(psi, k4, u, NX, NY, h, 1);
+			// kv4 = F_v(p_n + h kp_3, v_n + h kv_3, t_n+1) = - (v_n + h kv_3 - u(p_n+1 + h kp_3, t_n+1)) / tau_p
+			k4[0] = - (kp1[0] + dt*k3[0] - u[0]) / tau_p;
+			k4[1] = - (kp1[1] + dt*k3[1] - u[1]) / tau_p;
+
+			// x_n+1 = x_n + dt/6 (k1 + 2*k2 + 2*k3 + k4)
+			particles_pos[2*i  ] += dt/6.0 * (kp1[0] + 2*kp2[0] + 2*kp3[0] + kp4[0]);
+			particles_pos[2*i+1] += dt/6.0 * (kp1[1] + 2*kp2[1] + 2*kp3[1] + kp4[1]);
+
+			// x_n+1 = x_n + dt/6 (k1 + 2*k2 + 2*k3 + k4)
+			particles_vel[2*i  ] += dt/6.0 * (k1[0] + 2*k2[0] + 2*k3[0] + k4[0]);
+			particles_vel[2*i+1] += dt/6.0 * (k1[1] + 2*k2[1] + 2*k3[1] + k4[1]);
 
 			break;
 		}

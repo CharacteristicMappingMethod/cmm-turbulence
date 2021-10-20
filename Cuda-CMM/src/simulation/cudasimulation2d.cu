@@ -1,5 +1,6 @@
 #include "cudasimulation2d.h"
 
+#include <stdio.h>
 
 ////////////////////////////////////////////////////////////////////////
 __global__ void kernel_init_diffeo(double *ChiX, double *ChiY, int NX, int NY, double h)
@@ -26,7 +27,7 @@ __global__ void kernel_init_diffeo(double *ChiX, double *ChiY, int NX, int NY, d
 }
 
 
-__global__ void k_sample(double *ChiX, double *ChiY, double *ChiX_s, double *ChiY_s, int NXc, int NYc, double hc, int NXs, int NYs, double hs)															// time cost
+__global__ void k_sample(double *ChiX, double *ChiY, double *ChiX_s, double *ChiY_s, int NXc, int NYc, double hc, int NXs, int NYs, double hs)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -48,7 +49,7 @@ __global__ void k_sample(double *ChiX, double *ChiY, double *ChiX_s, double *Chi
 }
 
 
-__global__ void kernel_incompressibility_check(double *ChiX, double *ChiY, double *gradChi, int NXc, int NYc, double hc, int NXs, int NYs, double hs)															// time cost
+__global__ void kernel_incompressibility_check(double *ChiX, double *ChiY, double *gradChi, int NXc, int NYc, double hc, int NXs, int NYs, double hs)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -250,43 +251,36 @@ __global__ void kernel_apply_map_stack_to_W_custom(double *ChiX_stack, double *C
 }
 
 
-void apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY,
-		double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1,
-		double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3,
-		double *W_real, double *Dev_Temp, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM,
-		int mem_RAM, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double *bounds, double *W_initial, int simulation_num)
+void apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_fine, MapStack *Map_Stack, double *ChiX, double *ChiY,
+		double *W_real, double *Dev_Temp, double *bounds, double *W_initial, int simulation_num)
 {
 	// for normal map stack, bounds has the domain boundaries applied
-	kernel_apply_map_stack_to_W_custom_part_1<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, bounds[0], bounds[1], bounds[2], bounds[3]);
+	kernel_apply_map_stack_to_W_custom_part_1<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, Map_Stack->Grid->NX, Map_Stack->Grid->NY, Map_Stack->Grid->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, bounds[0], bounds[1], bounds[2], bounds[3]);
 
 	// loop over all maps in map stack
-	for(int K_RAM = stack_length_Nb_array_RAM; K_RAM >= 0; K_RAM--){
-		if (K_RAM == stack_length_Nb_array_RAM){
-			for(int K = stack_length_RAM%mem_RAM; K >= 0; K--){
-				copy_stack_to_device(K_RAM, K*map_stack_length*Grid_coarse->N*4, map_stack_length * 4*Grid_coarse->sizeNReal,
-						ChiX_stack, ChiY_stack,
-						Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1,
-						Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3);
-				if (K == stack_length_RAM%mem_RAM){
-					for(int k = stack_length - stack_length_RAM*map_stack_length - 1; k >= 0; k--){
-						kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX_stack, ChiY_stack, Dev_Temp, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, k);
+	for(int K_RAM = Map_Stack->stack_length_Nb_array_RAM; K_RAM >= 0; K_RAM--){
+		if (K_RAM == Map_Stack->stack_length_Nb_array_RAM){
+			for(int K = Map_Stack->stack_length_RAM%Map_Stack->frac_mem_cpu_to_gpu; K >= 0; K--){
+				// copy map stack, is done intern in map stack class
+				Map_Stack->copy_map_to_device(K_RAM, K);
+
+				if (K == Map_Stack->stack_length_RAM%Map_Stack->frac_mem_cpu_to_gpu){
+					for(int k = Map_Stack->map_stack_ctr - Map_Stack->stack_length_RAM*Map_Stack->map_stack_length - 1; k >= 0; k--){
+						kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Map_Stack->Dev_ChiX_stack, Map_Stack->Dev_ChiY_stack, Dev_Temp, Map_Stack->Grid->NX, Map_Stack->Grid->NY, Map_Stack->Grid->h, Grid_fine->NX, Grid_fine->NY, k);
 					}
 				}
 				else{
-					for(int k = map_stack_length - 1; k >= 0; k--){
-						kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX_stack, ChiY_stack, Dev_Temp, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, k);
+					for(int k = Map_Stack->map_stack_length - 1; k >= 0; k--){
+						kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Map_Stack->Dev_ChiX_stack, Map_Stack->Dev_ChiY_stack, Dev_Temp, Map_Stack->Grid->NX, Map_Stack->Grid->NY, Map_Stack->Grid->h, Grid_fine->NX, Grid_fine->NY, k);
 					}
 				}
 			}
 		}
 		else{
-			for(int K = mem_RAM-1; K >= 0; K--){
-				copy_stack_to_device(K_RAM, K*map_stack_length*Grid_coarse->N*4, map_stack_length * 4*Grid_coarse->sizeNReal,
-						ChiX_stack, ChiY_stack,
-						Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1,
-						Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3);
-				for(int k = map_stack_length - 1; k >= 0; k--){
-					kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX_stack, ChiY_stack, Dev_Temp, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, k);
+			for(int K = Map_Stack->frac_mem_cpu_to_gpu-1; K >= 0; K--){
+				Map_Stack->copy_map_to_device(K_RAM, K);
+				for(int k = Map_Stack->map_stack_length - 1; k >= 0; k--){
+					kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Map_Stack->Dev_ChiX_stack, Map_Stack->Dev_ChiY_stack, Dev_Temp, Map_Stack->Grid->NX, Map_Stack->Grid->NY, Map_Stack->Grid->h, Grid_fine->NX, Grid_fine->NY, k);
 				}
 			}
 		}
@@ -294,32 +288,6 @@ void apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_f
 
 	// initial condition
 	kernel_apply_map_stack_to_W_part_3<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_real, Dev_Temp, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, W_initial, simulation_num);
-
-}
-
-void copy_stack_to_device(int K_RAM, long int index, long int length_bytes, double *ChiX_stack, double *ChiY_stack, double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1, double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3) {
-	switch (K_RAM) {
-		case 0: {
-			cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_0[index], length_bytes, cudaMemcpyHostToDevice);
-			cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_0[index], length_bytes, cudaMemcpyHostToDevice);
-			break;
-		}
-		case 1: {
-			cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_1[index], length_bytes, cudaMemcpyHostToDevice);
-			cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_1[index], length_bytes, cudaMemcpyHostToDevice);
-			break;
-		}
-		case 2: {
-			cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_2[index], length_bytes, cudaMemcpyHostToDevice);
-			cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_2[index], length_bytes, cudaMemcpyHostToDevice);
-			break;
-		}
-		case 3: {
-			cudaMemcpy(ChiX_stack, &Host_ChiX_stack_RAM_3[index], length_bytes, cudaMemcpyHostToDevice);
-			cudaMemcpy(ChiY_stack, &Host_ChiY_stack_RAM_3[index], length_bytes, cudaMemcpyHostToDevice);
-			break;
-		}
-	}
 }
 
 

@@ -42,7 +42,7 @@ using namespace std;
 
 	// function to save all data from one timestep into hdf5 or other file structure
 	void writeTimeStep(string workspace, string file_name, string i_num, double *Host_save, double *Dev_W_coarse, double *Dev_W_fine, double *Dev_Psi_real, double *Dev_ChiX, double *Dev_ChiY, TCudaGrid2D *Grid_fine, TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_psi);
-	void writeTimeVariable(string workspace, string sim_name, string file_name, string i_num, double *Host_save, double *Dev_save, TCudaGrid2D *Grid_save);
+	void writeTimeVariable(string workspace, string sim_name, string file_name, string i_num, double *Host_save, double *Dev_save, long int size_N, long int N);
 	void writeParticles(SettingsCMM SettingsMain, string file_name, string i_num, double *Host_particles_pos, double *Dev_particles_pos, double *Tau_p, int Nb_Tau_p);
 
 	class Logger
@@ -60,5 +60,13 @@ using namespace std;
 
 	const string currentDateTime();
 #endif
+
+
+template < typename Type > string to_str (const Type & t)
+{
+  ostringstream os;
+  os << t;
+  return os.str ();
+}
 
 #endif

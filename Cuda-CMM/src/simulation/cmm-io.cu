@@ -19,7 +19,7 @@ void create_directory_structure(SettingsCMM SettingsMain, string file_name, doub
 	mkdir(folder_name.c_str(), 0700);
 
 	// create general subfolder for timesteps
-	string folder_name_tdata = folder_name + "/Timestep_data";
+	string folder_name_tdata = folder_name + "/Time_data";
 	mkdir(folder_name_tdata.c_str(), 0700);
 
 	string fileName = folder_name + "/readme.txt";
@@ -70,7 +70,7 @@ void create_directory_structure(SettingsCMM SettingsMain, string file_name, doub
     			case 40: { file<<"Particles Time integration : Runge Kutta 4"<<endl; break; }
     			case 25: { file<<"Particles Time integration : Nicolas Euler midpoint"<<endl; break; }
     			case 35: { file<<"Particles Time integration : Nicolas Runge Kutta 3"<<endl; break; }
-    			default: { file<<"Particles Time integration : Default (Euler explicit)"<<endl; break; }
+    			default: { file<<"Particles Time integration : Default (zero)"<<endl; break; }
     		}
         }
         else file<<"Particles disabled"<<endl;
@@ -100,7 +100,7 @@ void create_particle_directory_structure(SettingsCMM SettingsMain, string file_n
 
         // folder for tau_p particles
         for(int i = 1; i<Nb_Tau_p; i+=1){
-            fi_1 = fi + "/Tau=" + std::to_string(Tau_p[i]).substr(0, std::to_string(Tau_p[i]).find(".") + 3+ 1);
+            fi_1 = fi + "/Tau=" + to_str(Tau_p[i]);
             mkdir(fi_1.c_str(), 0700);
         }
 	}
@@ -167,7 +167,7 @@ void readAllRealFromBinaryFile(int Len, double *var, string workspace, string si
 	void writeTimeStep(string workspace, string file_name, string i_num, double *Host_save, double *Dev_W_coarse, double *Dev_W_fine, double *Dev_Psi_real, double *Dev_ChiX, double *Dev_ChiY, TCudaGrid2D *Grid_fine, TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_psi) {
 
 		// create new subfolder for current timestep
-		string sub_folder_name = "/Timestep_data/Timestep_" + i_num;
+		string sub_folder_name = "/Time_data/Time_" + i_num;
 		string folder_name_now = workspace + "data/" + file_name + sub_folder_name;
 		mkdir(folder_name_now.c_str(), 0700);
 
@@ -192,15 +192,15 @@ void readAllRealFromBinaryFile(int Len, double *var, string workspace, string si
 
 
 // script to save only one of the variables, needed because we need temporal arrays to save
-void writeTimeVariable(string workspace, string sim_name, string file_name, string i_num, double *Host_save, double *Dev_save, TCudaGrid2D *Grid_save) {
+void writeTimeVariable(string workspace, string sim_name, string file_name, string i_num, double *Host_save, double *Dev_save, long int size_N, long int N) {
 	// create new subfolder for current timestep, doesn't matter if we try to create it several times
-	string sub_folder_name = "/Timestep_data/Timestep_" + i_num;
+	string sub_folder_name = "/Time_data/Time_" + i_num;
 	string folder_name_now = workspace + "data/" + sim_name + sub_folder_name;
 	mkdir(folder_name_now.c_str(), 0700);
 
 	// copy and save
-	cudaMemcpy(Host_save, Dev_save, Grid_save->sizeNReal, cudaMemcpyDeviceToHost);
-	writeAllRealToBinaryFile(Grid_save->N, Host_save, workspace, sim_name, sub_folder_name + "/" + file_name);
+	cudaMemcpy(Host_save, Dev_save, size_N, cudaMemcpyDeviceToHost);
+	writeAllRealToBinaryFile(N, Host_save, workspace, sim_name, sub_folder_name + "/" + file_name);
 }
 
 
@@ -215,7 +215,7 @@ void writeParticles(SettingsCMM SettingsMain, string file_name, string i_num, do
     //cudaDeviceSynchronize();
     writeAllRealToBinaryFile(2*SettingsMain.getParticlesNum(), Host_particles_pos, SettingsMain.getWorkspace(), file_name, "/Particle_data/Fluid/Particles_pos_" + i_num);
     for(int i = 1; i < Nb_Tau_p; i+=1)
-        writeAllRealToBinaryFile(2*SettingsMain.getParticlesNum(), &Host_particles_pos[i * 2*SettingsMain.getParticlesNum()], SettingsMain.getWorkspace(), file_name, "/Particle_data/Tau=" + std::to_string(Tau_p[i]).substr(0, std::to_string(Tau_p[i]).find(".") + 3+ 1) + "/Particles_pos_" + i_num);
+        writeAllRealToBinaryFile(2*SettingsMain.getParticlesNum(), &Host_particles_pos[i * 2*SettingsMain.getParticlesNum()], SettingsMain.getWorkspace(), file_name, "/Particle_data/Tau=" + to_str(Tau_p[i]) + "/Particles_pos_" + i_num);
 
 }
 

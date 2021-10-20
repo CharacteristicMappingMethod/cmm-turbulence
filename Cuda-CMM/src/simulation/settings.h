@@ -28,7 +28,6 @@ private:
 	//memory variables
 	int mem_RAM_GPU_remaps;
 	int mem_RAM_CPU_remaps;
-	int Nb_array_RAM;
 	// specific
 	string time_integration; int time_integration_num;
 	int lagrange_order;
@@ -37,6 +36,8 @@ private:
 	int upsample_version;
 	double freq_cut_psi;
 	bool skip_remapping;
+	bool sample_on_grid;
+	int grid_sample;
 	// particles
 	bool particles;
 	int particles_num;
@@ -107,8 +108,6 @@ public:
 	void setMemRamGpuRemaps(int memRamGpuRemaps) { mem_RAM_GPU_remaps = memRamGpuRemaps; }
 	int getMemRamCpuRemaps() const { return mem_RAM_CPU_remaps; }
 	void setMemRamCpuRemaps(int memRamCpuRemaps) { mem_RAM_CPU_remaps = memRamCpuRemaps; }
-	int getNbArrayRam() const { return Nb_array_RAM; }
-	void setNbArrayRam(int nbArrayRam) { Nb_array_RAM = nbArrayRam; }
 
 	// map update order handling the stencil of footpoints
 	string getMapUpdateOrder() const { return map_update_order; }
@@ -156,6 +155,12 @@ public:
 	bool getSkipRemapping() const { return skip_remapping; }
 	void setSkipRemapping(bool skipRemapping) { skip_remapping = skipRemapping; }
 
+	// possibility to sample on specific grid
+	bool getSampleOnGrid() const { return sample_on_grid; }
+	void setSampleOnGrid(bool sampleOnGrid) { sample_on_grid = sampleOnGrid; }
+	int getGridSample() const { return grid_sample; }
+	void setGridSample(int gridSample) { grid_sample = gridSample; }
+
 	// particles
 	bool getParticles() const { return particles; }
 	void setParticles(bool Particles) { particles = Particles; }
@@ -167,6 +172,7 @@ public:
 		if (pTimeIntegration == "EulerExp") { particles_time_integration_num = 10; if (getLagrangeOrder() < 1) lagrange_order = 1; }
 		else if (pTimeIntegration == "Heun") { particles_time_integration_num = 20; if (getLagrangeOrder() < 2) lagrange_order = 2; }
 		else if (pTimeIntegration == "RK3") { particles_time_integration_num = 30; if (getLagrangeOrder() < 3) lagrange_order = 3; }
+		else if (pTimeIntegration == "RK4") { particles_time_integration_num = 40; if (getLagrangeOrder() < 4) lagrange_order = 4; }
 		else if (pTimeIntegration == "NicolasMid") { particles_time_integration_num = 25; if (getLagrangeOrder() < 2) lagrange_order = 2; }
 		else if (pTimeIntegration == "NicolasRK3") { particles_time_integration_num = 35; if (getLagrangeOrder() < 3) lagrange_order = 3; }
 		else particles_time_integration_num = -1;

@@ -30,12 +30,8 @@
 	
 	
 	//map applications
-	void apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY,
-			double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1,
-			double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3,
-			double *W_real, double *Dev_Complex_fine, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM,
-			int mem_RAM, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double *bounds, double *W_initial, int simulation_num);
-	void copy_stack_to_device(int K_RAM, long int index, long int length_bytes, double *ChiX_stack, double *ChiY_stack, double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1, double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3);
+	void apply_map_stack_to_W_part_All(TCudaGrid2D *Grid, MapStack *Map_Stack, double *ChiX, double *ChiY,
+			double *W_real, double *Dev_Temp, double *bounds, double *W_initial, int simulation_num);
 
 	__global__ void kernel_apply_map_to_W(double *ChiX, double *ChiY, double *ws, int NXc, int NYc, double hc, int NXs, int NYs, double hs);	//apply map on passed coarse grid to vorticiy field on sample grid
 	__global__ void kernel_apply_map_stack_to_W(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *ws, int stack_length, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double *W_initial, int simulation_num);	//apply map on passed coarse grid to vorticiy field on sample grid
@@ -57,8 +53,7 @@
 	__device__ double device_initial_W_discret(double x, double y, double *W_initial, int NX, int NY);
 	__device__ double initHomeoIso(double x, double y);
 	
-	__global__ void k_upsample(double *ChiX, double *ChiY, double *ChiX_2048, double *ChiY_2048, int NXc, int NYc, double hc, int NXs, int NYs, double hs);
-	
+	__global__ void k_sample(double *ChiX, double *ChiY, double *ChiX_s, double *ChiY_s, int NXc, int NYc, double hc, int NXs, int NYs, double hs);
 	
 #endif
 
