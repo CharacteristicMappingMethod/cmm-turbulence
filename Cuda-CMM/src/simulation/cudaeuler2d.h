@@ -2,18 +2,17 @@
 #define __CUDA_EULER_2D_H__
 
 #include "../simulation/settings.h"
-#include "../simulation/cmm-io.h"
 #include "../simulation/cudasimulation2d.h"
 #include "../grid/cudagrid2d.h"
 #include "../numerical/cmm-particles.h"
 #include "../simulation/cudamesure2d.h"
 #include "../simulation/cmm-fft.h"
 
+#include "../ui/cmm-io.h"
+
 #include <unistd.h>
 #include <chrono>
 
-
-#ifdef __CUDACC__
 
 //calculate a new inital condition for hermite	by applying full map stack
 void fourier_hermite(TCudaGrid2D *Grid, cufftDoubleComplex *Dev_Temp_C1, double *Dev_Output, cufftDoubleComplex *Dev_Temp_C2, cufftHandle cufftPlan);
@@ -41,8 +40,8 @@ void Zoom(TCudaGrid2D *Grid_fine, MapStack *Map_Stack, double *Dev_ChiX, double 
 		cufftHandle cufftPlan_fine, double *W_initial, cufftDoubleComplex *Dev_Temp,
 		string workspace, string simulationName, int simulation_num, double L);
 
-#endif
 
+// main function
 void cuda_euler_2d(SettingsCMM SettingsMain);
 
 

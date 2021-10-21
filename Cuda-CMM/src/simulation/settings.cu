@@ -26,10 +26,12 @@ void SettingsCMM::setPresets() {
 	// set time properties
 	double final_time = 4;  // end of computation
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this is the factor for it
-	int steps_per_sec = 64;  // how many steps do we want per seconds?
+	int steps_per_sec = 32;  // how many steps do we want per seconds?
 	bool set_dt_by_steps = true;  // choose wether we want to set dt by steps or by grid
 	// dt will be set in cudaeuler, so that all changes can be applied there
 	int snapshots_per_sec = 1;  // how many times do we want to save data per sec, set <= 0 to disable
+	bool save_initial = true;  // consume less data and make it possible to disable saving the initial data
+	bool save_final = true;  // consume less data and make it possible to disable saving the final data
 
 	// set minor properties
 	double incomp_threshhold = 1e-4;  // the maximum allowance of map to deviate from grad_chi begin 1
@@ -74,6 +76,13 @@ void SettingsCMM::setPresets() {
 	bool particles = false;  // en- or disable particles
 	// tau_p has to be modified in cudaeuler, since it contains an array and i dont want to hardcode it here
 	int particles_num = 1000;  // number of particles
+
+	int particles_step_reduction = 2;  // dont advect particles every step, but at different steps with bigger dt, for convergence tests
+
+	int particles_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save particles per sec, set <= 0 to disable
+	bool particles_save_initial = true;  // consume less data and make it possible to disable saving the initial data
+	bool particles_save_final = true;  // consume less data and make it possible to disable saving the final data
+
 	bool save_fine_particles = false;  // wether or not we want to save fine particles
 	int particles_fine_num = 1000;  // number of particles where every time step the position will be saved
 	// Time integration for particles, define by name, "EulerExp", "Heun", "RK3", "RK4", "NicolasMid", "NicolasRK3"
@@ -88,6 +97,7 @@ void SettingsCMM::setPresets() {
 	setFinalTime(final_time);
 	setFactorDtByGrid(factor_dt_by_grid); setStepsPerSec(steps_per_sec);
 	setSnapshotsPerSec(snapshots_per_sec); setSetDtBySteps(set_dt_by_steps);
+	setSaveInitial(save_initial); setSaveFinal(save_final);
 	setInitialCondition(initial_condition);
 	setIncompThreshold(incomp_threshhold);
 	setMapEpsilon(map_epsilon);
@@ -103,8 +113,14 @@ void SettingsCMM::setPresets() {
 	setParticles(particles);
 	if (particles) {
 		setParticlesNum(particles_num);
+
+		setParticlesSnapshotsPerSec(particles_snapshots_per_sec);
+		setParticlesSaveInitial(particles_save_initial); setParticlesSaveFinal(particles_save_final);
+		setParticlesStepReduction(particles_step_reduction);
+
 		setSaveFineParticles(save_fine_particles);
 		setParticlesFineNum(particles_fine_num);
+
 		setParticlesTimeIntegration(particles_time_integration);
 	}
 }
@@ -127,6 +143,8 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			string value = command_full.substr(pos_equal+1, command_full.length());
 
 			// big if else for different commands
+			// this beast is becoming larger and larger, i should convert it to something more automatic
+			// either using switch or using pointer to the function names together with a list of everything
 			if (command == "workspace") setWorkspace(value);
 			else if (command == "sim_name") setSimName(value);
 			else if (command == "grid_coarse") setGridCoarse(stoi(value));
@@ -135,10 +153,9 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "final_time") setFinalTime(stod(value));
 			else if (command == "factor_dt_by_grid") setFactorDtByGrid(stod(value));
 			else if (command == "steps_per_sec") setStepsPerSec(stoi(value));
-			else if (command == "set_dt_by_steps") {
-				if (value == "true" || value == "True" || value == "1") setSetDtBySteps(true);
-				else if (value == "false" || value == "False" || value == "0") setSetDtBySteps(false);
-			}
+			else if (command == "set_dt_by_steps") setSetDtBySteps(getBoolFromString(value));
+			else if (command == "save_initial") setSaveInitial(getBoolFromString(value));
+			else if (command == "save_final") setSaveFinal(getBoolFromString(value));
 			else if (command == "snapshots_per_sec") setSnapshotsPerSec(stoi(value));
 			else if (command == "initial_condition") setInitialCondition(value);
 			else if (command == "incomp_threshold") setIncompThreshold(stod(value));
@@ -150,26 +167,16 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "molly_stencil") setMollyStencil(stoi(value));
 			else if (command == "upsample_version") setUpsampleVersion(stoi(value));
 			else if (command == "freq_cut_psi") setFreqCutPsi(stod(value));
-			else if (command == "skip_remapping") {
-				if (value == "true" || value == "True" || value == "1") setSkipRemapping(true);
-				else if (value == "false" || value == "False" || value == "0") setSkipRemapping(false);
-			}
-			else if (command == "sample_on_grid") {
-				if (value == "true" || value == "True" || value == "1") setSampleOnGrid(true);
-				else if (value == "false" || value == "False" || value == "0") setSampleOnGrid(false);
-			}
+			else if (command == "skip_remapping") setSkipRemapping(getBoolFromString(value));
+			else if (command == "sample_on_grid") setSampleOnGrid(getBoolFromString(value));
 			else if (command == "grid_sample") setGridSample(stoi(value));
-			// true false handling
-			else if (command == "particles") {
-				if (value == "true" || value == "True" || value == "1") setParticles(true);
-				else if (value == "false" || value == "False" || value == "0") setParticles(false);
-			}
+			else if (command == "particles") setParticles(getBoolFromString(value));
 			else if (command == "particles_num") setParticlesNum(stoi(value));
-			// true false handling
-			else if (command == "save_fine_particles") {
-				if (value == "true" || value == "True" || value == "1") setSaveFineParticles(true);
-				else if (value == "false" || value == "False" || value == "0") setSaveFineParticles(false);
-			}
+			else if (command == "particles_snapshots_per_sec") setParticlesSnapshotsPerSec(stoi(value));
+			else if (command == "particles_save_initial") setParticlesSaveInitial(getBoolFromString(value));
+			else if (command == "particles_save_final") setParticlesSaveFinal(getBoolFromString(value));
+			else if (command == "particles_step_reduction") setParticlesNum(stoi(value));
+			else if (command == "save_fine_particles") setSaveFineParticles(getBoolFromString(value));
 			else if (command == "particles_fine_num") setParticlesFineNum(stoi(value));
 			else if (command == "particles_time_integration") setParticlesTimeIntegration(value);
 		}
@@ -205,4 +212,12 @@ SettingsCMM::SettingsCMM(int argc, char *args[]) {
 	setPresets();
 	// override presets with command line arguments
 	applyCommands(argc, args);
+}
+
+
+// little helper function to combine parsing the bool value
+bool SettingsCMM::getBoolFromString(string value) {
+	if (value == "true" || value == "True" || value == "1") return true;
+	else if (value == "false" || value == "False" || value == "0") return false;
+	return false;  // in case no value is chosen
 }

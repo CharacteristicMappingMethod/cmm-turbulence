@@ -31,8 +31,8 @@ all: SimulationCuda2d.out
 ./bin/cudagrid2d.o: src/grid/cudagrid2d.cu src/grid/cudagrid2d.h | bin_dir
 	$(NVCC_PATH) -O3 $(HDF5_COMMAND) -c -g -lineinfo src/grid/cudagrid2d.cu -o ./bin/cudagrid2d.o -arch=$(GPU_ARCH) --relocatable-device-code true
 
-./bin/cmm-io.o: src/simulation/cmm-io.cu src/simulation/cmm-fft.h | bin_dir
-	$(NVCC_PATH) -O3 -c -g -lineinfo src/simulation/cmm-io.cu -o ./bin/cmm-io.o -arch=$(GPU_ARCH) --relocatable-device-code true 
+./bin/cmm-io.o: src/ui/cmm-io.cu src/ui/cmm-io.h | bin_dir
+	$(NVCC_PATH) -O3 -c -g -lineinfo src/ui/cmm-io.cu -o ./bin/cmm-io.o -arch=$(GPU_ARCH) --relocatable-device-code true 
 
 ./bin/cmm-fft.o: src/simulation/cmm-fft.cu src/simulation/cmm-fft.h | bin_dir
 	$(NVCC_PATH) -O3 -c -g -lineinfo src/simulation/cmm-fft.cu -o ./bin/cmm-fft.o -arch=$(GPU_ARCH) --relocatable-device-code true 

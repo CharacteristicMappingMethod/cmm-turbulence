@@ -94,16 +94,20 @@ void create_particle_directory_structure(SettingsCMM SettingsMain, string file_n
         string fi_1 = fi + "/Fluid";
         mkdir(fi_1.c_str(), 0700);
         // folder for fine particle data
-        fi_1 = fi + "/Fluid_fine";
-        mkdir(fi_1.c_str(), 0700);
+        if (SettingsMain.getSaveFineParticles()) {
+			fi_1 = fi + "/Fluid_fine";
+			mkdir(fi_1.c_str(), 0700);
+        }
 
         // folder for tau_p particles together with fine folder
         for(int i = 1; i<Nb_Tau_p; i+=1){
             fi_1 = fi + "/Tau=" + to_str(Tau_p[i]);
             mkdir(fi_1.c_str(), 0700);
 
-            fi_1 = fi + "/Tau=" + to_str(Tau_p[i]) + "_fine";
-            mkdir(fi_1.c_str(), 0700);
+            if (SettingsMain.getSaveFineParticles()) {
+				fi_1 = fi + "/Tau=" + to_str(Tau_p[i]) + "_fine";
+				mkdir(fi_1.c_str(), 0700);
+            }
         }
 	}
 }

@@ -27,17 +27,14 @@
 
 
 
-
-#ifdef __CUDACC__
-
-
-
 	//the following functions assumes H to be a hermite interpolant on a grid (i*hH, j*hH)
 	//and interpolates the value at grid points (i*hF, j*hF) and assigns it to F
 	//all interpolation functions are warped
 	//a jump is added to diffeo on warping points
 
 //	__global__ void kernel_hermite_interpolation(double *H, double *F, int NXH, int NYH, int NXF, int NYF, double hH, double hF);		//interpolation test
+
+#ifdef __CUDACC__
 
 	__device__ double device_hermite_interpolate_2D   (double *H, double x, double y, int NX, int NY, double h);
 	__device__ double device_hermite_interpolate_dx_2D(double *H, double x, double y, int NX, int NY, double h);
@@ -50,10 +47,7 @@
 	__device__ void device_diffeo_interpolate_2D(double *Hx, double *Hy, double x, double y, double *x2,  double *y2, int NX, int NY, double h);
 	__device__ double device_diffeo_grad_2D(double *Hx, double *Hy, double x, double y, int NX, int NY, double h);
 
-
 #endif
-
-
 
 
 #endif

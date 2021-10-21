@@ -22,6 +22,7 @@ private:
 	double final_time, factor_dt_by_grid;
 	int steps_per_sec, snapshots_per_sec;
 	bool set_dt_by_steps;
+	bool save_initial, save_final;
 	// minor properties, can be tweaked but mainly remain constant
 	double incomp_threshhold;
 	double map_epsilon;
@@ -40,7 +41,9 @@ private:
 	int grid_sample;
 	// particles
 	bool particles, save_fine_particles;
+	bool particles_save_initial, particles_save_final;
 	int particles_num, particles_fine_num;
+	int particles_snapshots_per_sec, particles_step_reduction;
 	string particles_time_integration; int particles_time_integration_num;
 
 public:
@@ -53,6 +56,8 @@ public:
 	void setPresets();
 	// function to apply commands from command line
 	void applyCommands(int argc, char *args[]);
+	// helper function
+	bool getBoolFromString(string value);
 
 	// get and set methods for all variables
 
@@ -80,6 +85,11 @@ public:
 	void setSnapshotsPerSec(int snapshotsPerSec) { snapshots_per_sec = snapshotsPerSec; }
 	bool getSetDtBySteps() const { return set_dt_by_steps; }
 	void setSetDtBySteps(bool setDtBySteps) { set_dt_by_steps = setDtBySteps; }
+
+	bool getSaveInitial() const { return save_initial; }
+	void setSaveInitial(bool saveInitial) { save_initial = saveInitial; }
+	bool getSaveFinal() const { return save_final; }
+	void setSaveFinal(bool saveFinal) { save_final = saveFinal; }
 
 	// initial conditions setting
 	string getInitialCondition() const { return initial_condition; }
@@ -166,6 +176,17 @@ public:
 	void setParticles(bool Particles) { particles = Particles; }
 	int getParticlesNum() const { return particles_num; }
 	void setParticlesNum(int particlesNum) { particles_num = particlesNum; }
+
+	int getParticlesSnapshotsPerSec() const { return particles_snapshots_per_sec; }
+	void setParticlesSnapshotsPerSec(int particlesSnapshotsPerSec) { particles_snapshots_per_sec = particlesSnapshotsPerSec; }
+
+	bool getParticlesSaveInitial() const { return particles_save_initial; }
+	void setParticlesSaveInitial(bool particlesSaveInitial) { particles_save_initial = particlesSaveInitial; }
+	bool getParticlesSaveFinal() const { return particles_save_final; }
+	void setParticlesSaveFinal(bool particlesSaveFinal) { particles_save_final = particlesSaveFinal; }
+
+	int getParticlesStepReduction() const { return particles_step_reduction; }
+	void setParticlesStepReduction(int particlesStepReduction) { particles_step_reduction = particlesStepReduction; }
 
 	// fine particles
 	bool getSaveFineParticles() const { return save_fine_particles; }

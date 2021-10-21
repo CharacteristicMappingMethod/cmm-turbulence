@@ -51,14 +51,6 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	if (SettingsMain.getSetDtBySteps()) dt = 1.0 / steps_per_sec;  // direct setting of timestep
 	else dt = 1.0 / std::max(NX_coarse, NY_coarse) / grid_by_time;  // setting of timestep by grid and factor
 	
-	double *Dev_W_H_initial; cudaMalloc((void**)Dev_W_H_initial, 8);
-
-	#ifdef DISCRET
-		grid_by_time = 8.0;
-		snapshots_per_second = 1;
-		dt = 1.0/(NX_coarse * grid_by_time);
-		tf = 100;	
-	#endif
 	
 	//shared parameters
 	iterMax = ceil(tf / dt);
@@ -236,6 +228,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	*							DISCRET								   *
 	*******************************************************************/
 	
+	double *Host_W_initial, *Dev_W_H_initial;
 	#ifdef DISCRET
 		
 		double *Host_W_initial, *Dev_W_H_initial;
@@ -300,7 +293,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	double *Host_particles_pos ,*Dev_particles_pos;  // position of particles
 	double *Host_particles_vel ,*Dev_particles_vel;  // velocity of particles
 	curandGenerator_t prng;
-	int freq_fine_dt_particles, prod_fine_dt_particles;
+	int particles_save_buffer_count, freq_fine_dt_particles, prod_fine_dt_particles;
 	double *Dev_particles_fine_pos, *Host_particles_fine_pos;
 	// i still dont really get pointers and arrays in c++, so this array will have to stay here for now
 	int Nb_Tau_p = 2;
@@ -327,20 +320,25 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			cudaMemcpy(&Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_pos[0], 2*Nb_particles*sizeof(double), cudaMemcpyDeviceToDevice);
 
 		// particles where every time step the position will be saved
-		if (snapshots_per_second > 0 && SettingsMain.getSaveFineParticles()) {
-			SettingsMain.setParticlesFineNum(std::min(SettingsMain.getParticlesFineNum(), SettingsMain.getParticlesNum()));
-			freq_fine_dt_particles = save_buffer_count; // save particles at every saving step
-			prod_fine_dt_particles = SettingsMain.getParticlesFineNum() * freq_fine_dt_particles;
+		if (SettingsMain.getParticlesSnapshotsPerSec() > 0) {
+			particles_save_buffer_count = 1.0/SettingsMain.getParticlesSnapshotsPerSec()/dt;  // normal case
 
-			Host_particles_fine_pos = new double[2*prod_fine_dt_particles];
-			cudaMalloc((void**) &Dev_particles_fine_pos, 2*prod_fine_dt_particles*Nb_Tau_p*sizeof(double));
-			mb_used_RAM_GPU += 2*prod_fine_dt_particles*Nb_Tau_p*sizeof(double)/(double)(1024*1024);
+			if (SettingsMain.getSaveFineParticles()) {
+				SettingsMain.setParticlesFineNum(std::min(SettingsMain.getParticlesFineNum(), SettingsMain.getParticlesNum()));
+				freq_fine_dt_particles = (int)(save_buffer_count / (double)SettingsMain.getParticlesStepReduction()); // save particles at every saving step
+				prod_fine_dt_particles = SettingsMain.getParticlesFineNum() * freq_fine_dt_particles;
+
+				Host_particles_fine_pos = new double[2*prod_fine_dt_particles];
+				cudaMalloc((void**) &Dev_particles_fine_pos, 2*prod_fine_dt_particles*Nb_Tau_p*sizeof(double));
+				mb_used_RAM_GPU += 2*prod_fine_dt_particles*Nb_Tau_p*sizeof(double)/(double)(1024*1024);
+			}
 		}
+		else particles_save_buffer_count = INT_MIN;  // disable saving
 
 		create_particle_directory_structure(SettingsMain, file_name, Tau_p, Nb_Tau_p);
 
 		message = "Number of particles = " + to_str(Nb_particles); cout<<message+"\n"; logger.push(message);
-		if (snapshots_per_second > 0 && SettingsMain.getSaveFineParticles()) {
+		if (SettingsMain.getParticlesSnapshotsPerSec() > 0 && SettingsMain.getSaveFineParticles()) {
 			message = "Number of fine particles = " + to_str(SettingsMain.getParticlesFineNum()); cout<<message+"\n"; logger.push(message);
 		}
 	}
@@ -351,19 +349,16 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	*******************************************************************/
 
 	int count_mesure = 0;
-	int mes_size;
+	int mes_size = SettingsMain.getSaveInitial() + SettingsMain.getSaveFinal();  // initial and last step if computed
 	if (snapshots_per_second > 0) {
-		mes_size = (int)(tf*snapshots_per_second) + 2;  // add initial and last step
-	}
-	else {
-		mes_size = 2;  // add initial and last step
+		mes_size += (int)(tf*snapshots_per_second);  // add all intermediate targets
 	}
     double *Mesure, *Mesure_fine, *Mesure_sample;
-	cudaMallocManaged(&Mesure, 3*mes_size*sizeof(double));
-	cudaMallocManaged(&Mesure_fine, 3*mes_size*sizeof(double));
+	cudaMallocManaged(&Mesure, (3*mes_size+1)*sizeof(double));  // + 1 because i dont know what it does with 0
+	cudaMallocManaged(&Mesure_fine, (3*mes_size+1)*sizeof(double));
 
 	if (SettingsMain.getSampleOnGrid()) {
-		cudaMallocManaged(&Mesure_sample, 3*mes_size*sizeof(double));
+		cudaMallocManaged(&Mesure_sample, (3*mes_size+1)*sizeof(double));
 	}
 
     double incomp_error [iterMax];  // save incompressibility error for investigations
@@ -442,24 +437,24 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	
 	// save function to save variables, combined so we always save in the same way and location
     // use Dev_Hat_fine for W_fine, this works because just at the end of conservation it is overwritten
-	apply_map_stack_to_W_part_All(&Grid_fine, &Map_Stack, Dev_ChiX, Dev_ChiY,
-			(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C2, bounds, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
+	if (SettingsMain.getSaveInitial()) {
+		apply_map_stack_to_W_part_All(&Grid_fine, &Map_Stack, Dev_ChiX, Dev_ChiY,
+				(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C2, bounds, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
 
-	writeTimeStep(workspace, file_name, "0", Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real, Dev_ChiX, Dev_ChiY, &Grid_fine, &Grid_coarse, &Grid_psi);
-    // compute conservation for first step
-    compute_conservation_targets(&Grid_fine, &Grid_coarse, &Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, cufftPlan_coarse, cufftPlan_fine, Dev_Temp_C1, Dev_Temp_C2, Mesure, Mesure_fine, count_mesure);
+		writeTimeStep(workspace, file_name, "0", Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real, Dev_ChiX, Dev_ChiY, &Grid_fine, &Grid_coarse, &Grid_psi);
+		// compute conservation for first step
+		compute_conservation_targets(&Grid_fine, &Grid_coarse, &Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, cufftPlan_coarse, cufftPlan_fine, Dev_Temp_C1, Dev_Temp_C2, Mesure, Mesure_fine, count_mesure);
 
-    // sample if wanted
-    if (SettingsMain.getSampleOnGrid()) {
-    	sample_compute_and_write(&Map_Stack, &Grid_sample, Host_save, Dev_save_sample,
-    			cufftPlan_sample, Dev_Temp_C1, Dev_Temp_C2,
-    			Dev_ChiX, Dev_ChiY, bounds, Dev_W_H_initial, SettingsMain.getInitialConditionNum(),
-    			workspace, file_name, "0",
-    			Mesure_sample, count_mesure);
-    }
-
-
-    count_mesure+=1;
+		// sample if wanted
+		if (SettingsMain.getSampleOnGrid()) {
+			sample_compute_and_write(&Map_Stack, &Grid_sample, Host_save, Dev_save_sample,
+					cufftPlan_sample, Dev_Temp_C1, Dev_Temp_C2,
+					Dev_ChiX, Dev_ChiY, bounds, Dev_W_H_initial, SettingsMain.getInitialConditionNum(),
+					workspace, file_name, "0",
+					Mesure_sample, count_mesure);
+		}
+		count_mesure+=1;
+	}
 
     cudaDeviceSynchronize();
 
@@ -474,7 +469,9 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			Particle_advect_inertia_init<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h);
 		}
 
-    	writeParticles(SettingsMain, file_name, "0", Host_particles_pos, Dev_particles_pos, Tau_p, Nb_Tau_p);
+		if (SettingsMain.getParticlesSaveInitial()) {
+			writeParticles(SettingsMain, file_name, "0", Host_particles_pos, Dev_particles_pos, Tau_p, Nb_Tau_p);
+		}
 	}
 
 
@@ -490,6 +487,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	double t = t0;
 	int loop_ctr = 0;
 	int save_ctr = 1;
+	int particles_save_ctr = 1;
 
 	int old_ctr = 0;
 
@@ -532,18 +530,18 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 
 
 		// Particles advection
-	    if (SettingsMain.getParticles()) {
-			Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos, Dev_Psi_real,
+	    if (SettingsMain.getParticles() && loop_ctr % SettingsMain.getParticlesStepReduction() == 0) {
+			Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt*SettingsMain.getParticlesStepReduction(), Dev_particles_pos, Dev_Psi_real,
 					Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, SettingsMain.getParticlesTimeIntegrationNum());
 			// loop for all tau p
 			for(int i_tau_p = 1; i_tau_p < Nb_Tau_p; i_tau_p+=1){
-				Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt,
+				Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt*SettingsMain.getParticlesStepReduction(),
 						Dev_particles_pos + 2*Nb_particles*i_tau_p, Dev_particles_vel + 2*Nb_particles*i_tau_p, Dev_Psi_real,
 						Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, Tau_p[i_tau_p], SettingsMain.getParticlesTimeIntegrationNum());
 			}
 			// copy fine particle positions
 			if (snapshots_per_second > 0 && SettingsMain.getSaveFineParticles()) {
-				cudaMemcpy(Dev_particles_fine_pos + (loop_ctr*2*Nb_Tau_p*SettingsMain.getParticlesFineNum()*2) % (2*prod_fine_dt_particles), Dev_particles_pos, 2*Nb_Tau_p*SettingsMain.getParticlesFineNum()*sizeof(double), cudaMemcpyDeviceToDevice);
+				cudaMemcpy(Dev_particles_fine_pos + (loop_ctr/SettingsMain.getParticlesStepReduction()*2*Nb_Tau_p*SettingsMain.getParticlesFineNum()*2) % (2*prod_fine_dt_particles), Dev_particles_pos, 2*Nb_Tau_p*SettingsMain.getParticlesFineNum()*sizeof(double), cudaMemcpyDeviceToDevice);
 			}
 	    }
 
@@ -634,8 +632,8 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 
 		if( loop_ctr % save_buffer_count == 0 )
 		{
-			message = "Saving Image - ctr = " + to_str(loop_ctr) + " \t save_ctr = " + to_str(save_ctr)
-					+ " \t time = " + to_str(t) + " \t Compute time = " + to_str(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+			message = "Saving Image : save_ctr = " + to_str(save_ctr)
+					+ " \t T = " + to_str(t) + " \t Time = " + to_str(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
 			cout<<message+"\n"; logger.push(message);
 
 			// save function to save variables, combined so we always save in the same way and location
@@ -645,16 +643,6 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			writeTimeStep(workspace, file_name, to_str(save_ctr/(double)snapshots_per_second), Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real, Dev_ChiX, Dev_ChiY, &Grid_fine, &Grid_coarse, &Grid_psi);
 			// compute conservation for first step
 			compute_conservation_targets(&Grid_fine, &Grid_coarse, &Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, cufftPlan_coarse, cufftPlan_fine, Dev_Temp_C1, Dev_Temp_C2, Mesure, Mesure_fine, count_mesure);
-
-			// save particle positions
-			if (SettingsMain.getParticles()) {
-				writeParticles(SettingsMain, file_name, to_str(save_ctr/(double)snapshots_per_second), Host_particles_pos, Dev_particles_pos, Tau_p, Nb_Tau_p);
-
-			    // if wanted, save fine particles, 1 file for all positions
-			    if (SettingsMain.getSaveFineParticles()) {
-			    	writeFineParticles(SettingsMain, file_name, to_str(save_ctr/(double)snapshots_per_second), Host_particles_fine_pos, Dev_particles_fine_pos, Tau_p, Nb_Tau_p, prod_fine_dt_particles);
-			    }
-			}
 
 		    // sample if wanted
 		    if (SettingsMain.getSampleOnGrid()) {
@@ -666,23 +654,23 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		    }
 		    count_mesure++;
 			save_ctr++;
+		}
+		if ( loop_ctr % particles_save_buffer_count == 0) {
+			message = "Saving Particles : save_ctr = " + to_str(particles_save_ctr)
+					+ " \t T = " + to_str(t) + " \t Time = " + to_str(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+			cout<<message+"\n"; logger.push(message);
 
-			//Laplacian_vort(&Grid_fine, Dev_W_fine, Dev_Complex_fine, Dev_Hat_fine, Dev_lap_fine_real, Dev_lap_fine_complex, Dev_lap_fine_hat, cufftPlan_fine);
+			// save particle positions
+			if (SettingsMain.getParticles()) {
+				writeParticles(SettingsMain, file_name, to_str(particles_save_ctr/(double)SettingsMain.getParticlesSnapshotsPerSec()), Host_particles_pos, Dev_particles_pos, Tau_p, Nb_Tau_p);
 
-			//cudaMemcpy(Host_lap_fine, Dev_lap_fine_real, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
-			//cudaDeviceSynchronize();
-			//writeAllRealToBinaryFile(Grid_fine.N, Host_lap_fine, simulationName, "vorticity_fine_lagrangian/w_lagr_" + ss.str());
-
-
-			 //Laplacian initial
-
-			if (use_set_grid == 1) {
-//					Laplacian_vort(&Grid_2048, Dev_W_2048, Dev_Complex_fine_2048, Dev_Hat_fine_2048, Dev_lap_fine_2048_real, Dev_lap_fine_2048_complex, Dev_lap_fine_2048_hat, cufftPlan_2048);
-//					cudaMemcpy(Host_lap_fine_2048, Dev_lap_fine_2048_real, Grid_2048.sizeNReal, cudaMemcpyDeviceToHost);
-//					cudaDeviceSynchronize();
-//					writeAllRealToBinaryFile(Grid_2048.N, Host_lap_fine_2048, workspace, file_name, "vorticity_fine_lagrangian/w_lagr_" + ss.str());
+			    // if wanted, save fine particles, 1 file for all positions
+			    if (SettingsMain.getSaveFineParticles()) {
+			    	writeFineParticles(SettingsMain, file_name, to_str(particles_save_ctr/(double)SettingsMain.getParticlesSnapshotsPerSec()), Host_particles_fine_pos, Dev_particles_fine_pos, Tau_p, Nb_Tau_p, prod_fine_dt_particles);
+			    }
 			}
 
+			particles_save_ctr++;
 		}
 		
 		int error = cudaGetLastError();
@@ -714,31 +702,38 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	*******************************************************************/
 	
 	// save function to save variables, combined so we always save in the same way and location, last step so we can actually modify the condition
-	apply_map_stack_to_W_part_All(&Grid_fine, &Map_Stack, Dev_ChiX, Dev_ChiY,
-			(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C2, bounds, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
+	if (SettingsMain.getSaveFinal()) {
+		apply_map_stack_to_W_part_All(&Grid_fine, &Map_Stack, Dev_ChiX, Dev_ChiY,
+				(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C2, bounds, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
 
-	writeTimeStep(workspace, file_name, "final", Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real, Dev_ChiX, Dev_ChiY, &Grid_fine, &Grid_coarse, &Grid_psi);
-	// compute conservation
-	compute_conservation_targets(&Grid_fine, &Grid_coarse, &Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, cufftPlan_coarse, cufftPlan_fine, Dev_Temp_C1, Dev_Temp_C2, Mesure, Mesure_fine, count_mesure);
+		writeTimeStep(workspace, file_name, "final", Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real, Dev_ChiX, Dev_ChiY, &Grid_fine, &Grid_coarse, &Grid_psi);
+		// compute conservation
+		compute_conservation_targets(&Grid_fine, &Grid_coarse, &Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, cufftPlan_coarse, cufftPlan_fine, Dev_Temp_C1, Dev_Temp_C2, Mesure, Mesure_fine, count_mesure);
 
-    // sample if wanted
-    if (SettingsMain.getSampleOnGrid()) {
-    	sample_compute_and_write(&Map_Stack, &Grid_sample, Host_save, Dev_save_sample,
-    			cufftPlan_sample, Dev_Temp_C1, Dev_Temp_C2,
-    			Dev_ChiX, Dev_ChiY, bounds, Dev_W_H_initial, SettingsMain.getInitialConditionNum(),
-    			workspace, file_name, "final",
-    			Mesure_sample, count_mesure);
-    }
-	count_mesure++;
-
-	if (SettingsMain.getParticles()) {
-		writeParticles(SettingsMain, file_name, "final", Host_particles_pos, Dev_particles_pos, Tau_p, Nb_Tau_p);
+		// sample if wanted
+		if (SettingsMain.getSampleOnGrid()) {
+			sample_compute_and_write(&Map_Stack, &Grid_sample, Host_save, Dev_save_sample,
+					cufftPlan_sample, Dev_Temp_C1, Dev_Temp_C2,
+					Dev_ChiX, Dev_ChiY, bounds, Dev_W_H_initial, SettingsMain.getInitialConditionNum(),
+					workspace, file_name, "final",
+					Mesure_sample, count_mesure);
+		}
+		count_mesure++;
+	}
+	if (SettingsMain.getParticlesSaveFinal()) {
+		if (SettingsMain.getParticles()) {
+			writeParticles(SettingsMain, file_name, "final", Host_particles_pos, Dev_particles_pos, Tau_p, Nb_Tau_p);
+		}
 	}
 
-	// save all conservation data
-	writeAllRealToBinaryFile(3*mes_size, Mesure, workspace, file_name, "/Mesure");
-	writeAllRealToBinaryFile(3*mes_size, Mesure_fine, workspace, file_name, "/Mesure_fine");
-	writeAllRealToBinaryFile(3*mes_size, Mesure_sample, workspace, file_name, "/Mesure_"+to_str(Grid_sample.NX));
+	// save all conservation data, little switch in case we do not save anything
+	if (mes_size > 0) {
+		writeAllRealToBinaryFile(3*mes_size, Mesure, workspace, file_name, "/Mesure");
+		writeAllRealToBinaryFile(3*mes_size, Mesure_fine, workspace, file_name, "/Mesure_fine");
+		if (SettingsMain.getSampleOnGrid()) {
+			writeAllRealToBinaryFile(3*mes_size, Mesure_sample, workspace, file_name, "/Mesure_"+to_str(Grid_sample.NX));
+		}
+	}
 
     // save imcomp error
 	writeAllRealToBinaryFile(iterMax, incomp_error, workspace, file_name, "/Incompressibility_check");

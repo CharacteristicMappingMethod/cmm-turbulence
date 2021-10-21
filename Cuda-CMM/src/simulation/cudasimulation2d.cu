@@ -88,10 +88,10 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 
 	long int N = NXc*NYc;
 
-	//running through neighbours (unrolled loops)
+	//running through neighbours
 	double x_ep[2], x_f[2];
 
-	// initialize new intermediate values as zeros, helpfull to not write to array every point
+	// initialize new intermediate values as zeros, helpful to not write to array every point
 	double Chi_full_x[4] = {0, 0, 0, 0};
 	double Chi_full_y[4] = {0, 0, 0, 0};
 
@@ -108,16 +108,7 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 	}
 
 	// repeat for all footpoints, 4 for 2th order, 8 for 4th order and 12 for 6th order
-	int k_total;
-	switch (map_update_order_num) {
-		case 2: { k_total = 12; break; }
-		case 1: { k_total = 8; break; }
-		case 0: { k_total = 4; break; }
-	}
-
-	// footpoint loop
-	#pragma unroll
-	for (int k_foot = 0; k_foot<k_total; k_foot++) {
+	for (int k_foot = 0; k_foot< map_update_order_num*4 + 4; k_foot++) {
 		int i_foot_now = (k_foot/4);  // used for getting
 		double i_dist_now = i_foot_now+1;
 

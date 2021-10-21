@@ -10,8 +10,6 @@
 //#define L2(t, tp, tm, tmm) ((t-tp)*(t-tmm)/((tm-tp)*(tm-tmm)))
 //#define L3(t, tp, tm, tmm) ((t-tp)*(t-tm)/((tmm-tp)*(tmm-tm)))
 
-#ifdef __CUDACC__
-
 
 __global__ void Compute_Energy(double *E, double *psi, int N, int NX, int NY, double h);
 __global__ void Compute_Enstrophy(double *Ens, double *W, int N, int NX, int NY, double h);
@@ -39,10 +37,6 @@ void Laplacian_vort(TCudaGrid2D *Grid_fine, double *Dev_W_fine, cufftDoubleCompl
 __host__ __device__ double L1(double t, double tp, double tm, double tmm);
 __host__ __device__ double L2(double t, double tp, double tm, double tmm);
 __host__ __device__ double L3(double t, double tp, double tm, double tmm);
-
-#endif
-
-
 
 
 #endif
