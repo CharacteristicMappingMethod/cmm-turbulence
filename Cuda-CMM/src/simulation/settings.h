@@ -14,9 +14,9 @@ using namespace std;
 class SettingsCMM {
 
 private:
-	// main properties, needed to be able to run0
+	// main properties, needed to be able to run
 	string workspace, sim_name;
-	int grid_coarse, grid_fine, grid_psi;
+	int grid_coarse, grid_fine, grid_psi, grid_vort;
 	string initial_condition; int initial_condition_num;
 	// time stepping properties
 	double final_time, factor_dt_by_grid;
@@ -34,7 +34,6 @@ private:
 	int lagrange_order;
 	string map_update_order; int map_update_order_num;
 	int molly_stencil;
-	int upsample_version;
 	double freq_cut_psi;
 	bool skip_remapping;
 	bool sample_on_grid;
@@ -45,6 +44,7 @@ private:
 	int particles_num, particles_fine_num;
 	int particles_snapshots_per_sec, particles_step_reduction;
 	string particles_time_integration; int particles_time_integration_num;
+
 
 public:
 	// main functions
@@ -73,6 +73,8 @@ public:
 	void setGridFine(int gridFine) { grid_fine = gridFine; }
 	int getGridPsi() const { return grid_psi; }
 	void setGridPsi(int gridPsi) { grid_psi = gridPsi; }
+	int getGridVort() const { return grid_vort; }
+	void setGridVort(int gridVort) { grid_vort = gridVort; }
 
 	// time stepping properties
 	double getFinalTime() const { return final_time; }
@@ -134,10 +136,6 @@ public:
 	// molly stencil, amount of points to be used for mollification
 	int getMollyStencil() const { return molly_stencil; }
 	void setMollyStencil(int mollyStencil) { molly_stencil = mollyStencil; }
-
-	// upsample version, upsample vort and psi or only psi
-	int getUpsampleVersion() const { return upsample_version; }
-	void setUpsampleVersion(int upsampleVersion) { upsample_version = upsampleVersion; }
 
 	// low pass cut frequencies for psi
 	double getFreqCutPsi() const { return freq_cut_psi; }

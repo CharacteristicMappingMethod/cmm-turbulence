@@ -47,15 +47,15 @@ public:
 		   *Host_ChiX_stack_RAM_2, *Host_ChiY_stack_RAM_2,
 		   *Host_ChiX_stack_RAM_3, *Host_ChiY_stack_RAM_3,
 		   *Dev_ChiX_stack, *Dev_ChiY_stack;
-	int map_stack_length, frac_mem_cpu_to_gpu, Nb_array_RAM;
-	int map_stack_ctr, stack_length_RAM, stack_length_Nb_array_RAM;
+	int cpu_map_num, Nb_array_RAM;
+	int map_stack_ctr;
 
 	TCudaGrid2D *Grid;
 
-	MapStack(TCudaGrid2D *Grid, int frac_mem_cpu_to_gpu, int map_stack_length);
+	MapStack(TCudaGrid2D *Grid, int cpu_map_num);
 
 	void copy_map_to_host(double *Dev_ChiX, double *Dev_ChiY);
-	void copy_map_to_device(int K_RAM, int K);
+	void copy_map_to_device(int map_num);
 
 	void free_res();
 };

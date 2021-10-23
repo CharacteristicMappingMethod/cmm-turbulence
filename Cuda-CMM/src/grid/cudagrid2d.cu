@@ -28,32 +28,28 @@ TCudaGrid2D::TCudaGrid2D(int NX, int NY, double xRange)
 }
 
 
-MapStack::MapStack(TCudaGrid2D *Grid, int frac_mem_cpu_to_gpu, int map_stack_length) {
+MapStack::MapStack(TCudaGrid2D *Grid, int cpu_map_num) {
 
 	this->Grid = Grid;
 
-	this->frac_mem_cpu_to_gpu = frac_mem_cpu_to_gpu;
-	this->map_stack_length = map_stack_length;
+	this->cpu_map_num = cpu_map_num;
 
 	// set values
 	map_stack_ctr = 0;
-	stack_length_RAM = -1;
-	stack_length_Nb_array_RAM = -1;
-
 	Nb_array_RAM = 4;
 
 	// initialize device map stack
-	cudaMalloc((void **) &Dev_ChiX_stack, map_stack_length * 4*Grid->sizeNReal);
-	cudaMalloc((void **) &Dev_ChiY_stack, map_stack_length * 4*Grid->sizeNReal);
+	cudaMalloc((void **) &Dev_ChiX_stack, 4*Grid->sizeNReal);
+	cudaMalloc((void **) &Dev_ChiY_stack, 4*Grid->sizeNReal);
 
-	Host_ChiX_stack_RAM_0 = new double[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid->sizeNReal];
-	Host_ChiY_stack_RAM_0 = new double[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid->sizeNReal];
-	Host_ChiX_stack_RAM_1 = new double[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid->sizeNReal];
-	Host_ChiY_stack_RAM_1 = new double[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid->sizeNReal];
-	Host_ChiX_stack_RAM_2 = new double[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid->sizeNReal];
-	Host_ChiY_stack_RAM_2 = new double[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid->sizeNReal];
-	Host_ChiX_stack_RAM_3 = new double[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid->sizeNReal];
-	Host_ChiY_stack_RAM_3 = new double[frac_mem_cpu_to_gpu * map_stack_length * 4*Grid->sizeNReal];
+	Host_ChiX_stack_RAM_0 = new double[cpu_map_num * 4*Grid->sizeNReal];
+	Host_ChiY_stack_RAM_0 = new double[cpu_map_num * 4*Grid->sizeNReal];
+	Host_ChiX_stack_RAM_1 = new double[cpu_map_num * 4*Grid->sizeNReal];
+	Host_ChiY_stack_RAM_1 = new double[cpu_map_num * 4*Grid->sizeNReal];
+	Host_ChiX_stack_RAM_2 = new double[cpu_map_num * 4*Grid->sizeNReal];
+	Host_ChiY_stack_RAM_2 = new double[cpu_map_num * 4*Grid->sizeNReal];
+	Host_ChiX_stack_RAM_3 = new double[cpu_map_num * 4*Grid->sizeNReal];
+	Host_ChiY_stack_RAM_3 = new double[cpu_map_num * 4*Grid->sizeNReal];
 }
 
 
@@ -63,49 +59,50 @@ void MapStack::copy_map_to_host(double *Dev_ChiX, double *Dev_ChiY) {
 	//cudaMemcpy(&Dev_ChiX_stack[map_stack_ctr*4*Grid->N], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToDevice);
 	//cudaMemcpy(&Dev_ChiY_stack[map_stack_ctr*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToDevice);
 
-    switch(stack_length_Nb_array_RAM){
+    switch(map_stack_ctr / cpu_map_num){
         case 0:
-            cudaMemcpy(&Host_ChiX_stack_RAM_0[map_stack_ctr*4*Grid->N], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
-            cudaMemcpy(&Host_ChiY_stack_RAM_0[map_stack_ctr*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
+            cudaMemcpy(&Host_ChiX_stack_RAM_0[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
+            cudaMemcpy(&Host_ChiY_stack_RAM_0[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
             break;
-		//cout<<"pos ram 0 : "<<map_stack_ctr%(frac_mem_cpu_to_gpu * map_stack_length)<<endl;
+		//cout<<"pos ram 0 : "<<map_stack_ctr%(cpu_map_num * map_stack_length)<<endl;
         case 1:
-            cudaMemcpy(&Host_ChiX_stack_RAM_1[map_stack_ctr%(frac_mem_cpu_to_gpu * map_stack_length)*4*Grid->N], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
-            cudaMemcpy(&Host_ChiY_stack_RAM_1[map_stack_ctr%(frac_mem_cpu_to_gpu * map_stack_length)*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
+            cudaMemcpy(&Host_ChiX_stack_RAM_1[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
+            cudaMemcpy(&Host_ChiY_stack_RAM_1[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
             break;
-		//cout<<"pos ram 1 : "<<map_stack_ctr%(frac_mem_cpu_to_gpu * map_stack_length)<<endl;
+		//cout<<"pos ram 1 : "<<map_stack_ctr%(cpu_map_num * map_stack_length)<<endl;
         case 2:
-            cudaMemcpy(&Host_ChiX_stack_RAM_2[map_stack_ctr%(frac_mem_cpu_to_gpu * map_stack_length)*4*Grid->N], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
-            cudaMemcpy(&Host_ChiY_stack_RAM_2[map_stack_ctr%(frac_mem_cpu_to_gpu * map_stack_length)*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
+            cudaMemcpy(&Host_ChiX_stack_RAM_2[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
+            cudaMemcpy(&Host_ChiY_stack_RAM_2[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
             break;
 
         case 3:
-            cudaMemcpy(&Host_ChiX_stack_RAM_3[map_stack_ctr%(frac_mem_cpu_to_gpu * map_stack_length)*4*Grid->N], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
-            cudaMemcpy(&Host_ChiY_stack_RAM_3[map_stack_ctr%(frac_mem_cpu_to_gpu * map_stack_length)*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
+            cudaMemcpy(&Host_ChiX_stack_RAM_3[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
+            cudaMemcpy(&Host_ChiY_stack_RAM_3[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
             break;
     }
 }
 
-void MapStack::copy_map_to_device(int K_RAM, int K) {
-	switch (K_RAM) {
+void MapStack::copy_map_to_device(int map_num) {
+
+	switch (map_num / cpu_map_num) {
 		case 0: {
-			cudaMemcpy(Dev_ChiX_stack, &Host_ChiX_stack_RAM_0[K*map_stack_length*Grid->N*4], map_stack_length * 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
-			cudaMemcpy(Dev_ChiY_stack, &Host_ChiY_stack_RAM_0[K*map_stack_length*Grid->N*4], map_stack_length * 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
+			cudaMemcpy(Dev_ChiX_stack, &Host_ChiX_stack_RAM_0[(map_num%cpu_map_num)*Grid->N*4], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
+			cudaMemcpy(Dev_ChiY_stack, &Host_ChiY_stack_RAM_0[(map_num%cpu_map_num)*Grid->N*4], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
 			break;
 		}
 		case 1: {
-			cudaMemcpy(Dev_ChiX_stack, &Host_ChiX_stack_RAM_1[K*map_stack_length*Grid->N*4], map_stack_length * 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
-			cudaMemcpy(Dev_ChiY_stack, &Host_ChiY_stack_RAM_1[K*map_stack_length*Grid->N*4], map_stack_length * 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
+			cudaMemcpy(Dev_ChiX_stack, &Host_ChiX_stack_RAM_1[(map_num%cpu_map_num)*Grid->N*4], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
+			cudaMemcpy(Dev_ChiY_stack, &Host_ChiY_stack_RAM_1[(map_num%cpu_map_num)*Grid->N*4], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
 			break;
 		}
 		case 2: {
-			cudaMemcpy(Dev_ChiX_stack, &Host_ChiX_stack_RAM_2[K*map_stack_length*Grid->N*4], map_stack_length * 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
-			cudaMemcpy(Dev_ChiY_stack, &Host_ChiY_stack_RAM_2[K*map_stack_length*Grid->N*4], map_stack_length * 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
+			cudaMemcpy(Dev_ChiX_stack, &Host_ChiX_stack_RAM_2[(map_num%cpu_map_num)*Grid->N*4], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
+			cudaMemcpy(Dev_ChiY_stack, &Host_ChiY_stack_RAM_2[(map_num%cpu_map_num)*Grid->N*4], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
 			break;
 		}
 		case 3: {
-			cudaMemcpy(Dev_ChiX_stack, &Host_ChiX_stack_RAM_3[K*map_stack_length*Grid->N*4], map_stack_length * 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
-			cudaMemcpy(Dev_ChiY_stack, &Host_ChiY_stack_RAM_3[K*map_stack_length*Grid->N*4], map_stack_length * 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
+			cudaMemcpy(Dev_ChiX_stack, &Host_ChiX_stack_RAM_3[(map_num%cpu_map_num)*Grid->N*4], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
+			cudaMemcpy(Dev_ChiY_stack, &Host_ChiY_stack_RAM_3[(map_num%cpu_map_num)*Grid->N*4], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
 			break;
 		}
 	}

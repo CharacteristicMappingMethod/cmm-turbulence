@@ -67,36 +67,6 @@ void Compute_Enstrophy_Host(double *Ens, double *W, int N, double h){
 }
 
 
-// attention: Palinstrophy does not work for now with only two trash variables
-// i have to rewrite this in different forms
-void Compute_Palinstrophy(TCudaGrid2D *Grid_coarse, double *Pal, double *W_real, cufftDoubleComplex *Dev_Complex, cufftDoubleComplex *Dev_Hat, cufftDoubleComplex *Dev_Hat_bis, cufftHandle cufftPlan_coarse){
-
-	double *Host_W_coarse_real_dx_dy = new double[2*Grid_coarse->N];
-	
-	real_to_comp(W_real, Dev_Hat, Grid_coarse->N);
-	cufftExecZ2Z(cufftPlan_coarse, Dev_Hat, Dev_Complex, CUFFT_FORWARD);	
-	k_normalize<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Complex, Grid_coarse->NX, Grid_coarse->NY);
-	
-	k_fft_dx<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Complex, Dev_Hat, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h); 					// x-derivative in Fourier space
-	k_fft_dy<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Complex, Dev_Hat_bis, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h); 				// y-derivative in Fourier space
-	
-	cufftExecZ2Z(cufftPlan_coarse, Dev_Hat, Dev_Complex, CUFFT_INVERSE);
-    cudaDeviceSynchronize();
-	cufftExecZ2Z(cufftPlan_coarse, Dev_Hat_bis, Dev_Hat, CUFFT_INVERSE);
-	
-	cudaMemcpy(Host_W_coarse_real_dx_dy, (cufftDoubleReal*)Dev_Complex, Grid_coarse->N, cudaMemcpyDeviceToHost);
-	cudaMemcpy(&Host_W_coarse_real_dx_dy[Grid_coarse->N], (cufftDoubleReal*)Dev_Hat, Grid_coarse->N, cudaMemcpyDeviceToHost);
-
-
-    for(int i = 0; i < Grid_coarse->N; i+=1){
-		*Pal += (Grid_coarse->h) * (Grid_coarse->h) * (Host_W_coarse_real_dx_dy[i] * Host_W_coarse_real_dx_dy[i] + Host_W_coarse_real_dx_dy[i + Grid_coarse->N] * Host_W_coarse_real_dx_dy[i + Grid_coarse->N]);
-	}
-
-	*Pal = 0.5*(*Pal);
-	
-}
-
-
 // compute palinstrophy using fourier transformations - a bit expensive with two temporary arrays but ca marche
 void Compute_Palinstrophy_fourier(TCudaGrid2D *Grid_coarse, double *Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftDoubleComplex *Dev_Temp_C2, cufftHandle cufftPlan_coarse){
 

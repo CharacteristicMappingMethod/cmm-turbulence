@@ -5,7 +5,7 @@
 *				     Creation of storage files					   *
 *******************************************************************/
 
-void create_directory_structure(SettingsCMM SettingsMain, string file_name, double dt, int save_buffer_count, int show_progress_at, int iterMax, int map_stack_length)
+void create_directory_structure(SettingsCMM SettingsMain, string file_name, double dt, int save_buffer_count, int show_progress_at, int iterMax)
 {
 	struct stat st = {0};
 	if (stat("data", &st) == -1)
@@ -47,17 +47,15 @@ void create_directory_structure(SettingsCMM SettingsMain, string file_name, doub
         file<<"N_coarse(resolution coarse grid) \t\t: "<<SettingsMain.getGridCoarse()<<endl;
 		file<<"N_fine(resolution fine grid) \t\t: "<<SettingsMain.getGridFine()<<endl;
 		file<<"N_psi(resolution psi grid) \t\t: "<<SettingsMain.getGridPsi()<<endl;
+		file<<"N_vort(resolution sampled vorticity grid) \t\t: "<<SettingsMain.getGridVort()<<endl;
 		file<<"time step dt \t\t: "<<dt<<endl;
 		file<<"Final time \t\t: "<<SettingsMain.getFinalTime()<<endl;
 		file<<"save at \t\t: "<<save_buffer_count<<endl;
 		file<<"progress at \t\t: "<<show_progress_at<<endl;
 		file<<"iter max \t\t: "<<iterMax<<endl;
-		file<<"stack len \t\t: "<<map_stack_length<<endl;
 		file<<"Incomppressibility Threshold \t: "<<SettingsMain.getIncompThreshold()<<endl;
 		file<<"Map advection epsilon \t: "<<SettingsMain.getMapEpsilon()<<endl;
 		file<<"Map update order \t: "<<SettingsMain.getMapUpdateOrder()<<endl;
-		if (SettingsMain.getUpsampleVersion() == 0) file<<"Psi upsample version \t : Only Psi"<<endl;
-		else file<<"Psi upsample version \t : Vorticity and Psi"<<endl;
 		file<<"Cut Psi Frequencies at \t:"<<SettingsMain.getFreqCutPsi()<<endl;
 
         if (SettingsMain.getParticles()) {

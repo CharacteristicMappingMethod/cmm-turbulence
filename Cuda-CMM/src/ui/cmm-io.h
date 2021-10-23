@@ -31,7 +31,7 @@
 using namespace std;
 
 // general structure
-void create_directory_structure(SettingsCMM SettingsMain, string file_name, double dt, int save_buffer_count, int show_progress_at, int iterMax, int map_stack_length);
+void create_directory_structure(SettingsCMM SettingsMain, string file_name, double dt, int save_buffer_count, int show_progress_at, int iterMax);
 void create_particle_directory_structure(SettingsCMM SettingsMain, string file_name, double *Tau_p, int Nb_Tau_p);
 
 // fundamental save functions

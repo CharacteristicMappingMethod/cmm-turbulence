@@ -10,7 +10,8 @@ void SettingsCMM::setPresets() {
 	// max working on V100 : grid_scale = 4096; fine_grid_scale = 16384;
 	int grid_coarse = 512;
 	int grid_fine = 2048;
-	int grid_psi = 1024;  // psi will be used on this grid
+	int grid_psi = 1024;  // psi will be (up)sampled on this grid
+	int grid_vort = grid_psi;  // vorticity will be sampled on this grid for computation of psi, this changes the scales of the vorticity
 
 	/*
 	 *  Initial conditions
@@ -38,7 +39,6 @@ void SettingsCMM::setPresets() {
 	double map_epsilon = 1e-5;  // distance used for foot points for GALS map advection
 
 	// set memory properties
-	int mem_RAM_GPU_remaps = 128;  // mem_index in MB on the GPU
 	int mem_RAM_CPU_remaps = 4096;  // mem_RAM_CPU_remaps in MB on the CPU
 
 
@@ -58,8 +58,6 @@ void SettingsCMM::setPresets() {
 	// mollification settings, stencil size, 0, 4, 8
 	int molly_stencil = 0;
 
-	// for now we have two different upsample versions, upsample on vorticity and psi (1) or only psi (0)
-	int upsample_version = 1;
 	// in addition to the upsampling, we want to lowpass in fourier space by cutting high frequencies
 	double freq_cut_psi = (double)(grid_coarse)/2.0;  // take into account, that frequencies are symmetric around N/2
 
@@ -90,10 +88,12 @@ void SettingsCMM::setPresets() {
 
 
 	// make sure that not initialized values are set
-	lagrange_order = 0;
+//	lagrange_order = 0;
+	lagrange_order = 4;  // rk tests
 	// now set everything
 	setWorkspace(workspace); setSimName(sim_name);
-	setGridCoarse(grid_coarse); setGridFine(grid_fine); setGridPsi(grid_psi);
+	setGridCoarse(grid_coarse); setGridFine(grid_fine);
+	setGridPsi(grid_psi); setGridVort(grid_vort);
 	setFinalTime(final_time);
 	setFactorDtByGrid(factor_dt_by_grid); setStepsPerSec(steps_per_sec);
 	setSnapshotsPerSec(snapshots_per_sec); setSetDtBySteps(set_dt_by_steps);
@@ -105,7 +105,6 @@ void SettingsCMM::setPresets() {
 	setTimeIntegration(time_integration);
 	setMapUpdateOrder(map_update_order);
 	setMollyStencil(molly_stencil);
-	setUpsampleVersion(upsample_version);
 	setFreqCutPsi(freq_cut_psi);
 	setSkipRemapping(skip_remapping);
 	setSampleOnGrid(sample_on_grid);
@@ -144,12 +143,13 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 
 			// big if else for different commands
 			// this beast is becoming larger and larger, i should convert it to something more automatic
-			// either using switch or using pointer to the function names together with a list of everything
+			// link to site for that: https://stackoverflow.com/questions/4480788/c-c-switch-case-with-string
 			if (command == "workspace") setWorkspace(value);
 			else if (command == "sim_name") setSimName(value);
 			else if (command == "grid_coarse") setGridCoarse(stoi(value));
 			else if (command == "grid_fine") setGridFine(stoi(value));
 			else if (command == "grid_psi") setGridPsi(stoi(value));
+			else if (command == "grid_vort") setGridVort(stoi(value));
 			else if (command == "final_time") setFinalTime(stod(value));
 			else if (command == "factor_dt_by_grid") setFactorDtByGrid(stod(value));
 			else if (command == "steps_per_sec") setStepsPerSec(stoi(value));
@@ -165,7 +165,6 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "time_integration") setTimeIntegration(value);
 			else if (command == "map_update_order") setMapUpdateOrder(value);
 			else if (command == "molly_stencil") setMollyStencil(stoi(value));
-			else if (command == "upsample_version") setUpsampleVersion(stoi(value));
 			else if (command == "freq_cut_psi") setFreqCutPsi(stod(value));
 			else if (command == "skip_remapping") setSkipRemapping(getBoolFromString(value));
 			else if (command == "sample_on_grid") setSampleOnGrid(getBoolFromString(value));
@@ -175,7 +174,7 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "particles_snapshots_per_sec") setParticlesSnapshotsPerSec(stoi(value));
 			else if (command == "particles_save_initial") setParticlesSaveInitial(getBoolFromString(value));
 			else if (command == "particles_save_final") setParticlesSaveFinal(getBoolFromString(value));
-			else if (command == "particles_step_reduction") setParticlesNum(stoi(value));
+			else if (command == "particles_step_reduction") setParticlesStepReduction(stoi(value));
 			else if (command == "save_fine_particles") setSaveFineParticles(getBoolFromString(value));
 			else if (command == "particles_fine_num") setParticlesFineNum(stoi(value));
 			else if (command == "particles_time_integration") setParticlesTimeIntegration(value);

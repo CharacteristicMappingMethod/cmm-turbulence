@@ -246,33 +246,11 @@ void apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_fine, MapStack *Map_Stack, 
 	// for normal map stack, bounds has the domain boundaries applied
 	kernel_apply_map_stack_to_W_custom_part_1<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, Map_Stack->Grid->NX, Map_Stack->Grid->NY, Map_Stack->Grid->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, bounds[0], bounds[1], bounds[2], bounds[3]);
 
-	// loop over all maps in map stack
-	for(int K_RAM = Map_Stack->stack_length_Nb_array_RAM; K_RAM >= 0; K_RAM--){
-		if (K_RAM == Map_Stack->stack_length_Nb_array_RAM){
-			for(int K = Map_Stack->stack_length_RAM%Map_Stack->frac_mem_cpu_to_gpu; K >= 0; K--){
-				// copy map stack, is done intern in map stack class
-				Map_Stack->copy_map_to_device(K_RAM, K);
-
-				if (K == Map_Stack->stack_length_RAM%Map_Stack->frac_mem_cpu_to_gpu){
-					for(int k = Map_Stack->map_stack_ctr - Map_Stack->stack_length_RAM*Map_Stack->map_stack_length - 1; k >= 0; k--){
-						kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Map_Stack->Dev_ChiX_stack, Map_Stack->Dev_ChiY_stack, Dev_Temp, Map_Stack->Grid->NX, Map_Stack->Grid->NY, Map_Stack->Grid->h, Grid_fine->NX, Grid_fine->NY, k);
-					}
-				}
-				else{
-					for(int k = Map_Stack->map_stack_length - 1; k >= 0; k--){
-						kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Map_Stack->Dev_ChiX_stack, Map_Stack->Dev_ChiY_stack, Dev_Temp, Map_Stack->Grid->NX, Map_Stack->Grid->NY, Map_Stack->Grid->h, Grid_fine->NX, Grid_fine->NY, k);
-					}
-				}
-			}
-		}
-		else{
-			for(int K = Map_Stack->frac_mem_cpu_to_gpu-1; K >= 0; K--){
-				Map_Stack->copy_map_to_device(K_RAM, K);
-				for(int k = Map_Stack->map_stack_length - 1; k >= 0; k--){
-					kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Map_Stack->Dev_ChiX_stack, Map_Stack->Dev_ChiY_stack, Dev_Temp, Map_Stack->Grid->NX, Map_Stack->Grid->NY, Map_Stack->Grid->h, Grid_fine->NX, Grid_fine->NY, k);
-				}
-			}
-		}
+	// loop over all maps in map stack, where all maps are on host system
+	// this could be parallelized
+	for (int i_map = Map_Stack->map_stack_ctr-1; i_map >= 0; i_map--) {
+		Map_Stack->copy_map_to_device(i_map);
+		kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Map_Stack->Dev_ChiX_stack, Map_Stack->Dev_ChiY_stack, Dev_Temp, Map_Stack->Grid->NX, Map_Stack->Grid->NY, Map_Stack->Grid->h, Grid_fine->NX, Grid_fine->NY);
 	}
 
 	// initial condition
@@ -305,7 +283,7 @@ __global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *
 
 }
 
-__global__ void kernel_apply_map_stack_to_W_part_2(double *ChiX_stack, double *ChiY_stack, double *x_y, int NXc, int NYc, double hc, int NXs, int NYs, int k)
+__global__ void kernel_apply_map_stack_to_W_part_2(double *ChiX_stack, double *ChiY_stack, double *x_y, int NXc, int NYc, double hc, int NXs, int NYs)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -318,7 +296,7 @@ __global__ void kernel_apply_map_stack_to_W_part_2(double *ChiX_stack, double *C
 	long int N = NXc*NYc;	
 	
 	//for(int k = stack_length - 1; k >= 0; k--)
-	device_diffeo_interpolate_2D(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x_y[2*In], x_y[2*In+1], &x_y[2*In], &x_y[2*In+1], NXc, NYc, hc);
+	device_diffeo_interpolate_2D(ChiX_stack, ChiY_stack, x_y[2*In], x_y[2*In+1], &x_y[2*In], &x_y[2*In+1], NXc, NYc, hc);
 	
 }
 
