@@ -17,6 +17,8 @@ double compare_map_with_identity(double *ChiX, double *ChiY, int NX, int NY, dou
 //map operations
 __global__ void kernel_init_diffeo(double *ChiX, double *ChiY, int NX, int NY, double h);
 __global__ void kernel_incompressibility_check(double *ChiX, double *ChiY, double *gradChi, int NXc, int NYc, double hc, int NXs, int NYs, double hs);	//to improve
+double incompressibility_check(double *ChiX, double *ChiY, double *gradChi, TCudaGrid2D *Grid_fine, TCudaGrid2D *Grid_coarse);
+
 __global__ void kernel_compute_total_grid_Chi(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *gradChi, int stack_length, int NXc, int NYc, double hc, int NXs, int NYs, double hs);
 __global__ void kernel_compute_enstropy_increase_rate_factors(double *w, double *phi, double *div1, double *div2, int NXc, int NYc, double hc, double ep);
 __global__ void kernel_compute_enstropy_increase_rate_factors(double *wHsc, double *ChiX, double *ChiY, double *phi, double *div1, double *div2, int NXc, int NYc, double hc, int NXsc, int NYsc, double hsc, double ep);

@@ -69,5 +69,7 @@ bin_dir:
 clean:
 	rm -rf *.out
 	rm -rf ./bin/*.o
+	
+rebuild: clean all
 
 # Test

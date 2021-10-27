@@ -68,48 +68,48 @@ __device__ void adam_bashford_2_pc(double *phi, double *x_in, double *x_out, dou
  *      | 1/6 2/3 1/6
  */
 __device__ void RK3_classical(double *phi, double *x_in, double *x_out, double NX, double NY, double h, double dt) {
-//	double u[6];  // velocity placeholders
+	double u[6];  // velocity placeholders
 	double k1[2], k2[2], k3[2];  // step placeholders
 
 	// a test with different lagrange interpolations
-	int lagrange_order = 1;
-	double u[8];  // velocity placeholders
-	switch (lagrange_order) {
-		case 1: {
-			// compute u_tilde(X,t_n+1)
-			device_hermite_interpolate_grad_2D(phi, x_in, u, NX, NY, h, 1);
-
-			// k1 = u_tilde(x,t_n+1) = 3*u_n - 3*u_n-1 + 1*u_n-2
-			k1[0] = u[0];
-			k1[1] = u[1];
-
-			// compute u_tilde(x - dt*k1/2, t_n+1 - dt/2)
-			k2[0] = x_in[0] - dt*k1[0]/2.0; k2[1] = x_in[1] - dt*k1[1]/2.0;
-			device_hermite_interpolate_grad_2D(phi, k2, u, NX, NY, h, 1);
-
-			//k2 = u_tilde(x - k1 dt/2, t_n+1 - dt/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
-			k2[0] = u[0];
-			k2[1] = u[1];
-			break;
-		}
-		case 2: {
-			// compute u_tilde(X,t_n+1)
-			device_hermite_interpolate_grad_2D(phi, x_in, u, NX, NY, h, 2);
-
-			// k1 = u_tilde(X,t_n+1) = 4*u_n - 6*u_n-1 + 4*u_n-2 - 1*u_n-3
-			k1[0] = 2 * u[0] - u[2];
-			k1[1] = 2 * u[1] - u[3];
-
-			// compute u_tilde(x - dt*k1/2, t_n+1/2)
-			k2[0] = x_in[0] - dt*k1[0]/2.0; k2[1] = x_in[1] - dt*k1[1]/2.0;
-			device_hermite_interpolate_grad_2D(phi, k2, u, NX, NY, h, 2);
-
-			//k2 = u_tilde(x - k1 dt/2, t_n+1 - dt/2) = 2.1875*u_n - 2.1875*u_n-1 + 1.3125*u_n-2 - 0.3125*u_n-3
-			k2[0] = 1.5 * u[0] + -0.5 * u[2];
-			k2[1] = 1.5 * u[1] + -0.5 * u[3];
-			break;
-		}
-		case 3: {
+//	int lagrange_order = 1;
+//	double u[8];  // velocity placeholders
+//	switch (lagrange_order) {
+//		case 1: {
+//			// compute u_tilde(X,t_n+1)
+//			device_hermite_interpolate_grad_2D(phi, x_in, u, NX, NY, h, 1);
+//
+//			// k1 = u_tilde(x,t_n+1) = 3*u_n - 3*u_n-1 + 1*u_n-2
+//			k1[0] = u[0];
+//			k1[1] = u[1];
+//
+//			// compute u_tilde(x - dt*k1/2, t_n+1 - dt/2)
+//			k2[0] = x_in[0] - dt*k1[0]/2.0; k2[1] = x_in[1] - dt*k1[1]/2.0;
+//			device_hermite_interpolate_grad_2D(phi, k2, u, NX, NY, h, 1);
+//
+//			//k2 = u_tilde(x - k1 dt/2, t_n+1 - dt/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
+//			k2[0] = u[0];
+//			k2[1] = u[1];
+//			break;
+//		}
+//		case 2: {
+//			// compute u_tilde(X,t_n+1)
+//			device_hermite_interpolate_grad_2D(phi, x_in, u, NX, NY, h, 2);
+//
+//			// k1 = u_tilde(X,t_n+1) = 4*u_n - 6*u_n-1 + 4*u_n-2 - 1*u_n-3
+//			k1[0] = 2 * u[0] - u[2];
+//			k1[1] = 2 * u[1] - u[3];
+//
+//			// compute u_tilde(x - dt*k1/2, t_n+1/2)
+//			k2[0] = x_in[0] - dt*k1[0]/2.0; k2[1] = x_in[1] - dt*k1[1]/2.0;
+//			device_hermite_interpolate_grad_2D(phi, k2, u, NX, NY, h, 2);
+//
+//			//k2 = u_tilde(x - k1 dt/2, t_n+1 - dt/2) = 2.1875*u_n - 2.1875*u_n-1 + 1.3125*u_n-2 - 0.3125*u_n-3
+//			k2[0] = 1.5 * u[0] + -0.5 * u[2];
+//			k2[1] = 1.5 * u[1] + -0.5 * u[3];
+//			break;
+//		}
+//		case 3: {
 			// compute u_tilde(X,t_n+1)
 			device_hermite_interpolate_grad_2D(phi, x_in, u, NX, NY, h, 3);
 
@@ -124,26 +124,26 @@ __device__ void RK3_classical(double *phi, double *x_in, double *x_out, double N
 			//k2 = u_tilde(x - k1 dt/2, t_n+1 - dt/2) = 1.875*u_n - 1.25*u_n-1 + 0.375*u_n-2
 			k2[0] = 1.875 * u[0] + -1.25 * u[2] + 0.375 * u[4];
 			k2[1] = 1.875 * u[1] + -1.25 * u[3] + 0.375 * u[5];
-			break;
-		}
-		case 4: {
-			// compute u_tilde(X,t_n+1)
-			device_hermite_interpolate_grad_2D(phi, x_in, u, NX, NY, h, 4);
-
-			// k1 = u_tilde(X,t_n+1) = 4*u_n - 6*u_n-1 + 4*u_n-2 - 1*u_n-3
-			k1[0] = 4 * u[0] + -6 * u[2] + 4 * u[4] + -1 * u[6];
-			k1[1] = 4 * u[1] + -6 * u[3] + 4 * u[5] + -1 * u[7];
-
-			// compute u_tilde(x - dt*k1/2, t_n+1/2)
-			k2[0] = x_in[0] - dt*k1[0]/2.0; k2[1] = x_in[1] - dt*k1[1]/2.0;
-			device_hermite_interpolate_grad_2D(phi, k2, u, NX, NY, h, 4);
-
-			//k2 = u_tilde(x - k1 dt/2, t_n+1 - dt/2) = 2.1875*u_n - 2.1875*u_n-1 + 1.3125*u_n-2 - 0.3125*u_n-3
-			k2[0] = 2.1875 * u[0] + -2.1875 * u[2] + 1.3125 * u[4] + -0.3125 * u[6];
-			k2[1] = 2.1875 * u[1] + -2.1875 * u[3] + 1.3125 * u[5] + -0.3125 * u[7];
-			break;
-		}
-	}
+//			break;
+//		}
+//		case 4: {
+//			// compute u_tilde(X,t_n+1)
+//			device_hermite_interpolate_grad_2D(phi, x_in, u, NX, NY, h, 4);
+//
+//			// k1 = u_tilde(X,t_n+1) = 4*u_n - 6*u_n-1 + 4*u_n-2 - 1*u_n-3
+//			k1[0] = 4 * u[0] + -6 * u[2] + 4 * u[4] + -1 * u[6];
+//			k1[1] = 4 * u[1] + -6 * u[3] + 4 * u[5] + -1 * u[7];
+//
+//			// compute u_tilde(x - dt*k1/2, t_n+1/2)
+//			k2[0] = x_in[0] - dt*k1[0]/2.0; k2[1] = x_in[1] - dt*k1[1]/2.0;
+//			device_hermite_interpolate_grad_2D(phi, k2, u, NX, NY, h, 4);
+//
+//			//k2 = u_tilde(x - k1 dt/2, t_n+1 - dt/2) = 2.1875*u_n - 2.1875*u_n-1 + 1.3125*u_n-2 - 0.3125*u_n-3
+//			k2[0] = 2.1875 * u[0] + -2.1875 * u[2] + 1.3125 * u[4] + -0.3125 * u[6];
+//			k2[1] = 2.1875 * u[1] + -2.1875 * u[3] + 1.3125 * u[5] + -0.3125 * u[7];
+//			break;
+//		}
+//	}
 
 
 

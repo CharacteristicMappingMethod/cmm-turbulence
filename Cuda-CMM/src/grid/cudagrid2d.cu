@@ -53,23 +53,17 @@ MapStack::MapStack(TCudaGrid2D *Grid, int cpu_map_num) {
 }
 
 
-// name says already everything actually
+// copy inserted map into last position at map stack, after 1/4 of all total maps, start using new array
 void MapStack::copy_map_to_host(double *Dev_ChiX, double *Dev_ChiY) {
-	//saving map stack on device/host
-	//cudaMemcpy(&Dev_ChiX_stack[map_stack_ctr*4*Grid->N], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToDevice);
-	//cudaMemcpy(&Dev_ChiY_stack[map_stack_ctr*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToDevice);
-
     switch(map_stack_ctr / cpu_map_num){
         case 0:
             cudaMemcpy(&Host_ChiX_stack_RAM_0[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
             cudaMemcpy(&Host_ChiY_stack_RAM_0[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
             break;
-		//cout<<"pos ram 0 : "<<map_stack_ctr%(cpu_map_num * map_stack_length)<<endl;
         case 1:
             cudaMemcpy(&Host_ChiX_stack_RAM_1[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
             cudaMemcpy(&Host_ChiY_stack_RAM_1[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
             break;
-		//cout<<"pos ram 1 : "<<map_stack_ctr%(cpu_map_num * map_stack_length)<<endl;
         case 2:
             cudaMemcpy(&Host_ChiX_stack_RAM_2[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
             cudaMemcpy(&Host_ChiY_stack_RAM_2[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
@@ -80,10 +74,10 @@ void MapStack::copy_map_to_host(double *Dev_ChiX, double *Dev_ChiY) {
             cudaMemcpy(&Host_ChiY_stack_RAM_3[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
             break;
     }
+    map_stack_ctr++;
 }
-
+// copy map to device, map_num decides which map to take out
 void MapStack::copy_map_to_device(int map_num) {
-
 	switch (map_num / cpu_map_num) {
 		case 0: {
 			cudaMemcpy(Dev_ChiX_stack, &Host_ChiX_stack_RAM_0[(map_num%cpu_map_num)*Grid->N*4], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
@@ -128,7 +122,6 @@ void get_max_min(TCudaGrid2D *G, double *var, double *min, double *max)
 {
 	//calculating max and min
 	double var_min, var_max;
-	
 		for(int i=0; i<G->N; i++)
 		{
 			if(i==0)
@@ -136,7 +129,6 @@ void get_max_min(TCudaGrid2D *G, double *var, double *min, double *max)
 				var_min = var[i];
 				var_max = var[i];
 			}
-			
 			if(var_min > var[i])
 				var_min = var[i];
 				
@@ -176,7 +168,8 @@ __global__ void Dev_get_max_min(int len, double *var, double *min, double *max)
 	int In = threadIdx.x + blockDim.x * blockIdx.x;
 	int Di = blockDim.x * gridDim.x;
 	
-	int pos = len / Di * In, step_pos = len / Di;
+	// initialize positions, casting is important to include all points
+	int pos = (int)(len / (double)Di * In), step_pos = (int)ceil(len / (double)Di);
 	//calculating max and min
 	double var_min, var_max;
 

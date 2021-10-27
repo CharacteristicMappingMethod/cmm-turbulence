@@ -13,21 +13,14 @@
 //#define L2(t, tp, tm, tmm) ((t-tp)*(t-tmm)/((tm-tp)*(tm-tmm)))
 //#define L3(t, tp, tm, tmm) ((t-tp)*(t-tm)/((tmm-tp)*(tmm-tm)))
 
-
-__global__ void Compute_Energy(double *E, double *psi, int N, int NX, int NY, double h);
-__global__ void Compute_Enstrophy(double *Ens, double *W, int N, int NX, int NY, double h);
-void Compute_Energy_Host(double *E, double *psi, int N, double h);
-void Compute_Enstrophy_Host(double *Ens, double *W, int N, double h);
-void Compute_Palinstrophy_fourier(TCudaGrid2D *Grid_coarse, double *Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftDoubleComplex *Dev_Temp_C2, cufftHandle cufftPlan_coarse);
-//void Compute_Palinstrophy_hermite(TCudaGrid2D *Grid_fine, double *Pal, double *W_H_real);
+void Compute_Energy(double *E, double *psi, TCudaGrid2D *Grid, double *Dev_Temp_C1);
+void Compute_Enstrophy(double *E, double *W, TCudaGrid2D *Grid, double *Dev_Temp_C1);
+void Compute_Palinstrophy(TCudaGrid2D *Grid, double *Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftDoubleComplex *Dev_Temp_C2, cufftHandle cufftPlan);
 
 
 void NDFT_1D(cufftDoubleComplex *X_k, double *x_n, double *p_n, double *f_k, int N);
-
 void iNDFT_1D(cufftDoubleComplex *X_k, double *x_n, double *p_n, double *f_k, int N);
-
 __global__ void NDFT_2D(cufftDoubleComplex *X_k, double *x_n, double *p_n, int *f_k, int NX, int Np);
-
 __global__ void iNDFT_2D(cufftDoubleComplex *X_k, double *x_n, double *p_n, int *f_k, int N_grid);
 
 //void Lagrange_coef(double *Dev_Lagr_coef, double t, double tp, double tm, double tmm);

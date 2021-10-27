@@ -241,6 +241,7 @@ __global__ void k_fft_cut_off_scale(cufftDoubleComplex *W, int NX, double freq)
 	if (j > NX/2) j = NX-j;
 	// cut at frequency in a round circle
 	if ((i*i + j*j) > freq*freq || In == 0) {
+//	if (i > freq || j > freq || In == 0) {
 		W[In].x = 0;
 		W[In].y = 0;
 	}

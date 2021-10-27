@@ -68,7 +68,6 @@ void Host_get_max_min(int len, double *Var_min, double *Var_max, double *min, do
 #ifdef __CUDACC__
 
 	#define BLOCK_SIZE 16	// most devices have maximum thread size of 1024, i don't know why this is 16*16=256
-	#define sm_50  // for Julius, because he has a shitty graphics card
 
 	__global__ void Dev_get_max_min(int len, double *var, double *min, double *max);
 #endif

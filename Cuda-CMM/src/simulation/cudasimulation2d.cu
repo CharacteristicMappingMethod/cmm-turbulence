@@ -1,5 +1,7 @@
 #include "cudasimulation2d.h"
 
+#include "stdio.h"
+
 ////////////////////////////////////////////////////////////////////////
 __global__ void kernel_init_diffeo(double *ChiX, double *ChiY, int NX, int NY, double h)
 {
@@ -47,6 +49,91 @@ __global__ void k_sample(double *ChiX, double *ChiY, double *ChiX_s, double *Chi
 }
 
 
+// we have 32 threads in a warp, we therefore don't need to synchronize anymore
+__device__ void max_wr(volatile double *sdata, unsigned int tid) {
+	 sdata[tid] = fmax(sdata[tid],sdata[tid+32]);
+	 sdata[tid] = fmax(sdata[tid],sdata[tid+16]);
+	 sdata[tid] = fmax(sdata[tid],sdata[tid+ 8]);
+	 sdata[tid] = fmax(sdata[tid],sdata[tid+ 4]);
+	 sdata[tid] = fmax(sdata[tid],sdata[tid+ 2]);
+	 sdata[tid] = fmax(sdata[tid],sdata[tid+ 1]);
+}
+// function for parallel reduction min
+__global__ void k_max_pr(double *g_idata, double *g_odata, long long int N) {
+	__shared__ double sdata[512];  // shared array to store intermediate values, we assume a blocksize of 512
+	unsigned int tid = threadIdx.x;  // thread index in block
+	unsigned int i = blockIdx.x*(blockDim.x*2) + threadIdx.x;  // uid for thread
+	if (i > N) return;  // safety check
+	sdata[tid] = fmax(fabs(1-g_idata[i]), fabs(1-g_idata[i+blockDim.x]));  // data extraction including first function
+	__syncthreads();
+	// unrolled loop, is faster
+	if (tid < 256) { sdata[tid] = fmax(sdata[tid], sdata[tid + 256]); __syncthreads(); }
+	if (tid < 128) { sdata[tid] = fmax(sdata[tid], sdata[tid + 128]); __syncthreads(); }
+	if (tid <  64) { sdata[tid] = fmax(sdata[tid], sdata[tid + 64]); __syncthreads(); }
+	if (tid <  32) max_wr(sdata, tid);  // with less than 32 we don't need to synchronize anymore
+	if (tid ==  0) g_odata[blockIdx.x] = sdata[0];  // save final values, one per block
+}
+double incompressibility_check(double *ChiX, double *ChiY, double *gradChi, TCudaGrid2D *Grid_fine, TCudaGrid2D *Grid_coarse) {
+	// compute determinant of gradient and save in gradchi
+	kernel_incompressibility_check<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX, ChiY, gradChi, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h);  // time cost		A optimiser
+
+	// compute incompressibilty by using atomic max float function
+	int block_num = (int)ceil(Grid_fine->N/1024.0);
+	k_max_pr<<<block_num, 512>>>(gradChi, gradChi + Grid_fine->N, Grid_fine->N);  // we can use gradChi for output, as it hase size N_fine*2
+
+	double host_max[block_num];
+	cudaMemcpy(host_max, gradChi + Grid_fine->N, sizeof(double)*block_num, cudaMemcpyDeviceToHost);
+
+	double max_val = 0;  // final loop over all blocks
+	for (int i_b = 0; i_b < block_num; ++i_b) max_val = fmax(max_val, host_max[i_b]);
+	return max_val;
+}
+
+
+//__device__ void warpReduce(volatile double *sdata, unsigned int tid)
+// {
+//     sdata[tid] = fmax(sdata[tid],sdata[tid+32]);
+//     sdata[tid] = fmax(sdata[tid],sdata[tid+16]);
+//     sdata[tid] = fmax(sdata[tid],sdata[tid+8]);
+//     sdata[tid] = fmax(sdata[tid],sdata[tid+4]);
+//     sdata[tid] = fmax(sdata[tid],sdata[tid+2]);
+//     sdata[tid] = fmax(sdata[tid],sdata[tid+1]);
+// }
+//__global__ void findMinOfArray(double *g_idata, int N, float *op_data,int num_blocks){
+//
+//    unsigned int unique_id = blockIdx.x * blockDim.x + threadIdx.x; /* unique id for each thread in the block*/
+//    unsigned int row = unique_id % N; /*row number in the g_idata*/
+//    unsigned int col = unique_id / N; /*col number in the g_idata*/
+//
+//    unsigned int thread_id = threadIdx.x; /* thread index in the block*/
+//
+//    __shared__ double minChunk[256];
+//
+//    if((row >= 0) && (row < N) && (col >= 0) && (col < N)){
+//        minChunk[thread_id] = g_idata[index(row,col,N)];
+//    }
+//
+//    __syncthreads();
+//
+//    for(unsigned int stride = (blockDim.x/2); stride > 32 ; stride /=2){
+//        __syncthreads();
+//
+//        if(thread_id < stride)
+//        {
+//            minChunk[thread_id] = min(minChunk[thread_id],minChunk[thread_id + stride]);
+//        }
+//    }
+//
+//    if(thread_id < 32){
+//        warpReduce(minChunk,thread_id);
+//    }
+//
+//    if(thread_id == 0){
+//        op_data[index(0,blockIdx.x,num_blocks)] = minChunk[0];
+//    }
+//}
+
+
 __global__ void kernel_incompressibility_check(double *ChiX, double *ChiY, double *gradChi, int NXc, int NYc, double hc, int NXs, int NYs, double hs)
 {
 	//index
@@ -58,10 +145,9 @@ __global__ void kernel_incompressibility_check(double *ChiX, double *ChiY, doubl
 	
 	int In = iY*NXs + iX;
 	
-	//position
+	//position shifted by half a point to compute at off-grid
 	double x = iX*hs + 0.5*hs;
 	double y = iY*hs + 0.5*hs;
-	
 	gradChi[In] = device_diffeo_grad_2D(ChiX, ChiY, x, y, NXc, NYc, hc);
 }
 
@@ -293,7 +379,6 @@ __global__ void kernel_apply_map_stack_to_W_part_2(double *ChiX_stack, double *C
 		return;
 	
 	int In = iY*NXs + iX;
-	long int N = NXc*NYc;	
 	
 	//for(int k = stack_length - 1; k >= 0; k--)
 	device_diffeo_interpolate_2D(ChiX_stack, ChiY_stack, x_y[2*In], x_y[2*In+1], &x_y[2*In], &x_y[2*In+1], NXc, NYc, hc);
@@ -538,14 +623,16 @@ __device__ double device_initial_W(double x, double y, int simulation_num)
 		// v(x,y)= + x 1/(nu^2 t^2) exp(-(x^2+y^2)/(4 nu t))
 		case 6:  // shielded vortex
 		{
-			double nu = 5e-1;
-			double t = 1;
+			double nu = 2e-1;
+			double nu_fac = 1 / (2*nu*nu);  // 1 / (2*nu*nu*nu)
+			double nu_center = 4*nu;  // 4*nu
+			double nu_scale = 4*nu;  // 4*nu
 
 			// compute distance from center
 			double x_r = PI-x; double y_r = PI-y;
 
 			// build vorticity
-			return (4*nu*t - x_r*x_r - y_r*y_r) / (2*nu*nu*nu*t*t*t) * exp(-(x_r*x_r + y_r*y_r)/(4*nu*t));
+			return nu_fac * (nu_center - x_r*x_r - y_r*y_r) * exp(-(x_r*x_r + y_r*y_r)/nu_scale);
 			break;
 		}
 		default:  //default case goes to stationary

@@ -64,7 +64,7 @@ int main(int argc, char *args[])
 
 	// main function
 	cuda_euler_2d(SettingsMain);
-	
+
 	//Zoom_load_frame("vortex_shear_1000_4", grid_scale, fine_grid_scale, "final");
 	
 	return 0;

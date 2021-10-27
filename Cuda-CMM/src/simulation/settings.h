@@ -15,7 +15,7 @@ class SettingsCMM {
 
 private:
 	// main properties, needed to be able to run
-	string workspace, sim_name;
+	string workspace, sim_name, file_name;
 	int grid_coarse, grid_fine, grid_psi, grid_vort;
 	string initial_condition; int initial_condition_num;
 	// time stepping properties
@@ -27,8 +27,7 @@ private:
 	double incomp_threshhold;
 	double map_epsilon;
 	//memory variables
-	int mem_RAM_GPU_remaps;
-	int mem_RAM_CPU_remaps;
+	int mem_RAM_CPU_remaps; bool save_map_stack;
 	// specific
 	string time_integration; int time_integration_num;
 	int lagrange_order;
@@ -36,17 +35,25 @@ private:
 	int molly_stencil;
 	double freq_cut_psi;
 	bool skip_remapping;
+	// sample grid
 	bool sample_on_grid;
-	int grid_sample;
+	int grid_sample, sample_snapshots_per_sec;
+	bool sample_save_initial, sample_save_final;
 	// particles
 	bool particles, save_fine_particles;
+	int particles_tau_num;
 	bool particles_save_initial, particles_save_final;
 	int particles_num, particles_fine_num;
-	int particles_snapshots_per_sec, particles_step_reduction;
+	int particles_snapshots_per_sec;
 	string particles_time_integration; int particles_time_integration_num;
+
+	int particles_steps;
 
 
 public:
+	// arrays are hard to deal with methods in c++, so i make them public
+	double particles_tau[100];
+
 	// main functions
 	SettingsCMM(string sim_name, int gridCoarse, int gridFine, string initialCondition);
 	SettingsCMM();
@@ -56,8 +63,13 @@ public:
 	void setPresets();
 	// function to apply commands from command line
 	void applyCommands(int argc, char *args[]);
-	// helper function
+	// helper functions
 	bool getBoolFromString(string value);
+	// work with arrays
+	void string_to_int_array(string s_array, int *array);
+	void string_to_double_array(string s_array, double *array);
+	void transcribe_int_array(int *array_in, int *array_save, int num) { for (int i_num = 0; i_num < num; ++i_num) array_save[i_num] = array_in[i_num]; }
+	void transcribe_double_array(double *array_in, double *array_save, int num) { for (int i_num = 0; i_num < num; ++i_num) array_save[i_num] = array_in[i_num]; }
 
 	// get and set methods for all variables
 
@@ -66,6 +78,8 @@ public:
 	void setWorkspace(string Workspace) { workspace = Workspace; }
 	string getSimName() const { return sim_name; }
 	void setSimName(string simName) { sim_name = simName; }
+	string getFileName() const { return file_name; }
+	void setFileName(string fileName) { file_name = fileName; }
 	// grid settings
 	int getGridCoarse() const { return grid_coarse; }
 	void setGridCoarse(int gridCoarse) { grid_coarse = gridCoarse; }
@@ -116,10 +130,10 @@ public:
 	void setMapEpsilon(double mapEpsilon) { map_epsilon = mapEpsilon; }
 
 	// memory variables
-	int getMemRamGpuRemaps() const { return mem_RAM_GPU_remaps; }
-	void setMemRamGpuRemaps(int memRamGpuRemaps) { mem_RAM_GPU_remaps = memRamGpuRemaps; }
 	int getMemRamCpuRemaps() const { return mem_RAM_CPU_remaps; }
 	void setMemRamCpuRemaps(int memRamCpuRemaps) { mem_RAM_CPU_remaps = memRamCpuRemaps; }
+	bool getSaveMapStack() const { return save_map_stack; }
+	void setSaveMapStack(bool saveMapStack) { save_map_stack = saveMapStack; }
 
 	// map update order handling the stencil of footpoints
 	string getMapUpdateOrder() const { return map_update_order; }
@@ -168,12 +182,22 @@ public:
 	void setSampleOnGrid(bool sampleOnGrid) { sample_on_grid = sampleOnGrid; }
 	int getGridSample() const { return grid_sample; }
 	void setGridSample(int gridSample) { grid_sample = gridSample; }
+	int getSampleSnapshotsPerSec() const { return sample_snapshots_per_sec; }
+	void setSampleSnapshotsPerSec(int sampleSnapshotsPerSec) { sample_snapshots_per_sec = sampleSnapshotsPerSec; }
+
+	bool getSampleSaveInitial() const { return sample_save_initial; }
+	void setSampleSaveInitial(bool sampleSaveInitial) { sample_save_initial = sampleSaveInitial; }
+	bool getSampleSaveFinal() const { return sample_save_final; }
+	void setSampleSaveFinal(bool sampleSaveFinal) { sample_save_final = sampleSaveFinal; }
 
 	// particles
 	bool getParticles() const { return particles; }
 	void setParticles(bool Particles) { particles = Particles; }
 	int getParticlesNum() const { return particles_num; }
 	void setParticlesNum(int particlesNum) { particles_num = particlesNum; }
+
+	int getParticlesTauNum() const { return particles_tau_num; }
+	void setParticlesTauNum(int particlesTauNum) { particles_tau_num = particlesTauNum; }
 
 	int getParticlesSnapshotsPerSec() const { return particles_snapshots_per_sec; }
 	void setParticlesSnapshotsPerSec(int particlesSnapshotsPerSec) { particles_snapshots_per_sec = particlesSnapshotsPerSec; }
@@ -182,9 +206,6 @@ public:
 	void setParticlesSaveInitial(bool particlesSaveInitial) { particles_save_initial = particlesSaveInitial; }
 	bool getParticlesSaveFinal() const { return particles_save_final; }
 	void setParticlesSaveFinal(bool particlesSaveFinal) { particles_save_final = particlesSaveFinal; }
-
-	int getParticlesStepReduction() const { return particles_step_reduction; }
-	void setParticlesStepReduction(int particlesStepReduction) { particles_step_reduction = particlesStepReduction; }
 
 	// fine particles
 	bool getSaveFineParticles() const { return save_fine_particles; }
@@ -205,6 +226,9 @@ public:
 		else particles_time_integration_num = -1;
 	}
 	int getParticlesTimeIntegrationNum() const { return particles_time_integration_num; }
+
+	int getParticlesSteps() const { return particles_steps; }
+	void setParticlesSteps(int particlesSteps) { particles_steps = particlesSteps; }
 };
 
 #endif

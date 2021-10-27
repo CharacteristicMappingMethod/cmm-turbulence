@@ -5,17 +5,14 @@
 *				     Creation of storage files					   *
 *******************************************************************/
 
-void create_directory_structure(SettingsCMM SettingsMain, string file_name, double dt, int save_buffer_count, int show_progress_at, int iterMax)
+void create_directory_structure(SettingsCMM SettingsMain, double dt, int save_buffer_count, int iterMax)
 {
+	string folder_data = SettingsMain.getWorkspace() + "data";
 	struct stat st = {0};
-	if (stat("data", &st) == -1)
-	{
-		cout<<"A\n";
-		mkdir("data", 0700);
-	}
+	if (stat(folder_data.c_str(), &st) == -1) mkdir(folder_data.c_str(), 0700);
 
 	//creating main folder
-	string folder_name = SettingsMain.getWorkspace() + "data/" + file_name;
+	string folder_name = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName();
 	mkdir(folder_name.c_str(), 0700);
 
 	// create general subfolder for timesteps
@@ -32,31 +29,30 @@ void create_directory_structure(SettingsCMM SettingsMain, string file_name, doub
 	}
 	else
 	{
-        file<<"Simulation name \t\t: "<<SettingsMain.getSimName()<<endl;
+        file<<"Simulation name \t\t\t: "<<SettingsMain.getSimName()<<endl;
         switch (SettingsMain.getTimeIntegrationNum()) {
-			case 10: { file<<"Time integration : Euler explicit"<<endl; break; }
-			case 20: { file<<"Time integration : Adam Bashfords 2"<<endl; break; }
-			case 21: { file<<"Time integration : Runge Kutta 2"<<endl; break; }
-			case 30: { file<<"Time integration : Runge Kutta 3"<<endl; break; }
-			case 40: { file<<"Time integration : Runge Kutta 4"<<endl; break; }
-			case 31: { file<<"Time integration : Runge Kutta 3 (modified)"<<endl; break; }
-			case 41: { file<<"Time integration : Runge Kutta 4 (modified)"<<endl; break; }
-			default: { file<<"Time integration : Default (zero)"<<endl; break; }
+			case 10: { file<<"Time integration \t\t\t: Euler explicit"<<endl; break; }
+			case 20: { file<<"Time integration \t\t\t: Adam Bashfords 2"<<endl; break; }
+			case 21: { file<<"Time integration \t\t\t: Runge Kutta 2"<<endl; break; }
+			case 30: { file<<"Time integration \t\t\t: Runge Kutta 3"<<endl; break; }
+			case 40: { file<<"Time integration \t\t\t: Runge Kutta 4"<<endl; break; }
+			case 31: { file<<"Time integration \t\t\t: Runge Kutta 3 (modified)"<<endl; break; }
+			case 41: { file<<"Time integration \t\t\t: Runge Kutta 4 (modified)"<<endl; break; }
+			default: { file<<"Time integration \t\t\t: Default (zero)"<<endl; break; }
 		}
 
-        file<<"N_coarse(resolution coarse grid) \t\t: "<<SettingsMain.getGridCoarse()<<endl;
+        file<<"N_coarse(resolution coarse grid) \t: "<<SettingsMain.getGridCoarse()<<endl;
 		file<<"N_fine(resolution fine grid) \t\t: "<<SettingsMain.getGridFine()<<endl;
 		file<<"N_psi(resolution psi grid) \t\t: "<<SettingsMain.getGridPsi()<<endl;
-		file<<"N_vort(resolution sampled vorticity grid) \t\t: "<<SettingsMain.getGridVort()<<endl;
+		file<<"N_vort(resolution vort for psi grid) \t: "<<SettingsMain.getGridVort()<<endl;
 		file<<"time step dt \t\t: "<<dt<<endl;
 		file<<"Final time \t\t: "<<SettingsMain.getFinalTime()<<endl;
 		file<<"save at \t\t: "<<save_buffer_count<<endl;
-		file<<"progress at \t\t: "<<show_progress_at<<endl;
 		file<<"iter max \t\t: "<<iterMax<<endl;
 		file<<"Incomppressibility Threshold \t: "<<SettingsMain.getIncompThreshold()<<endl;
 		file<<"Map advection epsilon \t: "<<SettingsMain.getMapEpsilon()<<endl;
 		file<<"Map update order \t: "<<SettingsMain.getMapUpdateOrder()<<endl;
-		file<<"Cut Psi Frequencies at \t:"<<SettingsMain.getFreqCutPsi()<<endl;
+		file<<"Cut Psi Frequencies at \t: "<<SettingsMain.getFreqCutPsi()<<endl;
 
         if (SettingsMain.getParticles()) {
         	file<<"Particles enabled"<<endl;
@@ -79,10 +75,10 @@ void create_directory_structure(SettingsCMM SettingsMain, string file_name, doub
 
 
 // separate call for creating particle folder structure, as this is initialized later
-void create_particle_directory_structure(SettingsCMM SettingsMain, string file_name, double *Tau_p, int Nb_Tau_p) {
+void create_particle_directory_structure(SettingsCMM SettingsMain) {
 	// create particle folders
     if (SettingsMain.getParticles()) {
-    	string folder_name = SettingsMain.getWorkspace() + "data/" + file_name;
+    	string folder_name = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName();
 
     	// main folder
         string fi = folder_name + "/Particle_data";
@@ -98,12 +94,12 @@ void create_particle_directory_structure(SettingsCMM SettingsMain, string file_n
         }
 
         // folder for tau_p particles together with fine folder
-        for(int i = 1; i<Nb_Tau_p; i+=1){
-            fi_1 = fi + "/Tau=" + to_str(Tau_p[i]);
+        for(int i = 1; i<SettingsMain.getParticlesTauNum(); i+=1){
+            fi_1 = fi + "/Tau=" + to_str(SettingsMain.particles_tau[i]);
             mkdir(fi_1.c_str(), 0700);
 
             if (SettingsMain.getSaveFineParticles()) {
-				fi_1 = fi + "/Tau=" + to_str(Tau_p[i]) + "_fine";
+				fi_1 = fi + "/Tau=" + to_str(SettingsMain.particles_tau[i]) + "_fine";
 				mkdir(fi_1.c_str(), 0700);
             }
         }
@@ -115,9 +111,9 @@ void create_particle_directory_structure(SettingsCMM SettingsMain, string file_n
 *******************************************************************/
 
 
-void writeAllRealToBinaryFile(int Len, double *var, string workspace, string simulationName, string fileName)
+void writeAllRealToBinaryFile(int Len, double *var, SettingsCMM SettingsMain, string data_name)
 {
-	fileName = workspace + "data/" + simulationName + fileName + ".data";
+	string fileName = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + data_name + ".data";
 	ofstream file(fileName.c_str(), ios::out | ios::binary);
 
 		if(!file)
@@ -133,9 +129,9 @@ void writeAllRealToBinaryFile(int Len, double *var, string workspace, string sim
 }
 
 
-void readAllRealFromBinaryFile(int Len, double *var, string workspace, string simulationName, string fileName)
+void readAllRealFromBinaryFile(int Len, double *var, SettingsCMM SettingsMain, string data_name)
 {
-	fileName = workspace + "data/" + simulationName + fileName + ".data";
+	string fileName = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + data_name + ".data";
 	ifstream file(fileName.c_str(), ios::in | ios::binary);
 
 		if(!file)
@@ -168,43 +164,46 @@ void readAllRealFromBinaryFile(int Len, double *var, string workspace, string si
 
 // binary version
 #else
-	void writeTimeStep(string workspace, string file_name, string i_num, double *Host_save, double *Dev_W_coarse, double *Dev_W_fine, double *Dev_Psi_real, double *Dev_ChiX, double *Dev_ChiY, TCudaGrid2D *Grid_fine, TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_psi) {
+	void writeTimeStep(SettingsCMM SettingsMain, string i_num, double *Host_save, double *Dev_W_coarse, double *Dev_W_fine, double *Dev_Psi_real, double *Dev_ChiX, double *Dev_ChiY, TCudaGrid2D *Grid_fine, TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_psi) {
 
 		// create new subfolder for current timestep
 		string sub_folder_name = "/Time_data/Time_" + i_num;
-		string folder_name_now = workspace + "data/" + file_name + sub_folder_name;
-		mkdir(folder_name_now.c_str(), 0700);
+		string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
+		struct stat st = {0};
+		if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0700);
 
 		// execute binary save for all variables
 		// Vorticity on coarse grid : W_coarse
 		cudaMemcpy(Host_save, Dev_W_coarse, Grid_coarse->sizeNReal, cudaMemcpyDeviceToHost);
-		writeAllRealToBinaryFile(Grid_coarse->N, Host_save, workspace, file_name, sub_folder_name + "/Vorticity_W_coarse");
+		writeAllRealToBinaryFile(Grid_coarse->N, Host_save, SettingsMain, sub_folder_name + "/Vorticity_W_coarse");
 		// Vorticity on fine grid : W_fine
 		cudaMemcpy(Host_save, Dev_W_fine, Grid_fine->sizeNReal, cudaMemcpyDeviceToHost);
-	    writeAllRealToBinaryFile(Grid_fine->N, Host_save, workspace, file_name, sub_folder_name + "/Vorticity_W_fine");
+	    writeAllRealToBinaryFile(Grid_fine->N, Host_save, SettingsMain, sub_folder_name + "/Vorticity_W_fine");
 		// Stream function on psi grid : Psi
 		cudaMemcpy(Host_save, Dev_Psi_real, 4*Grid_psi->sizeNReal, cudaMemcpyDeviceToHost);
-		writeAllRealToBinaryFile(4*Grid_psi->N, Host_save, workspace, file_name, sub_folder_name + "/Stream_function_Psi_psi");
+		writeAllRealToBinaryFile(4*Grid_psi->N, Host_save, SettingsMain, sub_folder_name + "/Stream_function_Psi_psi");
 		// map in x direction on coarse grid : ChiX
 		cudaMemcpy(Host_save, Dev_ChiX, 4*Grid_coarse->sizeNReal, cudaMemcpyDeviceToHost);
-		writeAllRealToBinaryFile(4*Grid_coarse->N, Host_save, workspace, file_name, sub_folder_name + "/Map_ChiX_coarse");
+		writeAllRealToBinaryFile(4*Grid_coarse->N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiX_coarse");
 		// map in y direction on coarse grid : ChiY
 		cudaMemcpy(Host_save, Dev_ChiY, 4*Grid_coarse->sizeNReal, cudaMemcpyDeviceToHost);
-		writeAllRealToBinaryFile(4*Grid_coarse->N, Host_save, workspace, file_name, sub_folder_name + "/Map_ChiY_coarse");
+		writeAllRealToBinaryFile(4*Grid_coarse->N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiY_coarse");
 	}
 #endif
 
 
 // script to save only one of the variables, needed because we need temporal arrays to save
-void writeTimeVariable(string workspace, string sim_name, string file_name, string i_num, double *Host_save, double *Dev_save, long int size_N, long int N) {
+void writeTimeVariable(SettingsCMM SettingsMain, string data_name, string i_num, double *Host_save, double *Dev_save, long int size_N, long int N) {
 	// create new subfolder for current timestep, doesn't matter if we try to create it several times
 	string sub_folder_name = "/Time_data/Time_" + i_num;
-	string folder_name_now = workspace + "data/" + sim_name + sub_folder_name;
-	mkdir(folder_name_now.c_str(), 0700);
+	string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
+	struct stat st = {0};
+	if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0700);
+//	mkdir(folder_name_now.c_str(), 0700);
 
 	// copy and save
 	cudaMemcpy(Host_save, Dev_save, size_N, cudaMemcpyDeviceToHost);
-	writeAllRealToBinaryFile(N, Host_save, workspace, sim_name, sub_folder_name + "/" + file_name);
+	writeAllRealToBinaryFile(N, Host_save, SettingsMain, sub_folder_name + "/" + data_name);
 }
 
 
@@ -213,29 +212,68 @@ void writeTimeVariable(string workspace, string sim_name, string file_name, stri
  * Write particle positions
  */
 // will be with hdf5 version too at some point
-void writeParticles(SettingsCMM SettingsMain, string file_name, string i_num, double *Host_particles_pos, double *Dev_particles_pos, double *Tau_p, int Nb_Tau_p) {
+void writeParticles(SettingsCMM SettingsMain, string i_num, double *Host_particles_pos, double *Dev_particles_pos) {
 	// copy data to host
-    cudaMemcpy(Host_particles_pos, Dev_particles_pos, 2*SettingsMain.getParticlesNum()*Nb_Tau_p*sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(Host_particles_pos, Dev_particles_pos, 2*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()*sizeof(double), cudaMemcpyDeviceToHost);
     //cudaDeviceSynchronize();
-    writeAllRealToBinaryFile(2*SettingsMain.getParticlesNum(), Host_particles_pos, SettingsMain.getWorkspace(), file_name, "/Particle_data/Fluid/Particles_pos_" + i_num);
-    for(int i = 1; i < Nb_Tau_p; i+=1)
-        writeAllRealToBinaryFile(2*SettingsMain.getParticlesNum(), Host_particles_pos + i * 2*SettingsMain.getParticlesNum(), SettingsMain.getWorkspace(), file_name, "/Particle_data/Tau=" + to_str(Tau_p[i]) + "/Particles_pos_" + i_num);
+    writeAllRealToBinaryFile(2*SettingsMain.getParticlesNum(), Host_particles_pos, SettingsMain, "/Particle_data/Fluid/Particles_pos_" + i_num);
+    for(int i = 1; i < SettingsMain.getParticlesTauNum(); i+=1)
+        writeAllRealToBinaryFile(2*SettingsMain.getParticlesNum(), Host_particles_pos + i * 2*SettingsMain.getParticlesNum(), SettingsMain, "/Particle_data/Tau=" + to_str(SettingsMain.particles_tau[i]) + "/Particles_pos_" + i_num);
 }
 
-void writeFineParticles(SettingsCMM SettingsMain, string file_name, string i_num, double *Host_particles_fine_pos, double *Dev_particles_fine_pos, double *Tau_p, int Nb_Tau_p, int fine_particle_steps) {
+void writeFineParticles(SettingsCMM SettingsMain, string i_num, double *Host_particles_fine_pos, double *Dev_particles_fine_pos, int fine_particle_steps) {
 	cudaMemcpy(Host_particles_fine_pos, Dev_particles_fine_pos, 2*fine_particle_steps*sizeof(double), cudaMemcpyDeviceToHost);
-	writeAllRealToBinaryFile(2*fine_particle_steps, Host_particles_fine_pos, SettingsMain.getWorkspace(), file_name, "/Particle_data/Fluid_fine/Particles_pos_" + i_num);
+	writeAllRealToBinaryFile(2*fine_particle_steps, Host_particles_fine_pos, SettingsMain, "/Particle_data/Fluid_fine/Particles_pos_" + i_num);
 
-    for(int i = 1; i < Nb_Tau_p; i+=1) {
+    for(int i = 1; i < SettingsMain.getParticlesTauNum(); i+=1) {
 		cudaMemcpy(Host_particles_fine_pos, Dev_particles_fine_pos + 2*i*fine_particle_steps, 2*fine_particle_steps*sizeof(double), cudaMemcpyDeviceToHost);
-		writeAllRealToBinaryFile(2*fine_particle_steps, Host_particles_fine_pos, SettingsMain.getWorkspace(), file_name, "/Particle_data/Tau="+to_str(Tau_p[i])+"_fine/Particles_pos_" + i_num);
+		writeAllRealToBinaryFile(2*fine_particle_steps, Host_particles_fine_pos, SettingsMain, "/Particle_data/Tau="+to_str(SettingsMain.particles_tau[i])+"_fine/Particles_pos_" + i_num);
     }
 }
 
 
-Logger::Logger(string simulationName)
+// save the map stack, only save used maps though
+void writeMapStack(SettingsCMM SettingsMain, MapStack Map_Stack) {
+	// create new subfolder for mapstack, doesn't matter if we try to create it several times
+	string sub_folder_name = "/MapStack";
+	string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
+	struct stat st = {0};
+	if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0700);
+
+	printf("Map stack counter - %d\n",Map_Stack.map_stack_ctr);
+	// check if we have to save a stack for every stack
+	int save_ctr;
+	if (Map_Stack.map_stack_ctr / (double)Map_Stack.cpu_map_num > 0) {
+		if (Map_Stack.map_stack_ctr > 1*Map_Stack.cpu_map_num) save_ctr = Map_Stack.cpu_map_num;
+		else save_ctr = Map_Stack.map_stack_ctr - 0*Map_Stack.cpu_map_num;
+		printf("Save %d maps of map stack 1\n",save_ctr);
+		writeAllRealToBinaryFile(save_ctr*4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM_0, SettingsMain, "/MapStack/MapStack_ChiX_0");
+		writeAllRealToBinaryFile(save_ctr*4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM_0, SettingsMain, "/MapStack/MapStack_ChiY_0");
+	}
+	else if (Map_Stack.map_stack_ctr / (double)Map_Stack.cpu_map_num > 1) {
+		if (Map_Stack.map_stack_ctr > 2*Map_Stack.cpu_map_num) save_ctr = Map_Stack.cpu_map_num;
+		else save_ctr = Map_Stack.map_stack_ctr - 1*Map_Stack.cpu_map_num;
+		writeAllRealToBinaryFile(save_ctr*4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM_1, SettingsMain, "/MapStack/MapStack_ChiX_1");
+		writeAllRealToBinaryFile(save_ctr*4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM_1, SettingsMain, "/MapStack/MapStack_ChiY_1");
+	}
+	else if (Map_Stack.map_stack_ctr / (double)Map_Stack.cpu_map_num > 2) {
+		if (Map_Stack.map_stack_ctr > 3*Map_Stack.cpu_map_num) save_ctr = Map_Stack.cpu_map_num;
+		else save_ctr = Map_Stack.map_stack_ctr - 2*Map_Stack.cpu_map_num;
+		writeAllRealToBinaryFile(save_ctr*4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM_2, SettingsMain, "/MapStack/MapStack_ChiX_2");
+		writeAllRealToBinaryFile(save_ctr*4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM_2, SettingsMain, "/MapStack/MapStack_ChiY_2");
+	}
+	else if (Map_Stack.map_stack_ctr / (double)Map_Stack.cpu_map_num > 3) {
+		if (Map_Stack.map_stack_ctr > 4*Map_Stack.cpu_map_num) save_ctr = Map_Stack.cpu_map_num;
+		else save_ctr = Map_Stack.map_stack_ctr - 3*Map_Stack.cpu_map_num;
+		writeAllRealToBinaryFile(save_ctr*4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM_3, SettingsMain, "/MapStack/MapStack_ChiX_3");
+		writeAllRealToBinaryFile(save_ctr*4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM_3, SettingsMain, "/MapStack/MapStack_ChiY_3");
+	}
+}
+
+
+Logger::Logger(SettingsCMM SettingsMain)
 {
-	fileName = "data/" + simulationName + "/log.txt";
+	fileName = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/log.txt";
 	file.open(fileName.c_str(), ios::out);
 
 	if(!file)
@@ -245,7 +283,7 @@ Logger::Logger(string simulationName)
 	}
 	else
 	{
-		file<<simulationName<<endl;
+		file<<SettingsMain.getFileName()<<endl;
 		file.close();
 	}
 }

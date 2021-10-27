@@ -1,97 +1,104 @@
 #include "cudamesure2d.h"
 
 
-__global__ void Compute_Energy(double *E, double *psi, int N, int NX, int NY, double h){
 
-
-    int iX = (blockDim.x * blockIdx.x + threadIdx.x);
-	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-
-	if(iX >= NX || iY >= NX)
-		return;
-
-	int In = iY*NX + iX;
-
-	// atomicAdd defined for double at sm_60
-	#ifndef sm_50
-    	atomicAdd(E, 0.5*h * h * (psi[In + N] * psi[In + N] + psi[In + 2 * N] * psi[In + 2 * N]));
-	#else
-    	*E += 0.5*h * h * (psi[In + N] * psi[In + N] + psi[In + 2 * N] * psi[In + 2 * N]);
-	#endif
-/*	int idx = threadIdx.x;
-	int stride_x = blockDim.x;
-
-	for(int i = idx; i < N; i+=stride_x){
-		atomicAdd(E, 0.5*h * h * (psi[i + N] * psi[i + N] + psi[i + 2 * N] * psi[i + 2 * N]));
-	}
-    */
+// we have 32 threads in a warp, we therefore don't need to synchronize anymore
+__device__ void add2_wr(volatile double *sdata, unsigned int tid) {
+	 sdata[tid] += sdata[tid+32];
+	 sdata[tid] += sdata[tid+16];
+	 sdata[tid] += sdata[tid+ 8];
+	 sdata[tid] += sdata[tid+ 4];
+	 sdata[tid] += sdata[tid+ 2];
+	 sdata[tid] += sdata[tid+ 1];
+}
+// function for parallel reduction add of quadratic values
+__global__ void k_add2_pr(double *g_idata, double *g_odata, long long int N) {
+	__shared__ double sdata[512];  // shared array to store intermediate values, we assume a blocksize of 512
+	unsigned int tid = threadIdx.x;  // thread index in block
+	unsigned int i = blockIdx.x*(blockDim.x*2) + threadIdx.x;  // uid for thread
+	if (i > N) return;  // safety check
+	sdata[tid] = g_idata[i]*g_idata[i] + g_idata[i+blockDim.x]*g_idata[i+blockDim.x];  // data extraction including first function
+	__syncthreads();
+	// unrolled loop, is faster
+	if (tid < 256) { sdata[tid] += sdata[tid + 256]; __syncthreads(); }
+	if (tid < 128) { sdata[tid] += sdata[tid + 128]; __syncthreads(); }
+	if (tid <  64) { sdata[tid] += sdata[tid +  64]; __syncthreads(); }
+	if (tid <  32) add2_wr(sdata, tid);  // with less than 32 we don't need to synchronize anymore
+	if (tid ==  0) g_odata[blockIdx.x] = sdata[0];  // save final values, one per block
 }
 
 
-__global__ void Compute_Enstrophy(double *Ens, double *W, int N, int NX, int NY, double h){
+void Compute_Energy(double *E, double *psi, TCudaGrid2D *Grid, double *Dev_Temp_C1){
+	*E = 0;  // make sure the initial value is zero
+	#pragma unroll  // x and y components of velocity
+	for (int i_vel = 1; i_vel <= 2; ++i_vel) {
+		// compute parallel reduction on dev
+		int block_num = (int)ceil(Grid->N/1024.0);
+		k_add2_pr<<<block_num, 512>>>(psi + i_vel*Grid->N, Dev_Temp_C1, Grid->N);
 
-    int iX = (blockDim.x * blockIdx.x + threadIdx.x);
-	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+		// copy to host
+		double host_add[block_num];
+		cudaMemcpy(host_add, Dev_Temp_C1, sizeof(double)*block_num, cudaMemcpyDeviceToHost);
 
-	if(iX >= NX || iY >= NX)
-		return;
-
-	int In = iY*NX + iX;
-
-	// atomicAdd defined for double at sm_60
-	#ifndef sm_50
-    	atomicAdd(Ens, 0.5 * h * h * (W[In] * W[In]));
-	#else
-    	*Ens += 0.5 * h * h * (W[In] * W[In]);
-	#endif
-/*	int idx = threadIdx.x;
-	int stride_x = blockDim.x;
-
-	for(int i = idx; i < N; i+=stride_x){
-		atomicAdd(Ens, 0.5 * h * h * (W[i] * W[i]));
-	}
-    */
-}
-
-
-// two functions for host, because julius' computer doesn't support atomics for doubles
-void Compute_Energy_Host(double *E, double *psi, int N, double h){
-	for(int i = 0; i < N; i+=1){
-    	*E += 0.5*h * h * (psi[i + N] * psi[i + N] + psi[i + 2 * N] * psi[i + 2 * N]);
+		// add together all values from blocks on host
+		for (int i_b = 0; i_b < block_num; ++i_b) *E += 0.5*Grid->h*Grid->h * host_add[i_b];
 	}
 }
-void Compute_Enstrophy_Host(double *Ens, double *W, int N, double h){
-	for(int i = 0; i < N; i+=1){
-		*Ens += 0.5 * h * h * (W[i] * W[i]);
-	}
+
+
+void Compute_Enstrophy(double *E, double *W, TCudaGrid2D *Grid, double *Dev_Temp_C1){
+	*E = 0;  // make sure the initial value is zero
+	// compute parallel reduction on dev
+	int block_num = (int)ceil(Grid->N/1024.0);
+	k_add2_pr<<<block_num, 512>>>(W, Dev_Temp_C1, Grid->N);
+
+	// copy to host
+	double host_add[block_num];
+	cudaMemcpy(host_add, Dev_Temp_C1, sizeof(double)*block_num, cudaMemcpyDeviceToHost);
+
+	// add together all values from blocks on host
+	for (int i_b = 0; i_b < block_num; ++i_b) *E += 0.5*Grid->h*Grid->h * host_add[i_b];
 }
 
 
 // compute palinstrophy using fourier transformations - a bit expensive with two temporary arrays but ca marche
-void Compute_Palinstrophy_fourier(TCudaGrid2D *Grid_coarse, double *Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftDoubleComplex *Dev_Temp_C2, cufftHandle cufftPlan_coarse){
-
-	double *Host_W_coarse_real_dx_dy = new double[2*Grid_coarse->N];
+void Compute_Palinstrophy(TCudaGrid2D *Grid, double *Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftDoubleComplex *Dev_Temp_C2, cufftHandle cufftPlan){
+	*Pal = 0;  // make sure the initial value is zero
 
 	// round 1: dx dervative
-	k_real_to_comp<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(W_real, Dev_Temp_C1, Grid_coarse->NX, Grid_coarse->NY);
-	cufftExecZ2Z(cufftPlan_coarse, Dev_Temp_C1, Dev_Temp_C2, CUFFT_FORWARD);
-	k_normalize<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Temp_C2, Grid_coarse->NX, Grid_coarse->NY);
-	k_fft_dx<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h); 					// x-derivative in Fourier space
-	cufftExecZ2Z(cufftPlan_coarse, Dev_Temp_C1, Dev_Temp_C2, CUFFT_INVERSE);
-	cudaMemcpy(Host_W_coarse_real_dx_dy, (cufftDoubleReal*)Dev_Temp_C2, Grid_coarse->N, cudaMemcpyDeviceToHost);
+	k_real_to_comp<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(W_real, Dev_Temp_C1, Grid->NX, Grid->NY);
+	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_FORWARD);
+	k_normalize<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(Dev_Temp_C2, Grid->NX, Grid->NY);
+	k_fft_dx<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid->NX, Grid->NY, Grid->h); 					// x-derivative in Fourier space
+	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_INVERSE);
 
-	// round 1: dy dervative
-	k_real_to_comp<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(W_real, Dev_Temp_C1, Grid_coarse->NX, Grid_coarse->NY);
-	cufftExecZ2Z(cufftPlan_coarse, Dev_Temp_C1, Dev_Temp_C2, CUFFT_FORWARD);
-	k_normalize<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Temp_C2, Grid_coarse->NX, Grid_coarse->NY);
-	k_fft_dy<<<Grid_coarse->blocksPerGrid, Grid_coarse->threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h); 					// y-derivative in Fourier space
-	cufftExecZ2Z(cufftPlan_coarse, Dev_Temp_C1, Dev_Temp_C2, CUFFT_INVERSE);
-	cudaMemcpy(&Host_W_coarse_real_dx_dy[Grid_coarse->N], (cufftDoubleReal*)Dev_Temp_C2, Grid_coarse->N, cudaMemcpyDeviceToHost);
+	comp_to_real(Dev_Temp_C2, (cufftDoubleReal*)Dev_Temp_C1, Grid->N);
 
-	// now compute actual palinstrophy and add everything together
-    for(int i = 0; i < Grid_coarse->N; i+=1){
-		*Pal += 0.5 * (Grid_coarse->h) * (Grid_coarse->h) * (Host_W_coarse_real_dx_dy[i] * Host_W_coarse_real_dx_dy[i] + Host_W_coarse_real_dx_dy[i + Grid_coarse->N] * Host_W_coarse_real_dx_dy[i + Grid_coarse->N]);
-	}
+	// compute parallel reduction on dev
+	int block_num = (int)ceil(Grid->N/1024.0);
+	k_add2_pr<<<block_num, 512>>>((cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C2, Grid->N);
+	// copy to host
+	double host_add[block_num];
+	cudaMemcpy(host_add, (cufftDoubleReal*)Dev_Temp_C2, sizeof(double)*block_num, cudaMemcpyDeviceToHost);
+	// add together all values from blocks on host
+	for (int i_b = 0; i_b < block_num; ++i_b) *Pal += 0.5*Grid->h*Grid->h * host_add[i_b];
+
+
+	// round 2: dy dervative
+	k_real_to_comp<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(W_real, Dev_Temp_C1, Grid->NX, Grid->NY);
+	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_FORWARD);
+	k_normalize<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(Dev_Temp_C2, Grid->NX, Grid->NY);
+	k_fft_dy<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid->NX, Grid->NY, Grid->h); 					// x-derivative in Fourier space
+	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_INVERSE);
+
+	comp_to_real(Dev_Temp_C2, (cufftDoubleReal*)Dev_Temp_C1, Grid->N);
+
+	// compute parallel reduction on dev
+	k_add2_pr<<<block_num, 512>>>((cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C2, Grid->N);
+	// copy to host
+	cudaMemcpy(host_add, (cufftDoubleReal*)Dev_Temp_C2, sizeof(double)*block_num, cudaMemcpyDeviceToHost);
+	// add together all values from blocks on host
+	for (int i_b = 0; i_b < block_num; ++i_b) *Pal += 0.5*Grid->h*Grid->h * host_add[i_b];
 }
 
 
