@@ -1,5 +1,9 @@
-# possibility to set NVCC install path to full path or just command nvcc
-NVCC_PATH = /usr/local/cuda/bin/nvcc
+# set cuda install path used for NVCC and thrust library
+CUDA_PATH = /usr/local/cuda
+NVCC_PATH = $(CUDA_PATH)/bin/nvcc
+# include thrust for some algorithms
+THRUST_INCLUDE = -I$(CUDA_PATH)/include/thrust -I$(CUDA_PATH)/include/cub
+
 
 # set the GPU_ARCH after your gpu capabilities
 GPU_ARCH = sm_50

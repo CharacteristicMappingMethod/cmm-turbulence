@@ -32,6 +32,7 @@ private:
 	string time_integration; int time_integration_num;
 	int lagrange_order;
 	string map_update_order; int map_update_order_num;
+	bool map_update_grid;
 	int molly_stencil;
 	double freq_cut_psi;
 	bool skip_remapping;
@@ -146,6 +147,8 @@ public:
 		else map_update_order_num = -1;
 	}
 	int getMapUpdateOrderNum() const { return map_update_order_num; }
+	bool getMapUpdateGrid() const { return map_update_grid; }
+	void setMapUpdateGrid(bool mapUpdateGrid) { map_update_grid = mapUpdateGrid; }
 
 	// molly stencil, amount of points to be used for mollification
 	int getMollyStencil() const { return molly_stencil; }
@@ -223,6 +226,8 @@ public:
 		else if (pTimeIntegration == "RK4") { particles_time_integration_num = 40; if (getLagrangeOrder() < 4) lagrange_order = 4; }
 		else if (pTimeIntegration == "NicolasMid") { particles_time_integration_num = 25; if (getLagrangeOrder() < 2) lagrange_order = 2; }
 		else if (pTimeIntegration == "NicolasRK3") { particles_time_integration_num = 35; if (getLagrangeOrder() < 3) lagrange_order = 3; }
+		else if (pTimeIntegration == "RK3Mod") { particles_time_integration_num = 31; if (getLagrangeOrder() < 3) lagrange_order = 3; }
+		else if (pTimeIntegration == "RK4Mod") { particles_time_integration_num = 41; if (getLagrangeOrder() < 4) lagrange_order = 4; }
 		else particles_time_integration_num = -1;
 	}
 	int getParticlesTimeIntegrationNum() const { return particles_time_integration_num; }

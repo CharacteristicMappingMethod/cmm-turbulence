@@ -49,89 +49,22 @@ __global__ void k_sample(double *ChiX, double *ChiY, double *ChiX_s, double *Chi
 }
 
 
-// we have 32 threads in a warp, we therefore don't need to synchronize anymore
-__device__ void max_wr(volatile double *sdata, unsigned int tid) {
-	 sdata[tid] = fmax(sdata[tid],sdata[tid+32]);
-	 sdata[tid] = fmax(sdata[tid],sdata[tid+16]);
-	 sdata[tid] = fmax(sdata[tid],sdata[tid+ 8]);
-	 sdata[tid] = fmax(sdata[tid],sdata[tid+ 4]);
-	 sdata[tid] = fmax(sdata[tid],sdata[tid+ 2]);
-	 sdata[tid] = fmax(sdata[tid],sdata[tid+ 1]);
-}
-// function for parallel reduction min
-__global__ void k_max_pr(double *g_idata, double *g_odata, long long int N) {
-	__shared__ double sdata[512];  // shared array to store intermediate values, we assume a blocksize of 512
-	unsigned int tid = threadIdx.x;  // thread index in block
-	unsigned int i = blockIdx.x*(blockDim.x*2) + threadIdx.x;  // uid for thread
-	if (i > N) return;  // safety check
-	sdata[tid] = fmax(fabs(1-g_idata[i]), fabs(1-g_idata[i+blockDim.x]));  // data extraction including first function
-	__syncthreads();
-	// unrolled loop, is faster
-	if (tid < 256) { sdata[tid] = fmax(sdata[tid], sdata[tid + 256]); __syncthreads(); }
-	if (tid < 128) { sdata[tid] = fmax(sdata[tid], sdata[tid + 128]); __syncthreads(); }
-	if (tid <  64) { sdata[tid] = fmax(sdata[tid], sdata[tid + 64]); __syncthreads(); }
-	if (tid <  32) max_wr(sdata, tid);  // with less than 32 we don't need to synchronize anymore
-	if (tid ==  0) g_odata[blockIdx.x] = sdata[0];  // save final values, one per block
-}
-double incompressibility_check(double *ChiX, double *ChiY, double *gradChi, TCudaGrid2D *Grid_fine, TCudaGrid2D *Grid_coarse) {
+// function to get difference to 1 for thrust parallel reduction
+struct absto1
+{
+    __host__ __device__
+        double operator()(const double &x) const {
+            return fabs(1-x);
+        }
+};
+double incompressibility_check(double *ChiX, double *ChiY, double *gradChi, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse) {
 	// compute determinant of gradient and save in gradchi
-	kernel_incompressibility_check<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX, ChiY, gradChi, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h);  // time cost		A optimiser
+	kernel_incompressibility_check<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(ChiX, ChiY, gradChi, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);  // time cost		A optimiser
 
-	// compute incompressibilty by using atomic max float function
-	int block_num = (int)ceil(Grid_fine->N/1024.0);
-	k_max_pr<<<block_num, 512>>>(gradChi, gradChi + Grid_fine->N, Grid_fine->N);  // we can use gradChi for output, as it hase size N_fine*2
-
-	double host_max[block_num];
-	cudaMemcpy(host_max, gradChi + Grid_fine->N, sizeof(double)*block_num, cudaMemcpyDeviceToHost);
-
-	double max_val = 0;  // final loop over all blocks
-	for (int i_b = 0; i_b < block_num; ++i_b) max_val = fmax(max_val, host_max[i_b]);
-	return max_val;
+	// compute maximum using thrust parallel reduction
+	thrust::device_ptr<double> gradChi_ptr = thrust::device_pointer_cast(gradChi);
+	return thrust::transform_reduce(gradChi_ptr, gradChi_ptr + Grid_fine.N, absto1(), 0.0, thrust::maximum<double>());
 }
-
-
-//__device__ void warpReduce(volatile double *sdata, unsigned int tid)
-// {
-//     sdata[tid] = fmax(sdata[tid],sdata[tid+32]);
-//     sdata[tid] = fmax(sdata[tid],sdata[tid+16]);
-//     sdata[tid] = fmax(sdata[tid],sdata[tid+8]);
-//     sdata[tid] = fmax(sdata[tid],sdata[tid+4]);
-//     sdata[tid] = fmax(sdata[tid],sdata[tid+2]);
-//     sdata[tid] = fmax(sdata[tid],sdata[tid+1]);
-// }
-//__global__ void findMinOfArray(double *g_idata, int N, float *op_data,int num_blocks){
-//
-//    unsigned int unique_id = blockIdx.x * blockDim.x + threadIdx.x; /* unique id for each thread in the block*/
-//    unsigned int row = unique_id % N; /*row number in the g_idata*/
-//    unsigned int col = unique_id / N; /*col number in the g_idata*/
-//
-//    unsigned int thread_id = threadIdx.x; /* thread index in the block*/
-//
-//    __shared__ double minChunk[256];
-//
-//    if((row >= 0) && (row < N) && (col >= 0) && (col < N)){
-//        minChunk[thread_id] = g_idata[index(row,col,N)];
-//    }
-//
-//    __syncthreads();
-//
-//    for(unsigned int stride = (blockDim.x/2); stride > 32 ; stride /=2){
-//        __syncthreads();
-//
-//        if(thread_id < stride)
-//        {
-//            minChunk[thread_id] = min(minChunk[thread_id],minChunk[thread_id + stride]);
-//        }
-//    }
-//
-//    if(thread_id < 32){
-//        warpReduce(minChunk,thread_id);
-//    }
-//
-//    if(thread_id == 0){
-//        op_data[index(0,blockIdx.x,num_blocks)] = minChunk[0];
-//    }
-//}
 
 
 __global__ void kernel_incompressibility_check(double *ChiX, double *ChiY, double *gradChi, int NXc, int NYc, double hc, int NXs, int NYs, double hs)
@@ -152,6 +85,217 @@ __global__ void kernel_incompressibility_check(double *ChiX, double *ChiY, doubl
 }
 
 
+// advect stream where footpoints are just neighbouring points
+void advect_using_strem_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double t, double dt, int time_integration_num, int map_update_order_num) {
+	// first of all: compute footpoints at gridpoints, here we could speedup the first sampling of u by directly using the values, as we start at exact grid point locations
+	k_compute_footpoints<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock>>>(ChiX, ChiY, Chi_new_X, Chi_new_Y, psi, Grid_map.NX, Grid_map.NY, Grid_map.h, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, t, dt, time_integration_num);
+
+	// update map, x and y can be done seperately
+	int shared_size = (18+2*map_update_order_num)*(18+2*map_update_order_num);  // how many points do we want to load?
+	k_map_update<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock, shared_size*sizeof(double)>>>(ChiX, Chi_new_X, Grid_map.NX, Grid_map.NY, Grid_map.h, map_update_order_num+1, 0);
+	k_map_update<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock, shared_size*sizeof(double)>>>(ChiY, Chi_new_Y, Grid_map.NX, Grid_map.NY, Grid_map.h, map_update_order_num+1, 1);
+}
+
+
+// compute footpoints at exact grid locations
+__global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, int time_integration_num) {
+	//index
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+    /*int NX = 512; //Dans l'interpolation remettre NXc Nyc hc
+    int NY = 512;
+    double h = twoPI/(float)NX;*/
+
+    if(iX >= NXc || iY >= NYc)
+		return;
+
+    int In = iY*NXc + iX;
+
+    double x_ep[2], x_f[2];
+
+	x_ep[0] = iX*hc; x_ep[1] = iY*hc;
+
+	// time integration - note, we go backwards in time!
+	switch (time_integration_num) {
+		// EulerExp
+		case 10: { euler_exp(psi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+		// ABTwo
+		case 20: { adam_bashford_2_pc(psi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+		// ABTwo
+		case 21: { RK2_heun(psi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+		// RKThree
+		case 30: { RK3_classical(psi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+		// RKFour
+		case 40: { RK4_classical(psi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+		// custom RKThree
+		case 31: { RK3_optimized(psi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+		// custom RKFour case IV
+		case 41: { RK4_optimized(psi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+		// zero on default
+		default: { x_f[0] = x_f[1] = 0; }
+	}
+
+	// apply map deformation
+	device_diffeo_interpolate_2D(ChiX, ChiY, x_f[0], x_f[1], &x_f[0], &x_f[1], NXc, NYc, hc);
+
+	// transcribe
+	Chi_new_X[In] = x_f[0];	Chi_new_Y[In] = x_f[1];
+}
+
+
+// update map, this should hopefully use some funky cuda techniques
+// do template for map update orders to help the compiler
+__global__ void k_map_update(double *Chi, double *Chi_new, int NXc, int NYc, double hc, int map_ord_1, int warp_direc) {
+	// shared memory for loading the data - block widened by map_ord_1
+    extern __shared__ double sdata[];
+
+	int thread_id_xy = threadIdx.x + threadIdx.y * blockDim.x;  // unique ID of thread in block
+
+	// get positions in whole grid
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+
+	bool debug = false;
+//	if ((blockIdx.x == 0) && (blockIdx.y == 0)) { debug = true; }
+
+    if(iX >= NXc || iY >= NYc) return;  // safety precaution
+
+    // index in arrays
+    int In = iY*NXc + iX;
+    long int N = NXc*NYc;
+
+	if (debug) {
+		printf("Id : %d \t block x : %d \t block y : %d \t In : %d\n", thread_id_xy, iX, iY, In);
+	}
+
+    int ring_num = (16 + 2 * map_ord_1)* (16 + 2* map_ord_1) - 256;  // how many elements do we have in the ring
+    int change_num = (16 + 2 * map_ord_1) * map_ord_1;  // how many elements at top or bottom
+
+    // load values in shared memory, this makes it efficient as we have to access less storage in total
+    // central block first, each thread loads memory at its location, offset to fit
+    int sdata_pos = change_num + map_ord_1 + thread_id_xy + 2*map_ord_1*(thread_id_xy / 16);
+    sdata[sdata_pos] = Chi_new[In];
+
+	if (debug) {
+		printf("Id : %d \t store 1 : %d \t load 1 : %d\n", thread_id_xy, sdata_pos, In);
+		__syncthreads();  // only for debugging
+	}
+
+	if (thread_id_xy < ring_num) {
+		// load in ring values computed without ifs so that all important threads have something to do
+		int load_id, store_id;
+
+		// where should we store in shared memory?
+		store_id = thread_id_xy
+				 + ((thread_id_xy >= change_num)*(thread_id_xy < ring_num-change_num) * ((thread_id_xy + map_ord_1 - change_num)/(2*map_ord_1))*16)
+				 + (thread_id_xy >= ring_num-change_num)*256;
+
+		// due to periodic boundaries, we have to check for x and y values to perform waprs
+		int load_differ_x = - map_ord_1 + (thread_id_xy < change_num)*(thread_id_xy%(16+map_ord_1*2))
+				+ (thread_id_xy < ring_num-change_num)*(thread_id_xy >= change_num) * (thread_id_xy%(2*map_ord_1) + ((thread_id_xy/map_ord_1)%2)*16)
+				+ (thread_id_xy >= ring_num-change_num)*((thread_id_xy-ring_num+change_num)%(16+map_ord_1*2));
+		int load_differ_y = - map_ord_1 + (thread_id_xy < change_num)*thread_id_xy/(16+map_ord_1*2)
+				+ (thread_id_xy < ring_num-change_num)*(thread_id_xy >= change_num) * (map_ord_1+(thread_id_xy - change_num)/(2*map_ord_1))
+				+ (thread_id_xy >= ring_num-change_num)*(16+map_ord_1+(thread_id_xy-ring_num+change_num)/(16+map_ord_1*2));
+
+		if (debug) {
+			printf("Id : %d \t load_x : %d \t load y : %d\n", thread_id_xy, load_differ_x, load_differ_y);
+		}
+
+		// compute
+		int load_id_x = blockDim.x * blockIdx.x + load_differ_x;
+		int load_id_y = blockDim.y * blockIdx.y + load_differ_y;
+
+		int warp_x = (load_id_x/NXc - (load_id_x < 0));  // needed for warping the values back
+		int warp_y = (load_id_y/NYc - (load_id_y < 0));  // needed for warping the values back
+		load_id_x -= warp_x*NXc;  // warp
+		load_id_y -= warp_y*NYc;  // warp
+
+		load_id = load_id_y * NXc + load_id_x;
+
+		sdata[store_id] = Chi_new[load_id] + twoPI*((1 - warp_direc)*warp_x + warp_direc*warp_y);
+
+		if (debug) {
+			printf("Id : %d \t store 2 : %d \t load 2 : %d\n", thread_id_xy, store_id, load_id);
+		}
+	}
+
+
+    // synch threads needed, as different warps compute different things
+    __syncthreads();
+
+    // now, lets modify the values
+    double chi_new[4];
+
+	// chi values - exact center point
+    int shift_y = change_num/map_ord_1;  // construct stencils easily
+    chi_new[0] = sdata[sdata_pos];
+
+    switch (map_ord_1) {
+    	// second order
+		case 1: {
+			// chi grad x - central differences with stencil +NE +SE -SW -NW
+			chi_new[1] = (sdata[sdata_pos + 1] - sdata[sdata_pos - 1])
+					   / (2.0 * hc);
+
+			// chi grad y - central differences with stencil +NE -SE -SW +NW
+		    chi_new[2] = (sdata[sdata_pos + shift_y] - sdata[sdata_pos - shift_y])
+		    		   / (2.0 * hc);
+
+			// chi grad x y - cross central differences with stencil +NE -SE +SW -NW
+		    chi_new[3] = (sdata[sdata_pos + shift_y + 1] - sdata[sdata_pos - shift_y + 1] + sdata[sdata_pos - shift_y - 1]  - sdata[sdata_pos + shift_y - 1])
+		    		   / (4.0 * hc * hc);
+			break;
+		}
+		// fourth order
+		case 2: {
+			// chi grad x - central differences with stencil +NE +SE -SW -NW
+			chi_new[1] = (8*(sdata[sdata_pos + 1] - sdata[sdata_pos - 1])
+					   -    (sdata[sdata_pos + 2] - sdata[sdata_pos - 2]))
+					   / (12.0 * hc);
+
+			// chi grad y - central differences with stencil +NE -SE -SW +NW
+		    chi_new[2] = (8*(sdata[sdata_pos +   shift_y] - sdata[sdata_pos -   shift_y])
+		    		   -    (sdata[sdata_pos + 2*shift_y] - sdata[sdata_pos - 2*shift_y]))
+					   / (12.0 * hc);
+
+			// chi grad x y - cross central differences with stencil +NE -SE +SW -NW
+		    chi_new[3] =  (8*(sdata[sdata_pos +   shift_y + 1] - sdata[sdata_pos -   shift_y + 1] + sdata[sdata_pos -   shift_y - 1]  - sdata[sdata_pos +   shift_y - 1])
+		    		   -     (sdata[sdata_pos + 2*shift_y + 2] - sdata[sdata_pos - 2*shift_y + 2] + sdata[sdata_pos - 2*shift_y - 2]  - sdata[sdata_pos + 2*shift_y - 2]))
+		    	       / (24.0 * hc * hc);
+			break;
+		}
+		// sixth order
+		case 3: {
+			// chi grad x - central differences with stencil +NE +SE -SW -NW
+			chi_new[1] = (45*(sdata[sdata_pos + 1] - sdata[sdata_pos - 1])
+					   -   9*(sdata[sdata_pos + 2] - sdata[sdata_pos - 2])
+					   +     (sdata[sdata_pos + 3] - sdata[sdata_pos - 3]))
+					   / (60.0 * hc);
+
+			// chi grad y - central differences with stencil +NE -SE -SW +NW
+		    chi_new[2] = (45*(sdata[sdata_pos +   shift_y] - sdata[sdata_pos -   shift_y])
+		    		   -   9*(sdata[sdata_pos + 2*shift_y] - sdata[sdata_pos - 2*shift_y])
+					   +     (sdata[sdata_pos + 3*shift_y] - sdata[sdata_pos - 3*shift_y]))
+					   / (60.0 * hc);
+
+			// chi grad x y - cross central differences with stencil +NE -SE +SW -NW
+		    chi_new[3] =  (45*(sdata[sdata_pos +   shift_y + 1] - sdata[sdata_pos -   shift_y + 1] + sdata[sdata_pos -   shift_y - 1]  - sdata[sdata_pos +   shift_y - 1])
+		    		   -   18*(sdata[sdata_pos + 2*shift_y + 2] - sdata[sdata_pos - 2*shift_y + 2] + sdata[sdata_pos - 2*shift_y - 2]  - sdata[sdata_pos + 2*shift_y - 2])
+		    		   +      (sdata[sdata_pos + 3*shift_y + 3] - sdata[sdata_pos - 3*shift_y + 3] + sdata[sdata_pos - 3*shift_y - 3]  - sdata[sdata_pos + 3*shift_y - 3]))
+		    	       / (120.0 * hc * hc);
+			break;
+		}
+	}
+
+    // transcribe final results
+	Chi[    In] = chi_new[0];
+	Chi[1*N+In] = chi_new[1];
+	Chi[2*N+In] = chi_new[2];
+	Chi[3*N+In] = chi_new[3];
+}
+
+
 /*
  * Main advection function of the flow map using the stream function
  * Loop over footpoints to apply GALS
@@ -160,12 +304,12 @@ __global__ void kernel_incompressibility_check(double *ChiX, double *ChiY, doubl
  */
 __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *phi, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num)			// time cost
 {
+	bool debug = false;
+//	if ((blockIdx.x == 0) && (blockIdx.y == 0)) { debug = true; }
+
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-    /*int NX = 512; //Dans l'interpolation remettre NXc Nyc hc
-    int NY = 512;
-    double h = twoPI/(float)NX;*/
 
     if(iX >= NXc || iY >= NYc)
 		return;
@@ -226,6 +370,10 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 		// apply map deformation
 		device_diffeo_interpolate_2D(ChiX, ChiY, x_f[0], x_f[1], &x_f[0], &x_f[1], NXc, NYc, hc);
 
+		if (debug) {
+			printf("Id : %d \t ifoot : %d \t fpoint : %f \n", In, k_foot, x_f[0]);
+		}
+
 		// directly apply map update
 		// chi values - central average with stencil +NE +SE +SW +NW
 		Chi_full_x[0] += x_f[0] * c[i_foot_now];
@@ -244,6 +392,10 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 		Chi_full_y[3] += x_f[1] * c[i_foot_now] * (1 - 2*(k_foot%2)) /ep/ep/i_dist_now/i_dist_now;
 	}
 
+	if (debug) {
+		printf("Id : %d \t Val : %f \t x : %f \t y : %f \t xy : %f \n", In, Chi_full_x[0], Chi_full_x[1], Chi_full_x[2], Chi_full_x[3]);
+	}
+
 	// can't use Chi because we still use it for diffeo_interpolate
 	Chi_new_X[    In] = Chi_full_x[0];	Chi_new_Y[    In] = Chi_full_y[0];
 	Chi_new_X[1*N+In] = Chi_full_x[1];	Chi_new_Y[1*N+In] = Chi_full_y[1];
@@ -258,89 +410,21 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 *******************************************************************/
 
 
-__global__ void kernel_apply_map_stack_to_W(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *ws, int stack_length, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double *W_initial, int simulation_num)
-{
-	//index
-	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
-	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-	
-	if(iX >= NXs || iY >= NYs)
-		return;
-	
-	int In = iY*NXs + iX;
-	long int N = NXc*NYc;	
-	
-	//position
-	double x = iX*hs;
-	double y = iY*hs;
-	
-	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, NXc, NYc, hc);
-	for(int k = stack_length - 1; k >= 0; k--)
-		device_diffeo_interpolate_2D(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x, y, &x, &y, NXc, NYc, hc);
-	
-	#ifndef DISCRET
-		ws[In] = device_initial_W(x, y, simulation_num);
-	#endif
-	
-	#ifdef DISCRET
-		ws[In] = device_hermite_interpolate_2D(W_initial, x, y, NXs, NYs, hs);
-		//ws[In] = device_initial_W_discret(x, y, W_initial, NXs, NYs);
-	#endif
-	
-}
-
-
-__global__ void kernel_apply_map_stack_to_W_custom(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *ws, int stack_length, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double xl, double xr, double yl, double yr, double *W_initial, int simulation_num)		// Zoom
-{
-	//index
-	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
-	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-	
-	if(iX >= NXs || iY >= NYs)
-		return;
-	
-	int In = iY*NXs + iX;
-	long int N = NXc*NYc;	
-	
-	double htemp = (xr - xl)/NXs;
-	
-	//position
-	double x = xl + iX*htemp;
-	double y = yl + iY*htemp;
-	
-	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, NXc, NYc, hc);
-	for(int k = stack_length - 1; k >= 0; k--)
-		device_diffeo_interpolate_2D(&ChiX_stack[k*N*4], &ChiY_stack[k*N*4], x, y, &x, &y, NXc, NYc, hc);
-		
-	ws[In] = device_initial_W(x, y, simulation_num); //device_initial_W_discret(x, y)
-	
-	#ifndef DISCRET
-		ws[In] = device_initial_W(x, y, simulation_num);
-	#endif
-	
-	#ifdef DISCRET
-		ws[In] = device_hermite_interpolate_2D(W_initial, x, y, NXs, NYs, hs);
-		//ws[In] = device_initial_W_discret(x, y, W_initial, NXs, NYs);
-	#endif
-	
-}
-
-
-void apply_map_stack_to_W_part_All(TCudaGrid2D *Grid_fine, MapStack *Map_Stack, double *ChiX, double *ChiY,
+void apply_map_stack_to_W_part_All(TCudaGrid2D Grid_fine, MapStack Map_Stack, double *ChiX, double *ChiY,
 		double *W_real, double *Dev_Temp, double *bounds, double *W_initial, int simulation_num)
 {
 	// for normal map stack, bounds has the domain boundaries applied
-	kernel_apply_map_stack_to_W_custom_part_1<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, Map_Stack->Grid->NX, Map_Stack->Grid->NY, Map_Stack->Grid->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, bounds[0], bounds[1], bounds[2], bounds[3]);
+	kernel_apply_map_stack_to_W_custom_part_1<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, Map_Stack.Grid->NX, Map_Stack.Grid->NY, Map_Stack.Grid->h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h, bounds[0], bounds[1], bounds[2], bounds[3]);
 
 	// loop over all maps in map stack, where all maps are on host system
 	// this could be parallelized
-	for (int i_map = Map_Stack->map_stack_ctr-1; i_map >= 0; i_map--) {
-		Map_Stack->copy_map_to_device(i_map);
-		kernel_apply_map_stack_to_W_part_2<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Map_Stack->Dev_ChiX_stack, Map_Stack->Dev_ChiY_stack, Dev_Temp, Map_Stack->Grid->NX, Map_Stack->Grid->NY, Map_Stack->Grid->h, Grid_fine->NX, Grid_fine->NY);
+	for (int i_map = Map_Stack.map_stack_ctr-1; i_map >= 0; i_map--) {
+		Map_Stack.copy_map_to_device(i_map);
+		kernel_apply_map_stack_to_W_part_2<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack, Dev_Temp, Map_Stack.Grid->NX, Map_Stack.Grid->NY, Map_Stack.Grid->h, Grid_fine.NX, Grid_fine.NY);
 	}
 
 	// initial condition
-	kernel_apply_map_stack_to_W_part_3<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(W_real, Dev_Temp, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, W_initial, simulation_num);
+	kernel_apply_map_stack_to_W_part_3<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(W_real, Dev_Temp, Grid_fine.NX, Grid_fine.NY, Grid_fine.h, W_initial, simulation_num);
 }
 
 
@@ -516,8 +600,6 @@ __device__ double device_initial_W(double x, double y, int simulation_num)
 		{
 			x -= floor(x/twoPI)*twoPI;
 			y -= floor(y/twoPI)*twoPI;
-//			x += x - (x>0)*((int)(x/twoPI))*twoPI - (x<0)*((int)(x/twoPI)-1)*twoPI;
-//			y += y - (y>0)*((int)(y/twoPI))*twoPI - (y<0)*((int)(y/twoPI)-1)*twoPI;
 
 			return cos(x) + cos(y) + 0.6*cos(2*x) + 0.2*cos(3*x);
 			break;
@@ -590,10 +672,7 @@ __device__ double device_initial_W(double x, double y, int simulation_num)
 		{
 			x -= floor(x/twoPI)*twoPI;
 			y -= floor(y/twoPI)*twoPI;
-//			x = fmod(x, twoPI);
-//			x = (x < 0)*(twoPI+x) + (x > 0)*(x);
-//			y = fmod(y, twoPI);
-//			y = (y < 0)*(twoPI+y) + (y > 0)*(y);
+
 			int NB_gaus = 8;		//NB_gaus = 6;sigma = 0.24;
 			double sigma = 0.2;
 			double ret = 0;
@@ -651,12 +730,8 @@ __device__ double device_initial_W(double x, double y, int simulation_num)
 
 __device__ double device_initial_W_discret(double x, double y, double *W_initial, int NX, int NY){
 	// map position back into domain
-	x = fmod(x, twoPI);
-	x -= floor(x/twoPI)*twoPI;
-//	x = (x < 0)*(twoPI+x) + (x > 0)*(x);
-	y = fmod(y, twoPI);
-	y -= floor(y/twoPI)*twoPI;
-//	y = (y < 0)*(twoPI+y) + (y > 0)*(y);
+	x = fmod(x, twoPI) - floor(x/twoPI)*twoPI;
+	y = fmod(y, twoPI) - floor(y/twoPI)*twoPI;
 	
 	// compute index
 	int In = floor(y/twoPI * NY) * NX + floor(x/twoPI * NX);
@@ -680,7 +755,7 @@ __device__ double device_initial_W_discret(double x, double y, double *W_initial
 //void Zoom(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *Dev_ChiX_stack, double *Dev_ChiY_stack, double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1, double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3, double *Dev_ChiX, double *Dev_ChiY, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, double *W_real, cufftHandle cufftPlan_fine, double *W_initial, cufftDoubleComplex *Dev_Complex_fine, string workspace, string simulationName, int simulation_num, double L)
 //{
 //	double *ws;
-//	ws = new double[Grid_fine->N];
+//	ws = new double[Grid_fine.N];
 //	int save_ctr = 0;
 //
 //	double xCenter = 0.54;
@@ -706,16 +781,16 @@ __device__ double device_initial_W_discret(double x, double y, double *W_initial
 //		yMax = yMin + width;
 //
 //
-//		//kernel_apply_map_stack_to_W_custom<<<Gsf->blocksPerGrid, Gsf->threadsPerBlock>>>(devChiX_stack, devChiY_stack, devChiX, devChiY, devWs, stack_map_passed, Gc->NX, Gc->NY, Gc->h, Gsf->NX, Gsf->NY, Gsf->h, xMin*L, xMax*L, yMin*L, yMax*L, W_initial);
-//		kernel_apply_map_stack_to_W_custom_part_All(Grid_coarse, Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, W_real, Dev_Complex_fine, stack_length, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, mem_RAM, Grid_coarse->NX, Grid_coarse->NY, Grid_coarse->h, Grid_fine->NX, Grid_fine->NY, Grid_fine->h, xMin*L, xMax*L, yMin*L, yMax*L, W_initial, simulation_num);
+//		//kernel_apply_map_stack_to_W_custom<<<Gsf.blocksPerGrid, Gsf.threadsPerBlock>>>(devChiX_stack, devChiY_stack, devChiX, devChiY, devWs, stack_map_passed, Gc.NX, Gc.NY, Gc.h, Gsf.NX, Gsf.NY, Gsf.h, xMin*L, xMax*L, yMin*L, yMax*L, W_initial);
+//		kernel_apply_map_stack_to_W_custom_part_All(Grid_coarse, Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, W_real, Dev_Complex_fine, stack_length, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, mem_RAM, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h, xMin*L, xMax*L, yMin*L, yMax*L, W_initial, simulation_num);
 //
 //
-//		cudaMemcpy(ws, W_real, Grid_fine->sizeNReal, cudaMemcpyDeviceToHost);
+//		cudaMemcpy(ws, W_real, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
 //
 //		std::ostringstream ss2;
 //		ss2<<zoom_ctr;
 //
-//		writeAllRealToBinaryFile(Grid_fine->N, ws, simulationName, workspace, "zoom_" + ss2.str());
+//		writeAllRealToBinaryFile(Grid_fine.N, ws, simulationName, workspace, "zoom_" + ss2.str());
 //	}
 //
 //}

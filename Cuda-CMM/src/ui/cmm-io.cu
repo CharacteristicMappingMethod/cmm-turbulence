@@ -164,7 +164,7 @@ void readAllRealFromBinaryFile(int Len, double *var, SettingsCMM SettingsMain, s
 
 // binary version
 #else
-	void writeTimeStep(SettingsCMM SettingsMain, string i_num, double *Host_save, double *Dev_W_coarse, double *Dev_W_fine, double *Dev_Psi_real, double *Dev_ChiX, double *Dev_ChiY, TCudaGrid2D *Grid_fine, TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_psi) {
+	void writeTimeStep(SettingsCMM SettingsMain, string i_num, double *Host_save, double *Dev_W_coarse, double *Dev_W_fine, double *Dev_Psi_real, double *Dev_ChiX, double *Dev_ChiY, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi) {
 
 		// create new subfolder for current timestep
 		string sub_folder_name = "/Time_data/Time_" + i_num;
@@ -174,20 +174,20 @@ void readAllRealFromBinaryFile(int Len, double *var, SettingsCMM SettingsMain, s
 
 		// execute binary save for all variables
 		// Vorticity on coarse grid : W_coarse
-		cudaMemcpy(Host_save, Dev_W_coarse, Grid_coarse->sizeNReal, cudaMemcpyDeviceToHost);
-		writeAllRealToBinaryFile(Grid_coarse->N, Host_save, SettingsMain, sub_folder_name + "/Vorticity_W_coarse");
+		cudaMemcpy(Host_save, Dev_W_coarse, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+		writeAllRealToBinaryFile(Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Vorticity_W_coarse");
 		// Vorticity on fine grid : W_fine
-		cudaMemcpy(Host_save, Dev_W_fine, Grid_fine->sizeNReal, cudaMemcpyDeviceToHost);
-	    writeAllRealToBinaryFile(Grid_fine->N, Host_save, SettingsMain, sub_folder_name + "/Vorticity_W_fine");
+		cudaMemcpy(Host_save, Dev_W_fine, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
+	    writeAllRealToBinaryFile(Grid_fine.N, Host_save, SettingsMain, sub_folder_name + "/Vorticity_W_fine");
 		// Stream function on psi grid : Psi
-		cudaMemcpy(Host_save, Dev_Psi_real, 4*Grid_psi->sizeNReal, cudaMemcpyDeviceToHost);
-		writeAllRealToBinaryFile(4*Grid_psi->N, Host_save, SettingsMain, sub_folder_name + "/Stream_function_Psi_psi");
+		cudaMemcpy(Host_save, Dev_Psi_real, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToHost);
+		writeAllRealToBinaryFile(4*Grid_psi.N, Host_save, SettingsMain, sub_folder_name + "/Stream_function_Psi_psi");
 		// map in x direction on coarse grid : ChiX
-		cudaMemcpy(Host_save, Dev_ChiX, 4*Grid_coarse->sizeNReal, cudaMemcpyDeviceToHost);
-		writeAllRealToBinaryFile(4*Grid_coarse->N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiX_coarse");
+		cudaMemcpy(Host_save, Dev_ChiX, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+		writeAllRealToBinaryFile(4*Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiX_coarse");
 		// map in y direction on coarse grid : ChiY
-		cudaMemcpy(Host_save, Dev_ChiY, 4*Grid_coarse->sizeNReal, cudaMemcpyDeviceToHost);
-		writeAllRealToBinaryFile(4*Grid_coarse->N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiY_coarse");
+		cudaMemcpy(Host_save, Dev_ChiY, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+		writeAllRealToBinaryFile(4*Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiY_coarse");
 	}
 #endif
 
@@ -275,6 +275,7 @@ Logger::Logger(SettingsCMM SettingsMain)
 {
 	fileName = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/log.txt";
 	file.open(fileName.c_str(), ios::out);
+//	file.open(fileName.c_str(), ios::app);  // append to file for continuing simulation
 
 	if(!file)
 	{

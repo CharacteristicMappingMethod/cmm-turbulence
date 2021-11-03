@@ -61,9 +61,6 @@ public:
 };
 
 
-void get_max_min(TCudaGrid2D *G, double *var, double *min, double *max);
-void Host_get_max_min(int len, double *Var_min, double *Var_max, double *min, double *max);
-
 
 #ifdef __CUDACC__
 

@@ -20,15 +20,11 @@ TCudaGrid2D::TCudaGrid2D(int NX, int NY, double xRange)
 	blocksPerGrid.x = ceil((float)NX/threadsPerBlock.x);
 	blocksPerGrid.y = ceil((float)NY/threadsPerBlock.y);
 	blocksPerGrid.z = 1;
-
-	// debug information about grid, maybe add a verbose parameter?
-//	printf("Grid      : (%d, %d)\n", NX, NY);
-//	printf("Block Dim : (%d, %d, %d)\n", threadsPerBlock.x, threadsPerBlock.y, threadsPerBlock.z);
-//	printf("Grid Dim  : (%d, %d, %d)\n\n", blocksPerGrid->x, blocksPerGrid->y, blocksPerGrid->z);
 }
 
 
-MapStack::MapStack(TCudaGrid2D *Grid, int cpu_map_num) {
+MapStack::MapStack(TCudaGrid2D *Grid, int cpu_map_num)
+{
 
 	this->Grid = Grid;
 
@@ -114,77 +110,4 @@ void MapStack::free_res() {
 	delete [] Host_ChiY_stack_RAM_3;
 	cudaFree(Dev_ChiX_stack);
 	cudaFree(Dev_ChiY_stack);
-}
-
-
-
-void get_max_min(TCudaGrid2D *G, double *var, double *min, double *max)
-{
-	//calculating max and min
-	double var_min, var_max;
-		for(int i=0; i<G->N; i++)
-		{
-			if(i==0)
-			{
-				var_min = var[i];
-				var_max = var[i];
-			}
-			if(var_min > var[i])
-				var_min = var[i];
-				
-			if(var_max < var[i])
-				var_max = var[i];
-		}
-	
-	*min = var_min;
-	*max = var_max;
-}
-
-
-void Host_get_max_min(int len, double *Var_min, double *Var_max, double *min_f, double *max_f)
-{
-	//calculating max and min
-
-	double min = Var_min[0];
-	double max = Var_max[0];
-	
-	for(int i=0;i<len;i++)
-	{			
-		if(min > Var_min[i])
-			min = Var_min[i];
-			
-		if(max < Var_max[i])
-			max = Var_max[i];
-	}
-
-	*min_f = min;
-	*max_f = max;
-}
-
-
-__global__ void Dev_get_max_min(int len, double *var, double *min, double *max)
-{
-    
-	int In = threadIdx.x + blockDim.x * blockIdx.x;
-	int Di = blockDim.x * gridDim.x;
-	
-	// initialize positions, casting is important to include all points
-	int pos = (int)(len / (double)Di * In), step_pos = (int)ceil(len / (double)Di);
-	//calculating max and min
-	double var_min, var_max;
-
-	var_min = var[pos];
-	var_max = var[pos];
-	
-	for(int i=pos;i<pos + step_pos;i++)
-	{
-		if(var_min > var[i])
-			var_min = var[i];
-			
-		if(var_max < var[i])
-			var_max = var[i];
-	}
-	
-	min[In] = var_min;
-	max[In] = var_max;
 }

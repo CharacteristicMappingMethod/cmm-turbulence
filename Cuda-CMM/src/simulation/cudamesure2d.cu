@@ -1,104 +1,48 @@
 #include "cudamesure2d.h"
 
 
-
-// we have 32 threads in a warp, we therefore don't need to synchronize anymore
-__device__ void add2_wr(volatile double *sdata, unsigned int tid) {
-	 sdata[tid] += sdata[tid+32];
-	 sdata[tid] += sdata[tid+16];
-	 sdata[tid] += sdata[tid+ 8];
-	 sdata[tid] += sdata[tid+ 4];
-	 sdata[tid] += sdata[tid+ 2];
-	 sdata[tid] += sdata[tid+ 1];
-}
-// function for parallel reduction add of quadratic values
-__global__ void k_add2_pr(double *g_idata, double *g_odata, long long int N) {
-	__shared__ double sdata[512];  // shared array to store intermediate values, we assume a blocksize of 512
-	unsigned int tid = threadIdx.x;  // thread index in block
-	unsigned int i = blockIdx.x*(blockDim.x*2) + threadIdx.x;  // uid for thread
-	if (i > N) return;  // safety check
-	sdata[tid] = g_idata[i]*g_idata[i] + g_idata[i+blockDim.x]*g_idata[i+blockDim.x];  // data extraction including first function
-	__syncthreads();
-	// unrolled loop, is faster
-	if (tid < 256) { sdata[tid] += sdata[tid + 256]; __syncthreads(); }
-	if (tid < 128) { sdata[tid] += sdata[tid + 128]; __syncthreads(); }
-	if (tid <  64) { sdata[tid] += sdata[tid +  64]; __syncthreads(); }
-	if (tid <  32) add2_wr(sdata, tid);  // with less than 32 we don't need to synchronize anymore
-	if (tid ==  0) g_odata[blockIdx.x] = sdata[0];  // save final values, one per block
+void Compute_Energy(double *E, double *psi, TCudaGrid2D Grid){
+	// parallel reduction using thrust
+	thrust::device_ptr<double> psi_ptr = thrust::device_pointer_cast(psi);
+	*E = 0.5*Grid.h*Grid.h * thrust::transform_reduce(psi_ptr + Grid.N, psi_ptr + 3*Grid.N, thrust::square<double>(), 0.0, thrust::plus<double>());
 }
 
 
-void Compute_Energy(double *E, double *psi, TCudaGrid2D *Grid, double *Dev_Temp_C1){
-	*E = 0;  // make sure the initial value is zero
-	#pragma unroll  // x and y components of velocity
-	for (int i_vel = 1; i_vel <= 2; ++i_vel) {
-		// compute parallel reduction on dev
-		int block_num = (int)ceil(Grid->N/1024.0);
-		k_add2_pr<<<block_num, 512>>>(psi + i_vel*Grid->N, Dev_Temp_C1, Grid->N);
-
-		// copy to host
-		double host_add[block_num];
-		cudaMemcpy(host_add, Dev_Temp_C1, sizeof(double)*block_num, cudaMemcpyDeviceToHost);
-
-		// add together all values from blocks on host
-		for (int i_b = 0; i_b < block_num; ++i_b) *E += 0.5*Grid->h*Grid->h * host_add[i_b];
-	}
-}
-
-
-void Compute_Enstrophy(double *E, double *W, TCudaGrid2D *Grid, double *Dev_Temp_C1){
-	*E = 0;  // make sure the initial value is zero
-	// compute parallel reduction on dev
-	int block_num = (int)ceil(Grid->N/1024.0);
-	k_add2_pr<<<block_num, 512>>>(W, Dev_Temp_C1, Grid->N);
-
-	// copy to host
-	double host_add[block_num];
-	cudaMemcpy(host_add, Dev_Temp_C1, sizeof(double)*block_num, cudaMemcpyDeviceToHost);
-
-	// add together all values from blocks on host
-	for (int i_b = 0; i_b < block_num; ++i_b) *E += 0.5*Grid->h*Grid->h * host_add[i_b];
+void Compute_Enstrophy(double *E, double *W, TCudaGrid2D Grid){
+	// parallel reduction using thrust
+	thrust::device_ptr<double> W_ptr = thrust::device_pointer_cast(W);
+	*E = 0.5*Grid.h*Grid.h * thrust::transform_reduce(W_ptr, W_ptr + Grid.N, thrust::square<double>(), 0.0, thrust::plus<double>());
 }
 
 
 // compute palinstrophy using fourier transformations - a bit expensive with two temporary arrays but ca marche
-void Compute_Palinstrophy(TCudaGrid2D *Grid, double *Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftDoubleComplex *Dev_Temp_C2, cufftHandle cufftPlan){
-	*Pal = 0;  // make sure the initial value is zero
-
+void Compute_Palinstrophy(TCudaGrid2D Grid, double *Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftDoubleComplex *Dev_Temp_C2, cufftHandle cufftPlan){
 	// round 1: dx dervative
-	k_real_to_comp<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(W_real, Dev_Temp_C1, Grid->NX, Grid->NY);
+	k_real_to_comp<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(W_real, Dev_Temp_C1, Grid.NX, Grid.NY);
 	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_FORWARD);
-	k_normalize<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(Dev_Temp_C2, Grid->NX, Grid->NY);
-	k_fft_dx<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid->NX, Grid->NY, Grid->h); 					// x-derivative in Fourier space
+	k_normalize<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, Grid.NX, Grid.NY);
+	k_fft_dx<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid.NX, Grid.NY, Grid.h);
 	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_INVERSE);
 
-	comp_to_real(Dev_Temp_C2, (cufftDoubleReal*)Dev_Temp_C1, Grid->N);
+	comp_to_real(Dev_Temp_C2, (cufftDoubleReal*)Dev_Temp_C1, Grid.N);
 
-	// compute parallel reduction on dev
-	int block_num = (int)ceil(Grid->N/1024.0);
-	k_add2_pr<<<block_num, 512>>>((cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C2, Grid->N);
-	// copy to host
-	double host_add[block_num];
-	cudaMemcpy(host_add, (cufftDoubleReal*)Dev_Temp_C2, sizeof(double)*block_num, cudaMemcpyDeviceToHost);
-	// add together all values from blocks on host
-	for (int i_b = 0; i_b < block_num; ++i_b) *Pal += 0.5*Grid->h*Grid->h * host_add[i_b];
-
+	// parallel reduction using thrust
+	thrust::device_ptr<double> Pal_ptr = thrust::device_pointer_cast((cufftDoubleReal*)Dev_Temp_C1);
+	*Pal = 0.5*Grid.h*Grid.h * thrust::transform_reduce(Pal_ptr, Pal_ptr + Grid.N, thrust::square<double>(), 0.0, thrust::plus<double>());
 
 	// round 2: dy dervative
-	k_real_to_comp<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(W_real, Dev_Temp_C1, Grid->NX, Grid->NY);
+	k_real_to_comp<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(W_real, Dev_Temp_C1, Grid.NX, Grid.NY);
 	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_FORWARD);
-	k_normalize<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(Dev_Temp_C2, Grid->NX, Grid->NY);
-	k_fft_dy<<<Grid->blocksPerGrid, Grid->threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid->NX, Grid->NY, Grid->h); 					// x-derivative in Fourier space
+	k_normalize<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, Grid.NX, Grid.NY);
+	k_fft_dy<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid.NX, Grid.NY, Grid.h);
 	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_INVERSE);
 
-	comp_to_real(Dev_Temp_C2, (cufftDoubleReal*)Dev_Temp_C1, Grid->N);
+	comp_to_real(Dev_Temp_C2, (cufftDoubleReal*)Dev_Temp_C1, Grid.N);
 
-	// compute parallel reduction on dev
-	k_add2_pr<<<block_num, 512>>>((cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C2, Grid->N);
-	// copy to host
-	cudaMemcpy(host_add, (cufftDoubleReal*)Dev_Temp_C2, sizeof(double)*block_num, cudaMemcpyDeviceToHost);
-	// add together all values from blocks on host
-	for (int i_b = 0; i_b < block_num; ++i_b) *Pal += 0.5*Grid->h*Grid->h * host_add[i_b];
+	// parallel reduction using thrust
+	*Pal += 0.5*Grid.h*Grid.h * thrust::transform_reduce(Pal_ptr, Pal_ptr + Grid.N, thrust::square<double>(), 0.0, thrust::plus<double>());
+
+//	printf("Pal : %f\n", *Pal);
 }
 
 
@@ -106,14 +50,14 @@ void Compute_Palinstrophy(TCudaGrid2D *Grid, double *Pal, double *W_real, cufftD
 //void Compute_Palinstrophy_hermite(TCudaGrid2D *Grid_fine, double *Pal, double *W_H_real){
 //
 //	// dx and dy values are in position 2/4 and 3/4, copy to host
-//	double *Host_W_coarse_real_dx_dy = new double[2*Grid_fine->N];
-//	cudaMemcpy(Host_W_coarse_real_dx_dy, &W_H_real[Grid_fine->N], 2*Grid_fine->N, cudaMemcpyDeviceToHost);
-//	cudaMemcpy(Host_W_coarse_real_dx_dy, &W_H_real[Grid_fine->N], 2*Grid_fine->N, cudaMemcpyDeviceToHost);
-//	cudaMemcpy(Host_W_coarse_real_dx_dy, &W_H_real[Grid_fine->N], 2*Grid_fine->N, cudaMemcpyDeviceToHost);
+//	double *Host_W_coarse_real_dx_dy = new double[2*Grid_fine.N];
+//	cudaMemcpy(Host_W_coarse_real_dx_dy, &W_H_real[Grid_fine.N], 2*Grid_fine.N, cudaMemcpyDeviceToHost);
+//	cudaMemcpy(Host_W_coarse_real_dx_dy, &W_H_real[Grid_fine.N], 2*Grid_fine.N, cudaMemcpyDeviceToHost);
+//	cudaMemcpy(Host_W_coarse_real_dx_dy, &W_H_real[Grid_fine.N], 2*Grid_fine.N, cudaMemcpyDeviceToHost);
 //
 //	// now compute actual palinstrophy and add everything together
-//    for(int i = 0; i < Grid_fine->N; i+=1){
-//		*Pal += 0.5 * (Grid_fine->h) * (Grid_fine->h) * (Host_W_coarse_real_dx_dy[i] * Host_W_coarse_real_dx_dy[i] + Host_W_coarse_real_dx_dy[i + Grid_fine->N] * Host_W_coarse_real_dx_dy[i + Grid_fine->N]);
+//    for(int i = 0; i < Grid_fine.N; i+=1){
+//		*Pal += 0.5 * (Grid_fine.h) * (Grid_fine.h) * (Host_W_coarse_real_dx_dy[i] * Host_W_coarse_real_dx_dy[i] + Host_W_coarse_real_dx_dy[i + Grid_fine.N] * Host_W_coarse_real_dx_dy[i + Grid_fine.N]);
 //	}
 //}
 
@@ -217,15 +161,15 @@ __global__ void iNDFT_2D(cufftDoubleComplex *X_k, double *x_n, double *p_n, int 
 }
 
 
-void Laplacian_vort(TCudaGrid2D *Grid_fine, double *Dev_W_fine, cufftDoubleComplex *Dev_Complex_fine, cufftDoubleComplex *Dev_Hat_fine, double *Dev_lap_fine_real, cufftDoubleComplex *Dev_lap_fine_complex, cufftDoubleComplex *Dev_lap_fine_hat, cufftHandle cufftPlan_fine){
+void Laplacian_vort(TCudaGrid2D Grid_fine, double *Dev_W_fine, cufftDoubleComplex *Dev_Complex_fine, cufftDoubleComplex *Dev_Hat_fine, double *Dev_lap_fine_real, cufftDoubleComplex *Dev_lap_fine_complex, cufftDoubleComplex *Dev_lap_fine_hat, cufftHandle cufftPlan_fine){
 
-    real_to_comp(Dev_W_fine, Dev_Complex_fine, Grid_fine->N);
+    real_to_comp(Dev_W_fine, Dev_Complex_fine, Grid_fine.N);
     cufftExecZ2Z(cufftPlan_fine, Dev_Complex_fine, Dev_Hat_fine, CUFFT_FORWARD);
-    k_normalize<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Complex_fine, Grid_fine->NX, Grid_fine->NY);
+    k_normalize<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_Complex_fine, Grid_fine.NX, Grid_fine.NY);
 
-    k_fft_lap<<<Grid_fine->blocksPerGrid, Grid_fine->threadsPerBlock>>>(Dev_Hat_fine, Dev_lap_fine_hat, Grid_fine->NX, Grid_fine->NY, Grid_fine->h);
+    k_fft_lap<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_Hat_fine, Dev_lap_fine_hat, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);
     cufftExecZ2Z(cufftPlan_fine, Dev_lap_fine_hat, Dev_lap_fine_complex, CUFFT_INVERSE);
-    comp_to_real(Dev_lap_fine_complex, Dev_lap_fine_real, Grid_fine->N);
+    comp_to_real(Dev_lap_fine_complex, Dev_lap_fine_real, Grid_fine.N);
 
 }
 

@@ -23,13 +23,13 @@ void SettingsCMM::setPresets() {
 	 *  "turbulence_gaussienne"	-	???
 	 *  "shielded_vortex"		-	vortex core with ring of negative vorticity around it
 	 */
-//	string initial_condition = "4_nodes";
-	string initial_condition = "shielded_vortex";
+	string initial_condition = "4_nodes";
+//	string initial_condition = "shielded_vortex";
 
 	// set time properties
-	double final_time = 4;  // end of computation
-	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this is the factor for it
-	int steps_per_sec = 32;  // how many steps do we want per seconds?
+	double final_time = 1;  // end of computation
+	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
+	int steps_per_sec = 64;  // how many steps do we want per seconds?
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
 	// dt will be set in cudaeuler, so that all changes can be applied there
 	int snapshots_per_sec = 1;  // how many times do we want to save data per sec, set <= 0 to disable
@@ -38,7 +38,10 @@ void SettingsCMM::setPresets() {
 
 	// set minor properties
 	double incomp_threshhold = 1e-4;  // the maximum allowance of map to deviate from grad_chi begin 1
-	double map_epsilon = 1e-4;  // distance used for foot points for GALS map advection
+	double map_epsilon = 1e-3;  // distance used for foot points for GALS map advection
+//	double map_epsilon = 6.283185307179/512.0;  // distance used for foot points for GALS map advection
+	// skip remapping, usefull for convergence tests
+	bool skip_remapping = false;
 
 	// set memory properties
 	int mem_RAM_CPU_remaps = 4096;  // mem_RAM_CPU_remaps in MB on the CPU
@@ -52,20 +55,17 @@ void SettingsCMM::setPresets() {
 	 * Third order: "RK3", "RK3Mod"
 	 * Fourth order: "RK4", "RK4Mod"
 	 */
-	string time_integration = "RK3";
+	string time_integration = "RK3Mod";
 
 	// mapupdate order, "2nd", "4th", "6th"
-	string map_update_order = "2nd";
+	string map_update_order = "4th";
+	bool map_update_grid = false;  // should map update be computed with grid or footpoints?
 
 	// mollification settings, stencil size, 0, 4, 8
 	int molly_stencil = 0;
 
 	// in addition to the upsampling, we want to lowpass in fourier space by cutting high frequencies
 	double freq_cut_psi = (double)(grid_coarse)/2.0;  // take into account, that frequencies are symmetric around N/2
-
-	// skip remapping, usefull for convergence tests
-	bool skip_remapping = false;
-
 
 	// possibility to sample values on a specified grid
 	bool sample_on_grid = false;
@@ -90,7 +90,14 @@ void SettingsCMM::setPresets() {
 
 	bool save_fine_particles = false;  // wether or not we want to save fine particles
 	int particles_fine_num = 1000;  // number of particles where every time step the position will be saved
-	// Time integration for particles, define by name, "EulerExp", "Heun", "RK3", "RK4", "NicolasMid", "NicolasRK3"
+	/*
+	 * Time integration for particles
+	 * First order: "EulerExp"
+	 * Second order: "AB2", "RK2"
+	 * Third order: "RK3", "RK3Mod"
+	 * Fourth order: "RK4", "RK4Mod"
+	 * Nicolas: "NicolasMid", "NicolasRK3"
+	 */
 	string particles_time_integration = "RK3";
 
 
@@ -114,6 +121,7 @@ void SettingsCMM::setPresets() {
 	setMapEpsilon(map_epsilon);
 	setTimeIntegration(time_integration);
 	setMapUpdateOrder(map_update_order);
+	setMapUpdateGrid(map_update_grid);
 	setMollyStencil(molly_stencil);
 	setFreqCutPsi(freq_cut_psi);
 	setSkipRemapping(skip_remapping);
@@ -182,6 +190,7 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "map_epsilon") setMapEpsilon(stod(value));
 			else if (command == "time_integration") setTimeIntegration(value);
 			else if (command == "map_update_order") setMapUpdateOrder(value);
+			else if (command == "map_update_order") setMapUpdateGrid(getBoolFromString(value));
 			else if (command == "molly_stencil") setMollyStencil(stoi(value));
 			else if (command == "freq_cut_psi") setFreqCutPsi(stod(value));
 			else if (command == "skip_remapping") setSkipRemapping(getBoolFromString(value));
@@ -190,7 +199,7 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "grid_sample") setGridSample(stoi(value));
 			else if (command == "sample_save_initial") setSampleSaveInitial(getBoolFromString(value));
 			else if (command == "sample_save_final") setSampleSaveFinal(getBoolFromString(value));
-			else if (command == "sample_snapshots_per_sec") setSnapshotsPerSec(stoi(value));
+			else if (command == "sample_snapshots_per_sec") setSampleSnapshotsPerSec(stoi(value));
 
 			else if (command == "particles") setParticles(getBoolFromString(value));
 			else if (command == "particles_num") setParticlesNum(stoi(value));

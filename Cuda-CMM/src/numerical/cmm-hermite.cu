@@ -34,9 +34,9 @@ __device__ void device_init_ind(int *I, double *dxy, double x, double y, int NX,
 	//dx, dy
 	dxy[0] = x/h - Ix0; dxy[1] = y/h - Iy0;
 
-	// project into domain, 100 is chosen so that all values are positiv, since negativ values return negativ reminder
-	Ix0 = (Ix0+100 * NX)%NX; Iy0 = (Iy0+100 * NY)%NY;
-	Ix1 = (Ix1+100 * NX)%NX; Iy1 = (Iy1+100 * NY)%NY;
+	// project into domain, < 0 check is needed as integer division rounds towards 0
+	Ix0 -= (Ix0/NX - (Ix0 < 0))*NX; Iy0 -= (Iy0/NY - (Iy0 < 0))*NY;
+	Ix1 -= (Ix1/NX - (Ix1 < 0))*NX; Iy1 -= (Iy1/NY - (Iy1 < 0))*NY;
 
 	// I00, I10, I01, I11 in Vector to shorten function calls
 	I[0] = Iy0 * NX + Ix0; I[1] = Iy0 * NX + Ix1; I[2] = Iy1 * NX + Ix0; I[3] = Iy1 * NX + Ix1;
