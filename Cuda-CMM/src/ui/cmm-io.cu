@@ -40,6 +40,7 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int save_bu
 			case 41: { file<<"Time integration \t\t\t: Runge Kutta 4 (modified)"<<endl; break; }
 			default: { file<<"Time integration \t\t\t: Default (zero)"<<endl; break; }
 		}
+        file<<"Lagrange order \t: "<<SettingsMain.getLagrangeOrder()<<endl;
 
         file<<"N_coarse(resolution coarse grid) \t: "<<SettingsMain.getGridCoarse()<<endl;
 		file<<"N_fine(resolution fine grid) \t\t: "<<SettingsMain.getGridFine()<<endl;
@@ -53,6 +54,7 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int save_bu
 		file<<"Map advection epsilon \t: "<<SettingsMain.getMapEpsilon()<<endl;
 		file<<"Map update order \t: "<<SettingsMain.getMapUpdateOrder()<<endl;
 		file<<"Cut Psi Frequencies at \t: "<<SettingsMain.getFreqCutPsi()<<endl;
+		file<<"Molly stencil version \t: "<<SettingsMain.getMollyStencil()<<endl;
 
         if (SettingsMain.getParticles()) {
         	file<<"Particles enabled"<<endl;

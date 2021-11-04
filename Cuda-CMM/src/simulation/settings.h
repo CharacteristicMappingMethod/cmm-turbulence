@@ -30,7 +30,7 @@ private:
 	int mem_RAM_CPU_remaps; bool save_map_stack;
 	// specific
 	string time_integration; int time_integration_num;
-	int lagrange_order;
+	int lagrange_order, lagrange_override;
 	string map_update_order; int map_update_order_num;
 	bool map_update_grid;
 	int molly_stencil;
@@ -175,6 +175,10 @@ public:
 
 	// lagrange order set indirectly from map and particle time integration
 	int getLagrangeOrder() const { return lagrange_order; }
+	void setLagrangeOrder(int lagrangeOrder) { lagrange_order = lagrangeOrder; }
+	// lagrange override to force a specific lagrange order
+	int getLagrangeOverride() const { return lagrange_override; }
+	void setLagrangeOverride(int lagrangeOverride) { lagrange_override = lagrangeOverride; }
 
 	// skip remapping
 	bool getSkipRemapping() const { return skip_remapping; }

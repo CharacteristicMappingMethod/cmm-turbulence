@@ -58,6 +58,8 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	if (SettingsMain.getSetDtBySteps()) dt = 1.0 / steps_per_sec;  // direct setting of timestep
 	else dt = 1.0 / std::max(NX_coarse, NY_coarse) / grid_by_time;  // setting of timestep by grid and factor
 	
+	// reset lagrange order
+	if (SettingsMain.getLagrangeOverride() != -1) SettingsMain.setLagrangeOrder(SettingsMain.getLagrangeOverride());
 	
 	//shared parameters
 	iterMax = ceil(tf / dt);

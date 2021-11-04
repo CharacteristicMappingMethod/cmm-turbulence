@@ -55,7 +55,14 @@ void SettingsCMM::setPresets() {
 	 * Third order: "RK3", "RK3Mod"
 	 * Fourth order: "RK4", "RK4Mod"
 	 */
-	string time_integration = "RK3Mod";
+	string time_integration = "RK3";
+	/*
+	 * Override lagrange interpolation for velocity
+	 * if -1, then lagrange order is set after time integration schemes
+	 * values range between 1 and 4 implementationwise
+	 * 1 does not work for RK3Mod by definition
+	 */
+	int lagrange_override = -1;
 
 	// mapupdate order, "2nd", "4th", "6th"
 	string map_update_order = "4th";
@@ -104,7 +111,6 @@ void SettingsCMM::setPresets() {
 
 	// make sure that not initialized values are set
 	lagrange_order = 0;
-//	lagrange_order = 4;  // rk tests
 	// now set everything
 	setWorkspace(workspace); setSimName(sim_name);
 	setGridCoarse(grid_coarse); setGridFine(grid_fine);
@@ -121,6 +127,7 @@ void SettingsCMM::setPresets() {
 	setIncompThreshold(incomp_threshhold);
 	setMapEpsilon(map_epsilon);
 	setTimeIntegration(time_integration);
+	setLagrangeOverride(lagrange_override);
 	setMapUpdateOrder(map_update_order);
 	setMapUpdateGrid(map_update_grid);
 	setMollyStencil(molly_stencil);
@@ -190,6 +197,7 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "incomp_threshold") setIncompThreshold(stod(value));
 			else if (command == "map_epsilon") setMapEpsilon(stod(value));
 			else if (command == "time_integration") setTimeIntegration(value);
+			else if (command == "lagrange_override") setLagrangeOverride(stoi(value));
 			else if (command == "map_update_order") setMapUpdateOrder(value);
 			else if (command == "map_update_order") setMapUpdateGrid(getBoolFromString(value));
 			else if (command == "molly_stencil") setMollyStencil(stoi(value));

@@ -62,18 +62,10 @@ private:
 const string currentDateTime();
 
 
-template<typename Type>
-string to_str (const Type & t)
+template<typename Type> string to_str (const Type & t)
 {
   ostringstream os;
-  os << t;
-  return os.str ();
-}
-template<>
-string to_str (const double & t)
-{
-  ostringstream os;
-  os.precision(3);
+  if (std::is_same<Type, double>::value) os.precision(3);
   os << t;
   return os.str ();
 }
