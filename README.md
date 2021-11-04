@@ -13,7 +13,7 @@ Further work on the code has been done by Thibault Oujia, Nicolas Saber and Juli
 
 # Prerequesites
 
-This code is developed to be built and run on Linux machines. In addition, an installation of Nvidia Cuda together with a featured graphics card is required. To properly install Cuda on your system, Nvidia provides a helpful guide for installation: "https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html". On top of that, a working c++ compiler has to be present on the machine (tested for version 8).
+This code is developed to be built and run on Linux machines. In addition, an installation of Nvidia Cuda together with a featured graphics card is required. To properly install Cuda on your system, Nvidia provides a helpful guide for installation: "https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html". On top of that, a working c++ implementation has to be present. The code was checked for g++ 8.4.0. The c++ code itself was develpoed under C++14.
 
 # Compiling, building and running
 
@@ -21,22 +21,21 @@ This code is developed to be built and run on Linux machines. In addition, an in
    
 2) Prepare the execution of the code on your local machine:
 
-   Checking initial conditions:
+   Checking core settings:
 
-   - Check grid_coarse, grid_fine and grid_psi in 'Cuda-CMM/src/simulation/settings.cu' to work with your GPU memory, the memory usage can be tested while the code is running with the command 'nvidia-smi'.
-   - Change mem_RAM_GPU_remaps in 'Cuda-CMM/src/simulation/settings.cu' to a suitable number for your GPU memory. This value defines the amount of remappings to be saved on the GPU in MB and should only account for a fraction of the actual memory to give more space to other variables.
-   - Change mem_RAM_CPU_remaps in 'Cuda-CMM/src/simulation/settings.cu' to match your CPU memory in MB. This value can be chosen arbitrarily high in comparison to your machines CPU RAM.
+   - Check grid_coarse, grid_fine, grid_psi and grid_ in 'Cuda-CMM/src/simulation/settings.cu' to work with your GPU memory, the estimated memory usage while be output when running the code and can further be tested while the code is running with the command 'nvidia-smi'.
+   - Change mem_RAM_CPU_remaps in 'Cuda-CMM/src/simulation/settings.cu' to match your CPU memory in MB. This value can be chosen arbitrarily high in comparison to your machines CPU RAM and will ultimately decide how many remappings can be done and saved.
    - Set the initial condition in 'Cuda-CMM/src/simulation/settings.cu'.
 
    Makefile:
-   - set the NVCC_PATH variable to match your nvcc location, default is located under '/usr/local/cuda/bin/nvcc'
+   - set the CUDA_PATH variable to match your cuda install location, default is located under '/usr/local/cuda'
    - set the GPU_ARCH variable to match your GPU architecture. This specifies the name of the NVIDIA GPU architecture that the CUDA files will be compiled for. Further information regarding the architecture can be found at "https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#gpu-feature-list". Choose a version matching your architecture name.
    - compile the code in a shell by changing into the directory and running 'make all'.
      check for errors, if not listed, please provide them as an issue along with the given error stack.
    
 3) Running the code:
    - Run the code in a shell by executing 'Cuda-CMM/SimulationCuda2d.out'.
-   - Variables can be set at command line level by adding pairs in the form of 'COMMAND=VALUE', the name of the commands correspond to the actual variable name in the settings file. A huge variety of information regarding the meaning and values can be found in the setPresets-function in Cuda-CMM/src/simulation/settings.cu.
+   - Variables can be set at command line level by adding pairs in the form of 'COMMAND=VALUE', the name of the commands correspond to the actual variable name in the settings file. A huge variety of information regarding the meaning and values can be found in the setPresets-function in 'Cuda-CMM/src/simulation/settings.cu'.
    - Cuda errors are quite common, any furher error however should be reported as an issue along with the error stack.
 
 # Restrictions on code for different machines
@@ -46,7 +45,11 @@ The code is highly dependent on the GPU memory. This limits the usage on persona
 
 # Other notices
 
-Some more details, maybe team details?
+Known errors and bugs:
+When changing many values in 'Cuda-CMM/src/simulation/settings.cu' or 'Cuda-CMM/src/simulation/settings.h', the compiler will sometimes output the message:
+terminate called after throwing an instance of 'std::bad_alloc'
+  what():  std::bad_alloc
+This problem can be solved by rebuilding the whole code with 'make rebuild'.
 
 # Code structure
 
