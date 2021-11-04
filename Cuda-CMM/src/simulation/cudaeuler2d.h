@@ -2,22 +2,9 @@
 #define __CUDA_EULER_2D_H__
 
 #include "../simulation/settings.h"
-#include "../simulation/cudasimulation2d.h"
 #include "../grid/cudagrid2d.h"
-#include "../numerical/cmm-particles.h"
-#include "../simulation/cudamesure2d.h"
-#include "../simulation/cmm-fft.h"
 
-#include "../ui/cmm-io.h"
 
-#include <unistd.h>
-#include <chrono>
-
-// parallel reduce
-#include <thrust/transform_reduce.h>
-#include <thrust/reduce.h>
-#include <thrust/functional.h>
-#include <thrust/device_ptr.h>
 
 struct norm_fun
 {
@@ -27,10 +14,7 @@ struct norm_fun
         }
 };
 
-// helper function to format time to readable format
-string format_duration(double sec) {
-	return to_str(floor(sec/3600.0)) + "h " + to_str(floor(std::fmod(sec, 3600)/60.0)) + "m " + to_str(std::fmod(sec, 60)) + "s";
-}
+string format_duration(double sec);
 
 //calculate a new inital condition for hermite	by applying full map stack
 void fourier_hermite(TCudaGrid2D Grid, cufftDoubleComplex *Dev_Temp_C1, double *Dev_Output, cufftDoubleComplex *Dev_Temp_C2, cufftHandle cufftPlan);

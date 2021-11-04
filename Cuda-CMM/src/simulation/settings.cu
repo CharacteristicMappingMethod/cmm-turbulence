@@ -27,7 +27,7 @@ void SettingsCMM::setPresets() {
 //	string initial_condition = "shielded_vortex";
 
 	// set time properties
-	double final_time = 1;  // end of computation
+	double final_time = 4;  // end of computation
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
 	int steps_per_sec = 64;  // how many steps do we want per seconds?
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
@@ -98,7 +98,8 @@ void SettingsCMM::setPresets() {
 	 * Fourth order: "RK4", "RK4Mod"
 	 * Nicolas: "NicolasMid", "NicolasRK3"
 	 */
-	string particles_time_integration = "RK3";
+//	string particles_time_integration = "RK3";
+	string particles_time_integration = "EulerExp";
 
 
 	// make sure that not initialized values are set

@@ -1,5 +1,24 @@
 #include "cudaeuler2d.h"
 
+#include <curand.h>
+#include <curand_kernel.h>
+
+#include "../numerical/cmm-particles.h"
+#include "../simulation/cudamesure2d.h"
+#include "../simulation/cudasimulation2d.h"
+#include "../simulation/cmm-fft.h"
+
+#include "../ui/cmm-io.h"
+
+#include <unistd.h>
+#include <chrono>
+
+// parallel reduce
+#include <thrust/transform_reduce.h>
+#include <thrust/reduce.h>
+#include <thrust/functional.h>
+#include <thrust/device_ptr.h>
+
 
 void cuda_euler_2d(SettingsCMM SettingsMain)
 {
@@ -470,9 +489,12 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	message = "W min = " + to_str(w_min) + " - W max = " + to_str(w_max) + " - U max = " + to_str(u_max);
 	cout<<message+"\n"; logger.push(message);
 	
-	double t = t0;
+	double t_vec[iterMax+SettingsMain.getLagrangeOrder()], dt_vec[iterMax+SettingsMain.getLagrangeOrder()];
+	for (int i_l = 0; i_l < SettingsMain.getLagrangeOrder(); ++i_l) {
+		t_vec[i_l] = t0 - (SettingsMain.getLagrangeOrder()-1 - i_l) * dt;
+		dt_vec[i_l] = dt;
+	}
 	int loop_ctr = 0;
-
 	int old_ctr = 0;
 
 
@@ -494,59 +516,45 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	*							 Main loop							   *
 	*******************************************************************/
 
-	while(tf - t > 1e-10 && loop_ctr < iterMax)
+	while(tf - t_vec[loop_ctr + SettingsMain.getLagrangeOrder()-1] > 1e-10 && loop_ctr < iterMax)
 	{
-		//avoiding over-stepping for last time-step
-		if(t + dt > tf)
-			dt = tf - t;
+		/*
+		 * Timestep initialization:
+		 *  - avoid overstepping (works with lagrange interpolation)
+		 *  - save dt and t into vectors for lagrange interpolation
+		 */
+		//avoiding over-stepping for last time-step, this works fine with lagrange interpolation
+		int loop_ctr_l = loop_ctr + SettingsMain.getLagrangeOrder()-1;
+		if(t_vec[loop_ctr_l] + dt > tf) dt = tf - t_vec[loop_ctr_l];
 
-		// compute stream hermite from vorticity, we have two different versions avaiable
-		evaluate_stream_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufftPlan_coarse, cufftPlan_psi, cufftPlan_vort, Dev_Temp_C1, Dev_Temp_C2, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
+		// set new dt into time vectors for lagrange interpolation
+		t_vec[loop_ctr_l + 1] = t_vec[loop_ctr_l] + dt;
+		dt_vec[loop_ctr_l + 1] = dt;
 
-		// Particles advection
-	    if (SettingsMain.getParticles()) {
-			Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos, Dev_Psi_real,
-					Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, SettingsMain.getParticlesTimeIntegrationNum());
-			// loop for all tau p
-			for(int i_tau_p = 1; i_tau_p < SettingsMain.getParticlesTauNum(); i_tau_p+=1){
-				Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt,
-						Dev_particles_pos + 2*Nb_particles*i_tau_p, Dev_particles_vel + 2*Nb_particles*i_tau_p, Dev_Psi_real,
-						Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, SettingsMain.particles_tau[i_tau_p], SettingsMain.getParticlesTimeIntegrationNum());
-			}
-			// copy fine particle positions
-			if (snapshots_per_second > 0 && SettingsMain.getSaveFineParticles()) {
-				cudaMemcpy(Dev_particles_fine_pos + (loop_ctr*2*SettingsMain.getParticlesTauNum()*SettingsMain.getParticlesFineNum()*2) % (2*prod_fine_dt_particles), Dev_particles_pos, 2*SettingsMain.getParticlesTauNum()*SettingsMain.getParticlesFineNum()*sizeof(double), cudaMemcpyDeviceToDevice);
-			}
-	    }
-
-		// map advection
+		/*
+		 * Map advection
+		 *  - Velocity is already intialized, so we can safely do that here
+		 */
 	    // by grid itself - only useful for very large grid sizes (has to be investigated)
 	    if (SettingsMain.getMapUpdateGrid()) {
-	    advect_using_strem_hermite(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C2, Dev_Psi_real,
-	    		Grid_coarse, Grid_psi, t, dt, SettingsMain.getTimeIntegrationNum(), SettingsMain.getMapUpdateOrderNum());
+	    advect_using_stream_hermite_grid(SettingsMain, Grid_coarse, Grid_psi, Dev_ChiX, Dev_ChiY,
+	    		(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C2, Dev_Psi_real, t_vec, dt_vec, loop_ctr);
 	    }
 	    // by footpoints
 	    else {
-			kernel_advect_using_stream_hermite<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C2,
-					Dev_Psi_real, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_psi.NX, Grid_psi.NY, Grid_psi.h,
-					t, dt, SettingsMain.getMapEpsilon(), SettingsMain.getTimeIntegrationNum(), SettingsMain.getMapUpdateOrderNum());
-			// copy new map values onto the existing map
+		    advect_using_stream_hermite(SettingsMain, Grid_coarse, Grid_psi, Dev_ChiX, Dev_ChiY,
+		    		(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C2, Dev_Psi_real, t_vec, dt_vec, loop_ctr);
 			cudaMemcpyAsync(Dev_ChiX, (cufftDoubleReal*)Dev_Temp_C1, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice, streams[2]);
 			cudaMemcpyAsync(Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C2, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice, streams[3]);
 	    }
 
-        //copy Psi to Psi_previous and Psi_previous to Psi_previous_previous
-		for (int i_lagrange = 1; i_lagrange < SettingsMain.getLagrangeOrder(); i_lagrange++) {
-			cudaMemcpy(Dev_Psi_real + 4*Grid_psi.N*(SettingsMain.getLagrangeOrder()-i_lagrange),
-					   Dev_Psi_real + 4*Grid_psi.N*(SettingsMain.getLagrangeOrder()-i_lagrange-1), 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice);
-		}
-        /*cudaMemcpy(Dev_Psi_2048_previous_p, Dev_Psi_2048_previous, 4*Grid_2048.sizeNReal, cudaMemcpyDeviceToDevice);
-        cudaDeviceSynchronize();
-        cudaMemcpyAsync(Dev_Psi_2048_previous, Dev_Psi_2048, 4*Grid_2048.sizeNReal, cudaMemcpyDeviceToDevice, streams[1]);*/
-
 
 		/*******************************************************************
 		*							 Remapping							   *
+		*				Computing incompressibility
+		*				Checking against threshold
+		*				If exceeded: Safe map on CPU RAM
+		*							 Initialize variables
 		*******************************************************************/
 		incomp_error[loop_ctr] = incompressibility_check(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, Grid_fine, Grid_coarse);
 
@@ -580,56 +588,99 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			kernel_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
 		}
 		
-		//loop counters are increased after computation
-		t += dt;
+		//loop counters are increased after computation, only output is interested in that anyways
 		loop_ctr ++;
-			
+
+	    /*
+	     * Evaluation of stream hermite for the velocity at end of step to resemble velocity after timestep
+	     *  - first copy the old values
+	     *  - afterwards compute the new
+	     *  - done before particles so that particles can benefit from nice timesteppings
+	     */
+        //copy Psi to Psi_previous and Psi_previous to Psi_previous_previous
+		for (int i_lagrange = 1; i_lagrange < SettingsMain.getLagrangeOrder(); i_lagrange++) {
+			cudaMemcpy(Dev_Psi_real + 4*Grid_psi.N*(SettingsMain.getLagrangeOrder()-i_lagrange),
+					   Dev_Psi_real + 4*Grid_psi.N*(SettingsMain.getLagrangeOrder()-i_lagrange-1), 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice);
+		}
+
+		// compute stream hermite from vorticity for next time step so that particles can benefit from it
+		evaluate_stream_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufftPlan_coarse, cufftPlan_psi, cufftPlan_vort, Dev_Temp_C1, Dev_Temp_C2, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
+
+
+		/*
+		 * Particles advection after velocity update to profit from nice avaiable accelerated schemes
+		 */
+		// Particles advection after velocity update to profit from nice avaiable schemes
+	    if (SettingsMain.getParticles()) {
+			Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos, Dev_Psi_real,
+					Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, SettingsMain.getParticlesTimeIntegrationNum());
+			// loop for all tau p
+			for(int i_tau_p = 1; i_tau_p < SettingsMain.getParticlesTauNum(); i_tau_p+=1){
+				Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt,
+						Dev_particles_pos + 2*Nb_particles*i_tau_p, Dev_particles_vel + 2*Nb_particles*i_tau_p, Dev_Psi_real,
+						Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, SettingsMain.particles_tau[i_tau_p], SettingsMain.getParticlesTimeIntegrationNum());
+			}
+			// copy fine particle positions
+			if (SettingsMain.getParticlesSnapshotsPerSec() > 0 && SettingsMain.getSaveFineParticles()) {
+				cudaMemcpy(Dev_particles_fine_pos + (loop_ctr*2*SettingsMain.getParticlesTauNum()*SettingsMain.getParticlesFineNum()*2) % (2*prod_fine_dt_particles), Dev_particles_pos, 2*SettingsMain.getParticlesTauNum()*SettingsMain.getParticlesFineNum()*sizeof(double), cudaMemcpyDeviceToDevice);
+			}
+	    }
+
+
 			/*******************************************************************
 			*							 Save snap shot						   *
+			*				Normal variables in their respective grid
+			*				Variables on sampled grid if wanted
+			*				Particles together with fine particles
 			*******************************************************************/
 		if( loop_ctr % save_buffer_count == 0 )
 		{
-			message = "Saving data : T = " + to_str(t) + " \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+			message = "Saving data : T = " + to_str(t_vec[loop_ctr_l+1]) + " \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
 			cout<<message+"\n"; logger.push(message);
 
 			// save function to save variables, combined so we always save in the same way and location
 			apply_map_stack_to_W_part_All(Grid_fine, Map_Stack, Dev_ChiX, Dev_ChiY,
 					(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C2, bounds, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
 
-			writeTimeStep(SettingsMain, to_str(t), Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real, Dev_ChiX, Dev_ChiY, Grid_fine, Grid_coarse, Grid_psi);
+			writeTimeStep(SettingsMain, to_str(t_vec[loop_ctr_l+1]), Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real, Dev_ChiX, Dev_ChiY, Grid_fine, Grid_coarse, Grid_psi);
 			// compute conservation for first step
 			compute_conservation_targets(Grid_fine, Grid_coarse, Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, cufftPlan_coarse, cufftPlan_fine, Dev_Temp_C1, Dev_Temp_C2, Mesure, Mesure_fine, count_mesure);
 		    count_mesure++;
 		}
 		if (SettingsMain.getSampleOnGrid() && loop_ctr % sample_save_buffer_count == 0) {
-			message = "Saving sample data : T = " + to_str(t) + " \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+			message = "Saving sample data : T = " + to_str(t_vec[loop_ctr_l+1]) + " \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
 			cout<<message+"\n"; logger.push(message);
 	    	sample_compute_and_write(Map_Stack, Grid_sample, Host_save, Dev_save_sample,
 	    			cufftPlan_sample, Dev_Temp_C1, Dev_Temp_C2,
-	    			Dev_ChiX, Dev_ChiY, bounds, Dev_W_H_initial, SettingsMain, to_str(t),
+	    			Dev_ChiX, Dev_ChiY, bounds, Dev_W_H_initial, SettingsMain, to_str(t_vec[loop_ctr_l+1]),
 	    			Mesure_sample, count_mesure_sample);
 	    	count_mesure_sample++;
 		}
+
+
 		if (SettingsMain.getParticles() && loop_ctr % particles_save_buffer_count == 0) {
-			message = "Saving particles : T = " + to_str(t) + " \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+			message = "Saving particles : T = " + to_str(t_vec[loop_ctr_l+1]) + " \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
 			cout<<message+"\n"; logger.push(message);
 
 			// save particle positions
 			if (SettingsMain.getParticles()) {
-				writeParticles(SettingsMain, to_str(t), Host_particles_pos, Dev_particles_pos);
+				writeParticles(SettingsMain, to_str(t_vec[loop_ctr_l+1]), Host_particles_pos, Dev_particles_pos);
 
 				// if wanted, save fine particles, 1 file for all positions
 				if (SettingsMain.getSaveFineParticles()) {
-					writeFineParticles(SettingsMain, to_str(t), Host_particles_fine_pos, Dev_particles_fine_pos, prod_fine_dt_particles);
+					writeFineParticles(SettingsMain, to_str(t_vec[loop_ctr_l+1]), Host_particles_fine_pos, Dev_particles_fine_pos, prod_fine_dt_particles);
 				}
 			}
 		}
 		
+		/*
+		 * Some small things at the end of the loop
+		 *  - check for errors
+		 *  - spit out some verbose information
+		 *  - safe timing of loop
+		 */
+
 		int error = cudaGetLastError();
-		//cudaError_t err = cudaGetLastError();
-		//if (err != cudaSuccess){
-		//	  printf("%s\n", cudaGetErrorString(err));
-		//}
 		if(error != 0)
 		{
 			message = "Exited early : Last Cuda Error = " + to_str(error); cout<<message+"\n"; logger.push(message);
@@ -643,8 +694,11 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			double diff = std::chrono::duration_cast<std::chrono::microseconds>(step - begin).count()/1e6;
 			time_values[loop_ctr] = diff; // loop_ctr was already increased but first entry is init time
 		}
-		message = "Step = " + to_str(loop_ctr) + " \t Incomp Error = " + to_str(incomp_error[loop_ctr-1])
-				+ " \t Time = " + format_duration(time_values[loop_ctr]); cout<<message+"\n"; logger.push(message);
+		message = "Step = " + to_str(loop_ctr) + "/" + to_str(iterMax)
+				+ " \t S-Time = " + to_str(t_vec[loop_ctr_l+1]) + "/" + to_str(tf)
+				+ " \t IncompErr = " + to_str(incomp_error[loop_ctr-1])
+				+ " \t C-Time = " + format_duration(time_values[loop_ctr]);
+		cout<<message+"\n"; logger.push(message);
 	}
 	
 	
@@ -1086,6 +1140,11 @@ void Zoom(TCudaGrid2D Grid_fine, MapStack Map_Stack, double *Dev_ChiX, double *D
 		writeAllRealToBinaryFile(Grid_fine.N, ws, SettingsMain, "zoom_" + ss2.str());
 	}
 
+}
+
+// helper function to format time to readable format
+string format_duration(double sec) {
+	return to_str(floor(sec/3600.0)) + "h " + to_str(floor(std::fmod(sec, 3600)/60.0)) + "m " + to_str(std::fmod(sec, 60)) + "s";
 }
 
 

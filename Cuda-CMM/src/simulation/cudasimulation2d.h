@@ -1,17 +1,9 @@
 #ifndef __CUDA_SIMULATION_2D_H__
 #define __CUDA_SIMULATION_2D_H__
 
-#include "../numerical/cmm-hermite.h"
 #include "../grid/cudagrid2d.h"
-#include "../numerical/cmm-timestep.h"
+#include "../simulation/settings.h"
 
-#include <curand.h>
-#include <curand_kernel.h>
-
-// parallel reduce
-#include <thrust/transform_reduce.h>
-#include <thrust/functional.h>
-#include <thrust/device_ptr.h>
 
 //cpu functions
 double compare_map_with_identity(double *ChiX, double *ChiY, int NX, int NY, double h);
@@ -29,13 +21,14 @@ __global__ void kernel_compute_enstropy_increase_rate_factors(double *w, double 
 __global__ void kernel_compute_enstropy_increase_rate_factors(double *wHsc, double *ChiX, double *ChiY, double *phi, double *div1, double *div2, int NXc, int NYc, double hc, int NXsc, int NYsc, double hsc, double ep);
 
 //map advection
+void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, double *t, double *dt, int loop_ctr);
 
-void advect_using_strem_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double t, double dt, int time_integration_num, int map_update_order_num);
-__global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, int time_integration_num);
+void advect_using_stream_hermite_grid(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, double *t, double *dt, int loop_ctr);
+__global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, int time_integration_num, int l_order);
 __global__ void k_map_update(double *Chi, double *Chi_new, int NXc, int NYc, double hc, int map_ord_1, int warp_direc);
 
 __global__ void kernel_advect_using_velocity_function(double *ChiX, double *ChiY, double *ChiDualX, double *ChiDualY, int NXc, int NYc, double hc, double t, double dt, double ep);
-__global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *phi, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num);
+__global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *phi, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num, int l_order);
 
 
 //map applications

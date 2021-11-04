@@ -2,6 +2,19 @@
 
 #include "stdio.h"
 
+#include "../numerical/cmm-hermite.h"
+#include "../numerical/cmm-timestep.h"
+
+#include <curand.h>
+#include <curand_kernel.h>
+
+// parallel reduce
+#include <thrust/transform_reduce.h>
+#include <thrust/functional.h>
+#include <thrust/device_ptr.h>
+
+__constant__ double d_L1[4], d_L12[4], d_c1[12], d_cx[12], d_cy[12], d_cxy[12];
+
 ////////////////////////////////////////////////////////////////////////
 __global__ void kernel_init_diffeo(double *ChiX, double *ChiY, int NX, int NY, double h)
 {
@@ -86,19 +99,32 @@ __global__ void kernel_incompressibility_check(double *ChiX, double *ChiY, doubl
 
 
 // advect stream where footpoints are just neighbouring points
-void advect_using_strem_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double t, double dt, int time_integration_num, int map_update_order_num) {
+void advect_using_stream_hermite_grid(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, double *t, double *dt, int loop_ctr) {
+	// compute lagrange coefficients from dt vector for timesteps n+dt and n+dt/2, this makes them dynamic
+	double h_L1[4], h_L12[4];  // constant memory for lagrange coefficient to be computed only once
+	int loop_ctr_l = loop_ctr + SettingsMain.getLagrangeOrder()-1;  // dt and t are shifted because of initial previous steps
+	for (int i_p = 0; i_p < SettingsMain.getLagrangeOrder(); ++i_p) {
+		h_L1[i_p] = get_L_coefficient(t, t[loop_ctr_l+1], loop_ctr_l, i_p, SettingsMain.getLagrangeOrder());
+		h_L12[i_p] = get_L_coefficient(t, t[loop_ctr_l] + dt[loop_ctr_l+1]/2.0, loop_ctr_l, i_p, SettingsMain.getLagrangeOrder());
+	}
+
+	// copy to constant memory
+	cudaMemcpyToSymbol(d_L1, h_L1, sizeof(double)*4); cudaMemcpyToSymbol(d_L12, h_L12, sizeof(double)*4);
+
 	// first of all: compute footpoints at gridpoints, here we could speedup the first sampling of u by directly using the values, as we start at exact grid point locations
-	k_compute_footpoints<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock>>>(ChiX, ChiY, Chi_new_X, Chi_new_Y, psi, Grid_map.NX, Grid_map.NY, Grid_map.h, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, t, dt, time_integration_num);
+	k_compute_footpoints<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock>>>(ChiX, ChiY, Chi_new_X, Chi_new_Y, psi,
+			Grid_map.NX, Grid_map.NY, Grid_map.h, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, t[loop_ctr_l+1], dt[loop_ctr_l+1],
+			SettingsMain.getTimeIntegrationNum(), SettingsMain.getLagrangeOrder());
 
 	// update map, x and y can be done seperately
-	int shared_size = (18+2*map_update_order_num)*(18+2*map_update_order_num);  // how many points do we want to load?
-	k_map_update<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock, shared_size*sizeof(double)>>>(ChiX, Chi_new_X, Grid_map.NX, Grid_map.NY, Grid_map.h, map_update_order_num+1, 0);
-	k_map_update<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock, shared_size*sizeof(double)>>>(ChiY, Chi_new_Y, Grid_map.NX, Grid_map.NY, Grid_map.h, map_update_order_num+1, 1);
+	int shared_size = (18+2*SettingsMain.getMapUpdateOrderNum())*(18+2*SettingsMain.getMapUpdateOrderNum());  // how many points do we want to load?
+	k_map_update<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock, shared_size*sizeof(double)>>>(ChiX, Chi_new_X, Grid_map.NX, Grid_map.NY, Grid_map.h, SettingsMain.getMapUpdateOrderNum()+1, 0);
+	k_map_update<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock, shared_size*sizeof(double)>>>(ChiY, Chi_new_Y, Grid_map.NX, Grid_map.NY, Grid_map.h, SettingsMain.getMapUpdateOrderNum()+1, 1);
 }
 
 
 // compute footpoints at exact grid locations
-__global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, int time_integration_num) {
+__global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, int time_integration_num, int l_order) {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
@@ -117,22 +143,21 @@ __global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new
 
 	// time integration - note, we go backwards in time!
 	switch (time_integration_num) {
-		// EulerExp
-		case 10: { euler_exp(psi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
-		// ABTwo
-		case 20: { adam_bashford_2_pc(psi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
-		// ABTwo
-		case 21: { RK2_heun(psi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
-		// RKThree
-		case 30: { RK3_classical(psi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
-		// RKFour
-		case 40: { RK4_classical(psi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
-		// custom RKThree
-		case 31: { RK3_optimized(psi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
-		// custom RKFour case IV
-		case 41: { RK4_optimized(psi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
-		// zero on default
-		default: { x_f[0] = x_f[1] = 0; }
+	case 10: { euler_exp         (psi, d_L1,        x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
+	// ABTwo
+	case 20: { adam_bashford_2_pc(psi,              x_ep, x_f, NX_psi, NY_psi, h_psi, dt         ); break; }
+	// ABTwo
+	case 21: { RK2_heun          (psi, d_L1,        x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
+	// RKThree
+	case 30: { RK3_classical     (psi, d_L1, d_L12, x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
+	// RKFour
+	case 40: { RK4_classical     (psi, d_L1, d_L12, x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
+	// custom RKThree
+	case 31: { RK3_optimized     (psi, d_L1,        x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
+	// custom RKFour case IV
+	case 41: { RK4_optimized     (psi, d_L1, d_L12, x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
+	// zero on default
+	default: { x_f[0] = x_f[1] = 0; }
 	}
 
 	// apply map deformation
@@ -296,13 +321,53 @@ __global__ void k_map_update(double *Chi, double *Chi_new, int NXc, int NYc, dou
 }
 
 
+
+// wrapper function for map advection
+void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, double *t, double *dt, int loop_ctr) {
+	// compute lagrange coefficients from dt vector for timesteps n+dt and n+dt/2, this makes them dynamic
+	double h_L1[4], h_L12[4];  // constant memory for lagrange coefficient to be computed only once
+	int loop_ctr_l = loop_ctr + SettingsMain.getLagrangeOrder()-1;  // dt and t are shifted because of initial previous steps
+	for (int i_p = 0; i_p < SettingsMain.getLagrangeOrder(); ++i_p) {
+		h_L1[i_p] = get_L_coefficient(t, t[loop_ctr_l+1], loop_ctr_l, i_p, SettingsMain.getLagrangeOrder());
+		h_L12[i_p] = get_L_coefficient(t, t[loop_ctr_l] + dt[loop_ctr_l+1]/2.0, loop_ctr_l, i_p, SettingsMain.getLagrangeOrder());
+	}
+
+	double h_c[3];  // constant memory for map update coefficient to be computed only once
+	switch (SettingsMain.getMapUpdateOrderNum()) {
+		case 2: { h_c[0] = +3.0/8.0; h_c[1] = -3.0/20.0; h_c[2] = +1.0/40.0; break; }  // 6th order interpolation
+		case 1: { h_c[0] = +1.0/3.0; h_c[1] = -1.0/12.0; break; }  // 4th order interpolation
+		case 0: { h_c[0] = +1.0/4.0; break; }  // 2th order interpolation
+	}
+
+	double h_c1[12], h_cx[12], h_cy[12], h_cxy[12];  // compute coefficients for each direction only once
+	for (int i_foot = 0; i_foot < 4+4*SettingsMain.getMapUpdateOrderNum(); ++i_foot) {
+		h_c1[i_foot] =  h_c[i_foot/4];
+		h_cx[i_foot] =  h_c[i_foot/4] * (1 - 2*((i_foot/2)%2))     / SettingsMain.getMapEpsilon() / double(i_foot/4 + 1);
+		h_cy[i_foot] =  h_c[i_foot/4] * (1 - 2*(((i_foot+1)/2)%2)) / SettingsMain.getMapEpsilon() / double(i_foot/4 + 1);
+		h_cxy[i_foot] = h_c[i_foot/4] * (1 - 2*(i_foot%2)) / SettingsMain.getMapEpsilon() / SettingsMain.getMapEpsilon() / double(i_foot/4 + 1) / double(i_foot/4 + 1);
+	}
+
+	// copy to constant memory
+	cudaMemcpyToSymbol(d_L1, h_L1, sizeof(double)*4); cudaMemcpyToSymbol(d_L12, h_L12, sizeof(double)*4);
+	cudaMemcpyToSymbol(d_c1, h_c1, sizeof(double)*12); cudaMemcpyToSymbol(d_cx, h_cx, sizeof(double)*12);
+	cudaMemcpyToSymbol(d_cy, h_cy, sizeof(double)*12); cudaMemcpyToSymbol(d_cxy, h_cxy, sizeof(double)*12);
+
+
+	// now launch the kernel
+	kernel_advect_using_stream_hermite<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock>>>(ChiX, ChiY, Chi_new_X, Chi_new_Y,
+			psi, Grid_map.NX, Grid_map.NY, Grid_map.h, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, t[loop_ctr_l+1], dt[loop_ctr_l+1],
+			SettingsMain.getMapEpsilon(), SettingsMain.getTimeIntegrationNum(),
+			SettingsMain.getMapUpdateOrderNum(), SettingsMain.getLagrangeOrder());
+}
+
+
 /*
  * Main advection function of the flow map using the stream function
  * Loop over footpoints to apply GALS
  * For each foot point: advect using the stream function and time stepping scheme
  * At the end: combine results of all footpoints using specific map update scheme
  */
-__global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *phi, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num)			// time cost
+__global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *phi, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num, int l_order)			// time cost
 {
 	bool debug = false;
 //	if ((blockIdx.x == 0) && (blockIdx.y == 0)) { debug = true; }
@@ -325,18 +390,6 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 	double Chi_full_x[4] = {0, 0, 0, 0};
 	double Chi_full_y[4] = {0, 0, 0, 0};
 
-	// factors on how the map will be updated in the end
-	double c[3];
-	switch (map_update_order_num) {
-		// 6th order interpolation
-		case 2: { c[0] = +3.0/8.0; c[1] = -3.0/20.0; c[2] = +1.0/40.0; break; }
-		// 4th order interpolation
-		case 1: { c[0] = +1.0/3.0; c[1] = -1.0/12.0; break; }
-		// 2th order interpolation
-		case 0: { c[0] = +1.0/4.0; break; }
-		default: { c[0] = c[1] = c[2] = 0; break; }
-	}
-
 	// repeat for all footpoints, 4 for 2th order, 8 for 4th order and 12 for 6th order
 	for (int k_foot = 0; k_foot< map_update_order_num*4 + 4; k_foot++) {
 		int i_foot_now = (k_foot/4);  // used for getting
@@ -349,20 +402,19 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 
 		// time integration - note, we go backwards in time!
 		switch (time_integration_num) {
-			// EulerExp
-			case 10: { euler_exp(phi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+			case 10: { euler_exp         (phi, d_L1,        x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
 			// ABTwo
-			case 20: { adam_bashford_2_pc(phi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+			case 20: { adam_bashford_2_pc(phi,              x_ep, x_f, NX_psi, NY_psi, h_psi, dt         ); break; }
 			// ABTwo
-			case 21: { RK2_heun(phi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+			case 21: { RK2_heun          (phi, d_L1,        x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
 			// RKThree
-			case 30: { RK3_classical(phi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+			case 30: { RK3_classical     (phi, d_L1, d_L12, x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
 			// RKFour
-			case 40: { RK4_classical(phi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+			case 40: { RK4_classical     (phi, d_L1, d_L12, x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
 			// custom RKThree
-			case 31: { RK3_optimized(phi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+			case 31: { RK3_optimized     (phi, d_L1,        x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
 			// custom RKFour case IV
-			case 41: { RK4_optimized(phi, x_ep, x_f, NX_psi, NY_psi, h_psi, dt); break; }
+			case 41: { RK4_optimized     (phi, d_L1, d_L12, x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
 			// zero on default
 			default: { x_f[0] = x_f[1] = 0; }
 		}
@@ -376,20 +428,16 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 
 		// directly apply map update
 		// chi values - central average with stencil +NE +SE +SW +NW
-		Chi_full_x[0] += x_f[0] * c[i_foot_now];
-		Chi_full_y[0] += x_f[1] * c[i_foot_now];
+		Chi_full_x[0] += x_f[0] * d_c1 [k_foot]; Chi_full_y[0] += x_f[1] * d_c1 [k_foot];
 
 		// chi grad x - central differences with stencil +NE +SE -SW -NW
-		Chi_full_x[1] += x_f[0] * c[i_foot_now] * (1 - 2*((k_foot/2)%2)) /ep/i_dist_now;
-		Chi_full_y[1] += x_f[1] * c[i_foot_now] * (1 - 2*((k_foot/2)%2)) /ep/i_dist_now;
+		Chi_full_x[1] += x_f[0] * d_cx [k_foot]; Chi_full_y[1] += x_f[1] * d_cx [k_foot];
 
 		// chi grad y - central differences with stencil +NE -SE -SW +NW
-		Chi_full_x[2] += x_f[0] * c[i_foot_now] * (1 - 2*(((k_foot+1)/2)%2)) /ep/i_dist_now;
-		Chi_full_y[2] += x_f[1] * c[i_foot_now] * (1 - 2*(((k_foot+1)/2)%2)) /ep/i_dist_now;
+		Chi_full_x[2] += x_f[0] * d_cy [k_foot]; Chi_full_y[2] += x_f[1] * d_cy [k_foot];
 
 		// chi grad x y - cross central differences with stencil +NE -SE +SW -NW
-		Chi_full_x[3] += x_f[0] * c[i_foot_now] * (1 - 2*(k_foot%2)) /ep/ep/i_dist_now/i_dist_now;
-		Chi_full_y[3] += x_f[1] * c[i_foot_now] * (1 - 2*(k_foot%2)) /ep/ep/i_dist_now/i_dist_now;
+		Chi_full_x[3] += x_f[0] * d_cxy[k_foot]; Chi_full_y[3] += x_f[1] * d_cxy[k_foot];
 	}
 
 	if (debug) {
