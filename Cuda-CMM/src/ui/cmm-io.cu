@@ -19,10 +19,16 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int save_bu
 	string folder_name_tdata = folder_name + "/Time_data";
 	mkdir(folder_name_tdata.c_str(), 0700);
 
+	// create general subfolder for zoom
+	if (SettingsMain.getZoom()) {
+		string folder_name_tdata = folder_name + "/Zoom_data";
+		mkdir(folder_name_tdata.c_str(), 0700);
+	}
+
 	string fileName = folder_name + "/readme.txt";
 	ofstream file(fileName.c_str(), ios::out);
 
-	if(!file)
+	if (!file)
 	{
 		cout<<"Error writting files"<<fileName<<endl;
 		exit(0);
@@ -56,6 +62,16 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int save_bu
 		file<<"Cut Psi Frequencies at \t: "<<SettingsMain.getFreqCutPsi()<<endl;
 		file<<"Molly stencil version \t: "<<SettingsMain.getMollyStencil()<<endl;
 
+		if (SettingsMain.getZoom()) {
+			file<<"Zoom enabled"<<endl;
+			file<<"Zoom center x : "<<SettingsMain.getZoomCenterX()<<endl;
+			file<<"Zoom center y : "<<SettingsMain.getZoomCenterY()<<endl;
+			file<<"Zoom width x : "<<SettingsMain.getZoomWidthX()<<endl;
+			file<<"Zoom width y : "<<SettingsMain.getZoomWidthY()<<endl;
+			file<<"Zoom repetitions : "<<SettingsMain.getZoomRepetitions()<<endl;
+			file<<"Zoom repetition factor : "<<SettingsMain.getZoomRepetitionsFactor()<<endl;
+		}
+
         if (SettingsMain.getParticles()) {
         	file<<"Particles enabled"<<endl;
         	file<<"Amount of particles : "<<SettingsMain.getParticlesNum()<<endl;
@@ -68,6 +84,10 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int save_bu
     			case 35: { file<<"Particles Time integration : Nicolas Runge Kutta 3"<<endl; break; }
     			default: { file<<"Particles Time integration : Default (zero)"<<endl; break; }
     		}
+            if (SettingsMain.getSaveFineParticles()) {
+                file<<"Safe fine Particles enabled"<<endl;
+                file<<"Amount of fine particles : "<<SettingsMain.getParticlesFineNum()<<endl;
+            }
         }
         else file<<"Particles disabled"<<endl;
 
@@ -277,7 +297,7 @@ Logger::Logger(SettingsCMM SettingsMain)
 {
 	fileName = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/log.txt";
 	file.open(fileName.c_str(), ios::out);
-//	file.open(fileName.c_str(), ios::app);  // append to file for continuing simulation
+//	file.open(fileName.c_str(), ios::out || ios::app);  // append to file for continuing simulation
 
 	if(!file)
 	{

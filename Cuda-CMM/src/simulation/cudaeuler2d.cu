@@ -103,8 +103,9 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	TCudaGrid2D Grid_fine(NX_fine, NY_fine, LX);
 	TCudaGrid2D Grid_psi(SettingsMain.getGridPsi(), SettingsMain.getGridPsi(), LX);
 	TCudaGrid2D Grid_vort(SettingsMain.getGridVort(), SettingsMain.getGridVort(), LX);
+
 	TCudaGrid2D Grid_sample(SettingsMain.getGridSample(), SettingsMain.getGridSample(), LX);
-	
+	TCudaGrid2D Grid_zoom(SettingsMain.getGridZoom(), SettingsMain.getGridZoom(), LX);
 	
 	/*******************************************************************
 	*							CuFFT plans							   *
@@ -307,10 +308,12 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_DEFAULT);
 		curandGenerateUniformDouble(prng, Dev_particles_pos, 2*Nb_particles*SettingsMain.getParticlesTauNum());
 
+		// Particles position initialization, make here to be absolutely sure to have the same positions
+		Rescale<<<particle_block, particle_thread>>>(Nb_particles, LX, Dev_particles_pos);  // project 0-1 onto 0-LX
 
 		// copy all starting positions onto the other tau values
 		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p+=1)
-			cudaMemcpy(&Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_pos[0], 2*Nb_particles*sizeof(double), cudaMemcpyDeviceToDevice);
+			cudaMemcpy(Dev_particles_pos + 2*Nb_particles*index_tau_p, Dev_particles_pos, 2*Nb_particles*sizeof(double), cudaMemcpyDeviceToDevice);
 
 		// particles where every time step the position will be saved
 		if (SettingsMain.getParticlesSnapshotsPerSec() > 0) {
@@ -403,12 +406,24 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		cudaMalloc((void**)&Dev_save_sample, 4*Grid_sample.sizeNReal);
 		mb_used_RAM_GPU += 4*Grid_sample.sizeNReal / 1e6;
     }
-	if (SettingsMain.getSampleSnapshotsPerSec() > 0) {
+	if (SettingsMain.getSampleOnGrid() && SettingsMain.getSampleSnapshotsPerSec() > 0) {
 		sample_save_buffer_count = 1.0/(double)SettingsMain.getSampleSnapshotsPerSec()/dt;  // normal case
 	}
 	else {
 		sample_save_buffer_count = INT_MIN;  // disable saving
 	}
+
+	/*
+	 * Zoom
+	 */
+	int zoom_save_buffer_count;
+	if (SettingsMain.getZoom() && SettingsMain.getZoomSnapshotsPerSec() > 0) {
+		zoom_save_buffer_count = 1.0/(double)SettingsMain.getZoomSnapshotsPerSec()/dt;  // normal case
+	}
+	else {
+		zoom_save_buffer_count = INT_MIN;  // disable saving
+	}
+
 
 	// print estimated gpu memory usage in mb before initialization
 	message = "estimated GPU RAM usage in mb = " + to_str(mb_used_RAM_GPU); cout<<message+"\n"; logger.push(message);
@@ -461,17 +476,20 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
     // now lets get the particles in
     if (SettingsMain.getParticles()) {
 
-		// Particles initialization
-		Rescale<<<particle_block, particle_thread>>>(Nb_particles, LX, Dev_particles_pos);  // project 0-1 onto 0-LX
-
-		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p+=1){
-			Rescale<<<particle_block, particle_thread>>>(Nb_particles, LX, &Dev_particles_pos[2*Nb_particles*index_tau_p]);
-			Particle_advect_inertia_init<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h);
+		// velocity initialization for inertial particles
+		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p++){
+			Particle_advect_inertia_init<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos + 2*Nb_particles*index_tau_p, Dev_particles_vel + 2*Nb_particles*index_tau_p, Dev_Psi_real, Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h);
 		}
 
 		if (SettingsMain.getParticlesSaveInitial()) {
 			writeParticles(SettingsMain, "0", Host_particles_pos, Dev_particles_pos);
 		}
+	}
+
+	// zoom if wanted, has to be done after particle initialization, maybe a bit useless at first instance
+	if (SettingsMain.getZoom() && SettingsMain.getZoomSaveInitial()) {
+		Zoom(SettingsMain, Map_Stack, Grid_zoom, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial,
+				cufftPlan_fine, (cufftDoubleReal*)Dev_Temp_C2, Host_particles_pos, Dev_particles_pos, Host_save, "0");
 	}
 
 
@@ -675,6 +693,15 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			}
 		}
 		
+		// zoom if wanted, has to be done after particle initialization, maybe a bit useless at first instance
+		if (SettingsMain.getZoom() && loop_ctr % zoom_save_buffer_count == 0) {
+			message = "Saving Zoom : T = " + to_str(t_vec[loop_ctr_l+1]) + " \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+			cout<<message+"\n"; logger.push(message);
+
+			Zoom(SettingsMain, Map_Stack, Grid_zoom, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial,
+					cufftPlan_fine, (cufftDoubleReal*)Dev_Temp_C2, Host_particles_pos, Dev_particles_pos, Host_save, to_str(t_vec[loop_ctr_l+1]));
+		}
+
 		/*
 		 * Some small things at the end of the loop
 		 *  - check for errors
@@ -785,6 +812,12 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	}
 	if (SettingsMain.getParticles() && SettingsMain.getParticlesSaveFinal()) {
 		writeParticles(SettingsMain, "final", Host_particles_pos, Dev_particles_pos);
+	}
+
+	// zoom if wanted
+	if (SettingsMain.getZoom() && SettingsMain.getZoomSaveFinal()) {
+		Zoom(SettingsMain, Map_Stack, Grid_zoom, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial,
+				cufftPlan_fine, (cufftDoubleReal*)Dev_Temp_C2, Host_particles_pos, Dev_particles_pos, Host_save, "final");
 	}
 
 	// save all conservation data, little switch in case we do not save anything
@@ -1097,52 +1130,73 @@ void sample_compute_and_write(MapStack Map_Stack, TCudaGrid2D Grid_sample, doubl
 *******************************************************************/
 
 
-void Zoom(TCudaGrid2D Grid_fine, MapStack Map_Stack, double *Dev_ChiX, double *Dev_ChiY, double *W_real,
-		cufftHandle cufftPlan_fine, double *W_initial, cufftDoubleComplex *Dev_Temp,
-		SettingsCMM SettingsMain, int simulation_num, double L)
+void Zoom(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Grid_zoom, double *Dev_ChiX, double *Dev_ChiY,
+		double *W_real, double *W_initial, cufftHandle cufftPlan_fine, double *Dev_Temp,
+		double *Host_particles_pos, double *Dev_particles_pos, double *Host_debug, string i_num)
 {
-	double *ws;
-	ws = new double[Grid_fine.N];
-	int save_ctr = 0;
+	// create folder
+	string sub_folder_name = "/Zoom_data/Time_" + i_num;
+	string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
+	mkdir(folder_name_now.c_str(), 0700);
 
-	double xCenter = 0.54;
-	double yCenter = 0.51;
-	double width = 0.5;
+	double x_min, x_max, y_min, y_max;
 
-	double xMin = xCenter - width/2;
-	double xMax = xMin + width;
-	double yMin = yCenter - width/2;
-	double yMax = yMin + width;
+	double x_width = SettingsMain.getZoomWidthX()/2.0;
+	double y_width = SettingsMain.getZoomWidthY()/2.0;
 
-	std::ostringstream ss;
-	ss<<save_ctr;
+	// do repetetive zooms
+	for(int zoom_ctr = 0; zoom_ctr < SettingsMain.getZoomRepetitions(); zoom_ctr++){
+		// construct frame bounds for this zoom
+		x_min = SettingsMain.getZoomCenterX() - x_width;
+		x_max = SettingsMain.getZoomCenterX() + x_width;
+		y_min = SettingsMain.getZoomCenterY() - y_width;
+		y_max = SettingsMain.getZoomCenterY() + y_width;
+		// safe bounds in array
+		double bounds[4] = {x_min, x_max, y_min, y_max};
 
+		// compute actual zoom of vorticity
+		apply_map_stack_to_W_part_All(Grid_zoom, Map_Stack, Dev_ChiX, Dev_ChiY,
+				W_real, Dev_Temp, bounds, W_initial, SettingsMain.getInitialConditionNum());
 
-	//save zooming effects
-	for(int zoom_ctr = 0; zoom_ctr<10; zoom_ctr++){
+		// copy to host
+		cudaMemcpy(Host_debug, W_real, Grid_zoom.sizeNReal, cudaMemcpyDeviceToHost);
 
-		width *=  0.5;//0.99
-		xMin = xCenter - width/2;
-		xMax = xMin + width;
-		yMin = yCenter - width/2;
-		yMax = yMin + width;
+		writeAllRealToBinaryFile(Grid_zoom.N, Host_debug, SettingsMain, "/Zoom_data/Time_"+i_num+"/Vorticity_zoom_" + to_str(zoom_ctr));
 
-		double bounds[4] = {xMin, xMax, yMin, yMax};
+		// safe particles in zoomframe if wanted
+		// copy particles to host
+	    cudaMemcpy(Host_particles_pos, Dev_particles_pos, 2*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()*sizeof(double), cudaMemcpyDeviceToHost);
+	    // loop over all tau numbers
+		if (SettingsMain.getParticles() && SettingsMain.getZoomSaveParticles()) {
+			// primitive loop on host, maybe this could be implemented more clever, but ca marche
+			for (int i_tau = 0; i_tau < SettingsMain.getParticlesTauNum(); i_tau++) {
+				int part_counter = 0;
+				int tau_shift = 2*i_tau*SettingsMain.getParticlesNum();
+				for (int i_p = 0; i_p < SettingsMain.getParticlesNum(); i_p++) {
+					// check if particle in frame and then save it inside itself
+					if (Host_particles_pos[2*i_p   + tau_shift] > x_min &&
+						Host_particles_pos[2*i_p   + tau_shift] < x_max &&
+						Host_particles_pos[2*i_p+1 + tau_shift] > y_min &&
+						Host_particles_pos[2*i_p+1 + tau_shift] < y_max) {
+						// transcribe particle
+						Host_particles_pos[2*part_counter   + tau_shift] = Host_particles_pos[2*i_p   + tau_shift];
+						Host_particles_pos[2*part_counter+1 + tau_shift] = Host_particles_pos[2*i_p+1 + tau_shift];
+						// increment counter
+						part_counter++;
+					}
+				}
+				// save particles
+				string tau_name;
+				if (i_tau == 0) tau_name = "Fluid"; else tau_name = "Tau=" + to_str(SettingsMain.particles_tau[i_tau]);
+				writeAllRealToBinaryFile(2*part_counter, Host_particles_pos+tau_shift, SettingsMain, "/Zoom_data/Time_"+i_num+"/Particles_pos_"+ tau_name +"_" + to_str(zoom_ctr));
+			}
+		}
 
-
-		//kernel_apply_map_stack_to_W_custom<<<Gsf.blocksPerGrid, Gsf.threadsPerBlock>>>(devChiX_stack, devChiY_stack, devChiX, devChiY, devWs, stack_map_passed, Gc.NX, Gc.NY, Gc.h, Gsf.NX, Gsf.NY, Gsf.h, xMin*L, xMax*L, yMin*L, yMax*L, W_initial);
-		apply_map_stack_to_W_part_All(Grid_fine, Map_Stack, Dev_ChiX, Dev_ChiY,
-				W_real, (cufftDoubleReal*)Dev_Temp, bounds, W_initial, simulation_num);
-
-		cudaMemcpy(ws, W_real, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
-
-		std::ostringstream ss2;
-		ss2<<zoom_ctr;
-
-		writeAllRealToBinaryFile(Grid_fine.N, ws, SettingsMain, "zoom_" + ss2.str());
+		x_width *=  SettingsMain.getZoomRepetitionsFactor();
+		y_width *=  SettingsMain.getZoomRepetitionsFactor();
 	}
-
 }
+
 
 // helper function to format time to readable format
 string format_duration(double sec) {

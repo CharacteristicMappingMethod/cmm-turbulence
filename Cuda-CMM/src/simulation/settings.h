@@ -40,6 +40,11 @@ private:
 	bool sample_on_grid;
 	int grid_sample, sample_snapshots_per_sec;
 	bool sample_save_initial, sample_save_final;
+	// zoom
+	bool zoom, zoom_save_particles;
+	double zoom_center_x, zoom_center_y, zoom_width_x, zoom_width_y, zoom_repetitions_factor;
+	int grid_zoom, zoom_repetitions, zoom_snapshots_per_sec;
+	bool zoom_save_initial, zoom_save_final;
 	// particles
 	bool particles, save_fine_particles;
 	int particles_tau_num;
@@ -72,7 +77,8 @@ public:
 	void transcribe_int_array(int *array_in, int *array_save, int num) { for (int i_num = 0; i_num < num; ++i_num) array_save[i_num] = array_in[i_num]; }
 	void transcribe_double_array(double *array_in, double *array_save, int num) { for (int i_num = 0; i_num < num; ++i_num) array_save[i_num] = array_in[i_num]; }
 
-	// get and set methods for all variables
+	// get and set methods for all variables, this is quite much and quite ugly, i know
+
 
 	// name
 	string getWorkspace() const { return workspace; }
@@ -90,6 +96,7 @@ public:
 	void setGridPsi(int gridPsi) { grid_psi = gridPsi; }
 	int getGridVort() const { return grid_vort; }
 	void setGridVort(int gridVort) { grid_vort = gridVort; }
+
 
 	// time stepping properties
 	double getFinalTime() const { return final_time; }
@@ -123,6 +130,7 @@ public:
 		else initial_condition_num = -1;
 	}
 	int getInitialConditionNum() const { return initial_condition_num; }
+
 
 	// minor properties
 	double getIncompThreshold() const { return incomp_threshhold; }
@@ -184,6 +192,7 @@ public:
 	bool getSkipRemapping() const { return skip_remapping; }
 	void setSkipRemapping(bool skipRemapping) { skip_remapping = skipRemapping; }
 
+
 	// possibility to sample on specific grid
 	bool getSampleOnGrid() const { return sample_on_grid; }
 	void setSampleOnGrid(bool sampleOnGrid) { sample_on_grid = sampleOnGrid; }
@@ -196,6 +205,39 @@ public:
 	void setSampleSaveInitial(bool sampleSaveInitial) { sample_save_initial = sampleSaveInitial; }
 	bool getSampleSaveFinal() const { return sample_save_final; }
 	void setSampleSaveFinal(bool sampleSaveFinal) { sample_save_final = sampleSaveFinal; }
+
+
+	// zoom
+	bool getZoom() const { return zoom; }
+	void setZoom(bool Zoom) { zoom = Zoom; }
+	int getGridZoom() const { return grid_zoom; }
+	void setGridZoom(int gridZoom) { grid_zoom = gridZoom; }
+
+	double getZoomCenterX() const { return zoom_center_x; }
+	void setZoomCenterX(double zoomCenterX) { zoom_center_x = zoomCenterX; }
+	double getZoomCenterY() const { return zoom_center_y; }
+	void setZoomCenterY(double zoomCenterY) { zoom_center_y = zoomCenterY; }
+	double getZoomWidthX() const { return zoom_width_x; }
+	void setZoomWidthX(double zoomWidthX) { zoom_width_x = zoomWidthX; }
+	double getZoomWidthY() const { return zoom_width_y; }
+	void setZoomWidthY(double zoomWidthY) { zoom_width_y = zoomWidthY; }
+
+	int getZoomRepetitions() const { return zoom_repetitions; }
+	void setZoomRepetitions(int zoomRepetitions) { zoom_repetitions = zoomRepetitions; }
+	double getZoomRepetitionsFactor() const { return zoom_repetitions_factor; }
+	void setZoomRepetitionsFactor(double zoomRepetitionsFactor) { zoom_repetitions_factor = zoomRepetitionsFactor; }
+
+	bool getZoomSaveParticles() const { return zoom_save_particles; }
+	void setZoomSaveParticles(bool zoomSaveParticles) { zoom_save_particles = zoomSaveParticles; }
+
+	int getZoomSnapshotsPerSec() const { return zoom_snapshots_per_sec; }
+	void setZoomSnapshotsPerSec(int zoomSnapshotsPerSec) { zoom_snapshots_per_sec = zoomSnapshotsPerSec; }
+
+	bool getZoomSaveInitial() const { return zoom_save_initial; }
+	void setZoomSaveInitial(bool zoomSaveInitial) { zoom_save_initial = zoomSaveInitial; }
+	bool getZoomSaveFinal() const { return zoom_save_final; }
+	void setZoomSaveFinal(bool zoomSaveFinal) { zoom_save_final = zoomSaveFinal; }
+
 
 	// particles
 	bool getParticles() const { return particles; }

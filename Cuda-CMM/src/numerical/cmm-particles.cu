@@ -229,7 +229,7 @@ __global__ void Particle_advect_inertia_init(int Nb_particle, double dt, double 
 		return;
 
 	// compute velocity and transcribe directly
-	device_hermite_interpolate_grad_2D(psi, particles_pos + 2*i, particles_pos + 2*i, NX, NY, h, 1);
+	device_hermite_interpolate_grad_2D(psi, particles_pos + 2*i, particles_vel + 2*i, NX, NY, h, 1);
 }
 
 

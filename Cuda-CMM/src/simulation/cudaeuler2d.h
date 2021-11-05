@@ -37,9 +37,9 @@ void sample_compute_and_write(MapStack Map_Stack, TCudaGrid2D Grid_sample, doubl
 //cudaStream_t streams
 
 void Zoom_load_frame(string File, int grid_scale, int fine_grid_scale, string t_nb);
-void Zoom(TCudaGrid2D Grid_fine, MapStack Map_Stack, double *Dev_ChiX, double *Dev_ChiY, double *W_real,
-		cufftHandle cufftPlan_fine, double *W_initial, cufftDoubleComplex *Dev_Temp,
-		SettingsCMM SettingsMain, int simulation_num, double L);
+void Zoom(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Grid_fine, double *Dev_ChiX, double *Dev_ChiY,
+		double *W_real, double *W_initial, cufftHandle cufftPlan_fine, double *Dev_Temp,
+		double *Host_particles_pos, double *Dev_particles_pos, double *Host_debug, string i_num);
 
 
 // main function
