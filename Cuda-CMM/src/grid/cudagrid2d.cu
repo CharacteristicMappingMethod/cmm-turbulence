@@ -1,13 +1,20 @@
 #include "cudagrid2d.h"
 
 
-TCudaGrid2D::TCudaGrid2D(int NX, int NY, double xRange)
+TCudaGrid2D::TCudaGrid2D (int NX, int NY, double *bounds)
 {
 	this->NX = NX;
 	this->NY = NY;
-	
-	this->h = xRange/(float)NX;
-	
+
+	this->h = (bounds[1] - bounds[0]) / (float)NX;  // for quadratic problems, is used everywhere so changing it is tedious
+
+	this->hx = (bounds[1] - bounds[0]) / (float)NX;
+	this->hy = (bounds[3] - bounds[2]) / (float)NY;
+
+	for (int i_b = 0; i_b < 4; ++i_b) {
+		this->bounds[i_b] = bounds[i_b];
+	}
+
 	this->N = NX*NY;
 	this->sizeNReal = sizeof(double)*N;
 	this->sizeNComplex = sizeof(cufftDoubleComplex)*N;
@@ -17,8 +24,8 @@ TCudaGrid2D::TCudaGrid2D(int NX, int NY, double xRange)
 	threadsPerBlock.y = BLOCK_SIZE;
 	threadsPerBlock.z = 1;
 
-	blocksPerGrid.x = ceil((float)NX/threadsPerBlock.x);
-	blocksPerGrid.y = ceil((float)NY/threadsPerBlock.y);
+	blocksPerGrid.x = ceil(NX/(double)threadsPerBlock.x);
+	blocksPerGrid.y = ceil(NY/(double)threadsPerBlock.y);
 	blocksPerGrid.z = 1;
 }
 

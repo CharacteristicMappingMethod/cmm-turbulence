@@ -18,6 +18,7 @@ private:
 	string workspace, sim_name, file_name;
 	int grid_coarse, grid_fine, grid_psi, grid_vort;
 	string initial_condition; int initial_condition_num;
+	int verbose;
 	// time stepping properties
 	double final_time, factor_dt_by_grid;
 	int steps_per_sec, snapshots_per_sec;
@@ -39,9 +40,9 @@ private:
 	// sample grid
 	bool sample_on_grid;
 	int grid_sample, sample_snapshots_per_sec;
-	bool sample_save_initial, sample_save_final;
+	bool sample_save_initial, sample_save_final, conv_init_final;
 	// zoom
-	bool zoom, zoom_save_particles;
+	bool zoom, zoom_save_psi, zoom_save_particles;
 	double zoom_center_x, zoom_center_y, zoom_width_x, zoom_width_y, zoom_repetitions_factor;
 	int grid_zoom, zoom_repetitions, zoom_snapshots_per_sec;
 	bool zoom_save_initial, zoom_save_final;
@@ -114,6 +115,8 @@ public:
 	void setSaveInitial(bool saveInitial) { save_initial = saveInitial; }
 	bool getSaveFinal() const { return save_final; }
 	void setSaveFinal(bool saveFinal) { save_final = saveFinal; }
+	bool getConvInitFinal() const { return conv_init_final; }
+	void setConvInitFinal(bool convInitFinal) { conv_init_final = convInitFinal; }
 
 	// initial conditions setting
 	string getInitialCondition() const { return initial_condition; }
@@ -130,6 +133,9 @@ public:
 		else initial_condition_num = -1;
 	}
 	int getInitialConditionNum() const { return initial_condition_num; }
+
+	int getVerbose() const { return verbose; }
+	void setVerbose(int Verbose) { verbose = Verbose; }
 
 
 	// minor properties
@@ -227,6 +233,8 @@ public:
 	double getZoomRepetitionsFactor() const { return zoom_repetitions_factor; }
 	void setZoomRepetitionsFactor(double zoomRepetitionsFactor) { zoom_repetitions_factor = zoomRepetitionsFactor; }
 
+	bool getZoomSavePsi() const { return zoom_save_psi; }
+	void setZoomSavePsi(bool zoomSavePsi) { zoom_save_psi = zoomSavePsi; }
 	bool getZoomSaveParticles() const { return zoom_save_particles; }
 	void setZoomSaveParticles(bool zoomSaveParticles) { zoom_save_particles = zoomSaveParticles; }
 

@@ -25,19 +25,24 @@
 //#define DISCRET
 
 //the grid is assumed to span the space [0, NX*h] X [0, NY*h]
-class TCudaGrid2D
+struct TCudaGrid2D
 {
 	public:
 		int NX, NY;
 		long int N;
 		double h;
 
+		double hx, hy;
+		double bounds[4];
+
 		dim3 threadsPerBlock, blocksPerGrid;
 
 		long int sizeNReal, sizeNComplex;
 
-		TCudaGrid2D(int NX, int NY, double xRange);
+		TCudaGrid2D(int NX, int NY, double *bounds);
 };
+
+void fill_grid(TCudaGrid2D Grid, int NX, int NY, double *bounds);
 
 // class for map stack thingies, because I am always just transferring this everywhere
 class MapStack {

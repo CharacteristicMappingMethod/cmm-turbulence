@@ -15,13 +15,17 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int save_bu
 	string folder_name = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName();
 	mkdir(folder_name.c_str(), 0700);
 
+	// create general subfolder for other data
+	string folder_name_tdata = folder_name + "/Monitoring_data";
+	mkdir(folder_name_tdata.c_str(), 0700);
+
 	// create general subfolder for timesteps
-	string folder_name_tdata = folder_name + "/Time_data";
+	folder_name_tdata = folder_name + "/Time_data";
 	mkdir(folder_name_tdata.c_str(), 0700);
 
 	// create general subfolder for zoom
 	if (SettingsMain.getZoom()) {
-		string folder_name_tdata = folder_name + "/Zoom_data";
+		folder_name_tdata = folder_name + "/Zoom_data";
 		mkdir(folder_name_tdata.c_str(), 0700);
 	}
 
@@ -262,7 +266,6 @@ void writeMapStack(SettingsCMM SettingsMain, MapStack Map_Stack) {
 	struct stat st = {0};
 	if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0700);
 
-	printf("Map stack counter - %d\n",Map_Stack.map_stack_ctr);
 	// check if we have to save a stack for every stack
 	int save_ctr;
 	if (Map_Stack.map_stack_ctr / (double)Map_Stack.cpu_map_num > 0) {

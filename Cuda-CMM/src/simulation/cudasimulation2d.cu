@@ -113,7 +113,7 @@ void advect_using_stream_hermite_grid(SettingsCMM SettingsMain, TCudaGrid2D Grid
 
 	// first of all: compute footpoints at gridpoints, here we could speedup the first sampling of u by directly using the values, as we start at exact grid point locations
 	k_compute_footpoints<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock>>>(ChiX, ChiY, Chi_new_X, Chi_new_Y, psi,
-			Grid_map.NX, Grid_map.NY, Grid_map.h, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, t[loop_ctr_l+1], dt[loop_ctr_l+1],
+			Grid_map.NX, Grid_map.NY, Grid_map.h, Grid_psi, t[loop_ctr_l+1], dt[loop_ctr_l+1],
 			SettingsMain.getTimeIntegrationNum(), SettingsMain.getLagrangeOrder());
 
 	// update map, x and y can be done seperately
@@ -124,7 +124,7 @@ void advect_using_stream_hermite_grid(SettingsCMM SettingsMain, TCudaGrid2D Grid
 
 
 // compute footpoints at exact grid locations
-__global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, int time_integration_num, int l_order) {
+__global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, int NXc, int NYc, double hc, TCudaGrid2D Grid_psi, double t, double dt, int time_integration_num, int l_order) {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
@@ -143,21 +143,21 @@ __global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new
 
 	// time integration - note, we go backwards in time!
 	switch (time_integration_num) {
-	case 10: { euler_exp         (psi, d_L1,        x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
-	// ABTwo
-	case 20: { adam_bashford_2_pc(psi,              x_ep, x_f, NX_psi, NY_psi, h_psi, dt         ); break; }
-	// ABTwo
-	case 21: { RK2_heun          (psi, d_L1,        x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
-	// RKThree
-	case 30: { RK3_classical     (psi, d_L1, d_L12, x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
-	// RKFour
-	case 40: { RK4_classical     (psi, d_L1, d_L12, x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
-	// custom RKThree
-	case 31: { RK3_optimized     (psi, d_L1,        x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
-	// custom RKFour case IV
-	case 41: { RK4_optimized     (psi, d_L1, d_L12, x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
-	// zero on default
-	default: { x_f[0] = x_f[1] = 0; }
+		case 10: { euler_exp         (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
+		// ABTwo
+		case 20: { adam_bashford_2_pc(psi,              x_ep, x_f, Grid_psi, dt         ); break; }
+		// ABTwo
+		case 21: { RK2_heun          (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
+		// RKThree
+		case 30: { RK3_classical     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
+		// RKFour
+		case 40: { RK4_classical     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
+		// custom RKThree
+		case 31: { RK3_optimized     (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
+		// custom RKFour case IV
+		case 41: { RK4_optimized     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
+		// zero on default
+		default: { x_f[0] = x_f[1] = 0; }
 	}
 
 	// apply map deformation
@@ -342,9 +342,9 @@ void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map,
 	double h_c1[12], h_cx[12], h_cy[12], h_cxy[12];  // compute coefficients for each direction only once
 	// already compute final coefficients with appropriate sign
 	for (int i_foot = 0; i_foot < 4+4*SettingsMain.getMapUpdateOrderNum(); ++i_foot) {
-		h_c1[i_foot] =  h_c[i_foot/4];
-		h_cx[i_foot] =  h_c[i_foot/4] * (1 - 2*((i_foot/2)%2))     / SettingsMain.getMapEpsilon() / double(i_foot/4 + 1);
-		h_cy[i_foot] =  h_c[i_foot/4] * (1 - 2*(((i_foot+1)/2)%2)) / SettingsMain.getMapEpsilon() / double(i_foot/4 + 1);
+		h_c1 [i_foot] = h_c[i_foot/4];
+		h_cx [i_foot] = h_c[i_foot/4] * (1 - 2*((i_foot/2)%2))     / SettingsMain.getMapEpsilon() / double(i_foot/4 + 1);
+		h_cy [i_foot] = h_c[i_foot/4] * (1 - 2*(((i_foot+1)/2)%2)) / SettingsMain.getMapEpsilon() / double(i_foot/4 + 1);
 		h_cxy[i_foot] = h_c[i_foot/4] * (1 - 2*(i_foot%2)) / SettingsMain.getMapEpsilon() / SettingsMain.getMapEpsilon() / double(i_foot/4 + 1) / double(i_foot/4 + 1);
 	}
 
@@ -353,10 +353,9 @@ void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map,
 	cudaMemcpyToSymbol(d_c1, h_c1, sizeof(double)*12); cudaMemcpyToSymbol(d_cx, h_cx, sizeof(double)*12);
 	cudaMemcpyToSymbol(d_cy, h_cy, sizeof(double)*12); cudaMemcpyToSymbol(d_cxy, h_cxy, sizeof(double)*12);
 
-
 	// now launch the kernel
 	kernel_advect_using_stream_hermite<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock>>>(ChiX, ChiY, Chi_new_X, Chi_new_Y,
-			psi, Grid_map.NX, Grid_map.NY, Grid_map.h, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, t[loop_ctr_l+1], dt[loop_ctr_l+1],
+			psi, Grid_map, Grid_psi, t[loop_ctr_l+1], dt[loop_ctr_l+1],
 			SettingsMain.getMapEpsilon(), SettingsMain.getTimeIntegrationNum(),
 			SettingsMain.getMapUpdateOrderNum(), SettingsMain.getLagrangeOrder());
 }
@@ -368,7 +367,8 @@ void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map,
  * For each foot point: advect using the stream function and time stepping scheme
  * At the end: combine results of all footpoints using specific map update scheme
  */
-__global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *phi, int NXc, int NYc, double hc, int NX_psi, int NY_psi, double h_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num, int l_order)			// time cost
+__global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi,
+		TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num, int l_order)
 {
 	bool debug = false;
 //	if ((blockIdx.x == 0) && (blockIdx.y == 0)) { debug = true; }
@@ -377,12 +377,10 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 
-    if(iX >= NXc || iY >= NYc)
+    if(iX >= Grid_map.NX || iY >= Grid_map.NY)
 		return;
 
-	int In = iY*NXc + iX;
-
-	long int N = NXc*NYc;
+	int In = iY*Grid_map.NX + iX;
 
 	//running through neighbours
 	double x_ep[2], x_f[2];
@@ -398,30 +396,30 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 
 		// get position of footpoint, NE, SE, SW, NW
 		// for higher orders repeat cross shape stencil with more points
-		x_ep[0] = iX*hc + i_dist_now * ep*(1 - 2*((k_foot/2)%2));
-		x_ep[1] = iY*hc + i_dist_now * ep*(1 - 2*(((k_foot+1)/2)%2));
+		x_ep[0] = Grid_map.bounds[0] + iX*Grid_map.hx + i_dist_now * ep*(1 - 2*((k_foot/2)%2));
+		x_ep[1] = Grid_map.bounds[2] + iY*Grid_map.hy + i_dist_now * ep*(1 - 2*(((k_foot+1)/2)%2));
 
 		// time integration - note, we go backwards in time!
 		switch (time_integration_num) {
-			case 10: { euler_exp         (phi, d_L1,        x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
+			case 10: { euler_exp         (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
 			// ABTwo
-			case 20: { adam_bashford_2_pc(phi,              x_ep, x_f, NX_psi, NY_psi, h_psi, dt         ); break; }
+			case 20: { adam_bashford_2_pc(psi,              x_ep, x_f, Grid_psi, dt         ); break; }
 			// ABTwo
-			case 21: { RK2_heun          (phi, d_L1,        x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
+			case 21: { RK2_heun          (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
 			// RKThree
-			case 30: { RK3_classical     (phi, d_L1, d_L12, x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
+			case 30: { RK3_classical     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
 			// RKFour
-			case 40: { RK4_classical     (phi, d_L1, d_L12, x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
+			case 40: { RK4_classical     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
 			// custom RKThree
-			case 31: { RK3_optimized     (phi, d_L1,        x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
+			case 31: { RK3_optimized     (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
 			// custom RKFour case IV
-			case 41: { RK4_optimized     (phi, d_L1, d_L12, x_ep, x_f, NX_psi, NY_psi, h_psi, dt, l_order); break; }
+			case 41: { RK4_optimized     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
 			// zero on default
 			default: { x_f[0] = x_f[1] = 0; }
 		}
 
 		// apply map deformation
-		device_diffeo_interpolate_2D(ChiX, ChiY, x_f[0], x_f[1], &x_f[0], &x_f[1], NXc, NYc, hc);
+		device_diffeo_interpolate_2D(ChiX, ChiY, x_f[0], x_f[1], &x_f[0], &x_f[1], Grid_map.NX, Grid_map.NY, Grid_map.h);
 
 		if (debug) {
 			printf("Id : %d \t ifoot : %d \t fpoint : %f \n", In, k_foot, x_f[0]);
@@ -446,12 +444,11 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 	}
 
 	// can't use Chi because we still use it for diffeo_interpolate
-	Chi_new_X[    In] = Chi_full_x[0];	Chi_new_Y[    In] = Chi_full_y[0];
-	Chi_new_X[1*N+In] = Chi_full_x[1];	Chi_new_Y[1*N+In] = Chi_full_y[1];
-	Chi_new_X[2*N+In] = Chi_full_x[2];	Chi_new_Y[2*N+In] = Chi_full_y[2];
-	Chi_new_X[3*N+In] = Chi_full_x[3];	Chi_new_Y[3*N+In] = Chi_full_y[3];
+	Chi_new_X[             In] = Chi_full_x[0];	Chi_new_Y[             In] = Chi_full_y[0];
+	Chi_new_X[1*Grid_map.N+In] = Chi_full_x[1];	Chi_new_Y[1*Grid_map.N+In] = Chi_full_y[1];
+	Chi_new_X[2*Grid_map.N+In] = Chi_full_x[2];	Chi_new_Y[2*Grid_map.N+In] = Chi_full_y[2];
+	Chi_new_X[3*Grid_map.N+In] = Chi_full_x[3];	Chi_new_Y[3*Grid_map.N+In] = Chi_full_y[3];
 }
-
 
 
 /*******************************************************************
@@ -788,165 +785,3 @@ __device__ double device_initial_W_discret(double x, double y, double *W_initial
 	
 	return W_initial[In];
 }
-
-
-
-
-
-
-
-
-///*******************************************************************
-//*							   Zoom								   *
-//*******************************************************************/
-//
-//
-//void Zoom(TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_fine, double *Dev_ChiX_stack, double *Dev_ChiY_stack, double *Host_ChiX_stack_RAM_0, double *Host_ChiY_stack_RAM_0, double *Host_ChiX_stack_RAM_1, double *Host_ChiY_stack_RAM_1, double *Host_ChiX_stack_RAM_2, double *Host_ChiY_stack_RAM_2, double *Host_ChiX_stack_RAM_3, double *Host_ChiY_stack_RAM_3, double *Dev_ChiX, double *Dev_ChiY, int stack_length, int map_stack_length, int stack_length_RAM, int stack_length_Nb_array_RAM, int mem_RAM, double *W_real, cufftHandle cufftPlan_fine, double *W_initial, cufftDoubleComplex *Dev_Complex_fine, string workspace, string simulationName, int simulation_num, double L)
-//{
-//	double *ws;
-//	ws = new double[Grid_fine.N];
-//	int save_ctr = 0;
-//
-//	double xCenter = 0.54;
-//	double yCenter = 0.51;
-//	double width = 0.5;
-//
-//	double xMin = xCenter - width/2;
-//	double xMax = xMin + width;
-//	double yMin = yCenter - width/2;
-//	double yMax = yMin + width;
-//
-//	std::ostringstream ss;
-//	ss<<save_ctr;
-//
-//
-//	//save zooming effects
-//	for(int zoom_ctr = 0; zoom_ctr<10; zoom_ctr++){
-//
-//		width *=  0.5;//0.99
-//		xMin = xCenter - width/2;
-//		xMax = xMin + width;
-//		yMin = yCenter - width/2;
-//		yMax = yMin + width;
-//
-//
-//		//kernel_apply_map_stack_to_W_custom<<<Gsf.blocksPerGrid, Gsf.threadsPerBlock>>>(devChiX_stack, devChiY_stack, devChiX, devChiY, devWs, stack_map_passed, Gc.NX, Gc.NY, Gc.h, Gsf.NX, Gsf.NY, Gsf.h, xMin*L, xMax*L, yMin*L, yMax*L, W_initial);
-//		kernel_apply_map_stack_to_W_custom_part_All(Grid_coarse, Grid_fine, Dev_ChiX_stack, Dev_ChiY_stack, Dev_ChiX, Dev_ChiY, Host_ChiX_stack_RAM_0, Host_ChiY_stack_RAM_0, Host_ChiX_stack_RAM_1, Host_ChiY_stack_RAM_1, Host_ChiX_stack_RAM_2, Host_ChiY_stack_RAM_2, Host_ChiX_stack_RAM_3, Host_ChiY_stack_RAM_3, W_real, Dev_Complex_fine, stack_length, map_stack_length, stack_length_RAM, stack_length_Nb_array_RAM, mem_RAM, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h, xMin*L, xMax*L, yMin*L, yMax*L, W_initial, simulation_num);
-//
-//
-//		cudaMemcpy(ws, W_real, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
-//
-//		std::ostringstream ss2;
-//		ss2<<zoom_ctr;
-//
-//		writeAllRealToBinaryFile(Grid_fine.N, ws, simulationName, workspace, "zoom_" + ss2.str());
-//	}
-//
-//}
-
-
-/*******************************************************************
-*							    								   *
-*******************************************************************/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/******************************************************************/
-/*******************************************************************
-*							   Old								   *
-*******************************************************************/
-/******************************************************************/
-
-
-
-
-
-
-
-
-
-
-
-
-//////////////////////////////////////////////////////////////////////////
-//void test_fft_operations()
-//{
-//}
-//
-////void recompute_output_files(){}
-//
-//////////////////////////////////////////////////////////////////////////
-//double compare_map_with_identity(double *chiX, double *chiY, int NX, int NY, double h)
-//{
-//return 0;
-//}
-//
-//__global__ void kernel_compute_total_grid_Chi(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *gradChi, int stack_length, int NXc, int NYc, double hc, int NXs, int NYs, double hs)
-//{
-//}
-//
-//__global__ void kernel_compute_enstropy_increase_rate_factors(double *w, double *phi, double *div1, double *div2, int NXc, int NYc, double hc, double ep)
-//{
-//}
-//
-//__global__ void kernel_compute_enstropy_increase_rate_factors(double *wHsc, double *ChiX, double *ChiY, double *phi, double *div1, double *div2, int NXc, int NYc, double hc, int NXsc, int NYsc, double hsc, double ep)
-//{
-//}
-//
-//////////////////////////////////////////////////////////////////////////
-//__global__ void kernel_advect_using_velocity_function(double *ChiX, double *ChiY, double *ChiDualX, double *ChiDualY,  int NXc, int NYc, double hc, double t, double dt, double ep)
-//{
-//}
-//
-//////////////////////////////////////////////////////////////////////////
-//__global__ void kernel_apply_map_to_W(double *ChiX, double *ChiY, double *ws, int NXc, int NYc, double hc, int NXs, int NYs, double hs)
-//{
-//}
-//
-//__global__ void kernel_compare_map_stack_with_identity(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *error, int stack_length, int NXc, int NYc, double hc, int NXs, int NYs, double hs)
-//{
-//}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -28,6 +28,14 @@ void SettingsCMM::setPresets() {
 	string initial_condition = "4_nodes";
 //	string initial_condition = "shielded_vortex";
 
+	/*
+	 * Console output verbose intensity
+	 *  0	-	no console outputs besides errors
+	 *  1	-	Initialization and finishing output
+	 *  2	-	Step and Saving output
+	 */
+	int verbose = 2;
+
 	// set time properties
 	double final_time = 4;  // end of computation
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
@@ -37,6 +45,7 @@ void SettingsCMM::setPresets() {
 	int snapshots_per_sec = -1;  // how many times do we want to save data per sec, set <= 0 to disable
 	bool save_initial = true;  // consume less data and make it possible to disable saving the initial data
 	bool save_final = true;  // consume less data and make it possible to disable saving the final data
+	bool conv_init_final = true;  // compute initial and final convergence details?
 
 	// set minor properties
 	double incomp_threshhold = 1e-4;  // the maximum allowance of map to deviate from grad_chi begin 1
@@ -95,8 +104,9 @@ void SettingsCMM::setPresets() {
 	double zoom_center_y = twoPI * 0.75;
 	double zoom_width_x = twoPI * 1e-1;  // twoPI taken as LX, width of the zoom window
 	double zoom_width_y = twoPI * 1e-1;  // twoPI taken as LY, width of the zoom window
-	int zoom_repetitions = 4;  // how many repetetive zooms with decreasing windows?
+	int zoom_repetitions = 4;  // how many repetitive zooms with decreasing windows?
 	double zoom_repetitions_factor = 0.5;  // how much do we want to decrease the window each time
+	bool zoom_save_psi = true;  // stream function is not a zoom property, but its interesting for fine scale particle behavior
 	bool zoom_save_particles = true;  // if particles are enabled, safe particles in the range too
 	// saving settings
 	int zoom_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save zoom per sec, set <= 0 to disable
@@ -109,8 +119,8 @@ void SettingsCMM::setPresets() {
 	 *  - control saving intervals of particle positions
 	 *  - save some particles at every position for detailed analysis
 	 */
-	bool particles = true;  // en- or disable particles
-	int particles_num = 1000000;  // number of particles
+	bool particles = false;  // en- or disable particles
+	int particles_num = (int)1e6;  // number of particles
 
 	int particles_tau_num = 3;  // how many tau_p values do we have? for now maximum is 100
 //	double Tau_p[Nb_Tau_p] = {0.0, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.125, 0.15, 0.25, 0.5, 0.75, 1, 2, 5, 13};
@@ -146,7 +156,10 @@ void SettingsCMM::setPresets() {
 	setFactorDtByGrid(factor_dt_by_grid); setStepsPerSec(steps_per_sec);
 	setSnapshotsPerSec(snapshots_per_sec); setSetDtBySteps(set_dt_by_steps);
 	setSaveInitial(save_initial); setSaveFinal(save_final);
+	setConvInitFinal(conv_init_final);
 	setInitialCondition(initial_condition);
+
+	setVerbose(verbose);
 
 	setMemRamCpuRemaps(mem_RAM_CPU_remaps);
 	setSaveMapStack(save_map_stack);
@@ -174,6 +187,7 @@ void SettingsCMM::setPresets() {
 	setZoomWidthY(zoom_width_y);
 	setZoomRepetitions(zoom_repetitions);
 	setZoomRepetitionsFactor(zoom_repetitions_factor);
+	setZoomSavePsi(zoom_save_psi);
 
 	setZoomSaveParticles(zoom_save_particles);
 	setZoomSnapshotsPerSec(zoom_snapshots_per_sec);
@@ -229,10 +243,13 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "set_dt_by_steps") setSetDtBySteps(getBoolFromString(value));
 			else if (command == "save_initial") setSaveInitial(getBoolFromString(value));
 			else if (command == "save_final") setSaveFinal(getBoolFromString(value));
+			else if (command == "conv_init_final") setConvInitFinal(getBoolFromString(value));
 			else if (command == "snapshots_per_sec") setSnapshotsPerSec(stoi(value));
 
 			else if (command == "mem_RAM_CPU_remaps") setMemRamCpuRemaps(stoi(value));
 			else if (command == "save_map_stack") setSaveMapStack(getBoolFromString(value));
+
+			else if (command == "verbose") setVerbose(stoi(value));
 
 			else if (command == "initial_condition") setInitialCondition(value);
 			else if (command == "incomp_threshold") setIncompThreshold(stod(value));
@@ -259,6 +276,7 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "zoom_width_y") setZoomWidthY(stod(value));
 			else if (command == "zoom_repetitions") setZoomRepetitions(stoi(value));
 			else if (command == "zoom_repetitions_factor") setZoomRepetitionsFactor(stod(value));
+			else if (command == "zoom_save_psi") setZoomSavePsi(getBoolFromString(value));
 			else if (command == "zoom_save_particles") setZoomSaveParticles(getBoolFromString(value));
 			else if (command == "zoom_save_initial") setZoomSaveInitial(getBoolFromString(value));
 			else if (command == "zoom_save_final") setZoomSaveFinal(getBoolFromString(value));
