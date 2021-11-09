@@ -1,17 +1,19 @@
 #include "cmm-fft.h"
 
+#include "../grid/cudagrid2d.h"
+
 /*******************************************************************
 *						  Fourier operations					   *
 *******************************************************************/
 
 // laplacian in fourier space - multiplication by kx**2 and ky**2
-__global__ void k_fft_lap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h)						// Laplace operator in Fourier space
+__global__ void k_fft_lap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 
-	if(iX >= NX || iY >= NY)
+	if(iX >= Grid.NX || iY >= Grid.NY)
 		return;
 
 	if(iX == 0 && iY == 0)
@@ -20,10 +22,10 @@ __global__ void k_fft_lap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_ou
 		return;
 	}
 
-	int In = iY*NX + iX;
+	int In = iY*Grid.NX + iX;
 
-	double kx = twoPI/(h*NX) * (iX - (iX>NX/2)*NX);						// twoPI/(h*NX) = 1
-	double ky = twoPI/(h*NY) * (iY - (iY>NY/2)*NY);
+	double kx = twoPI/(Grid.hx*Grid.NX) * (iX - (iX>Grid.NX/2)*Grid.NX);						// twoPI/(h*NX) = 1
+	double ky = twoPI/(Grid.hy*Grid.NY) * (iY - (iY>Grid.NY/2)*Grid.NY);
 	double k2 = kx*kx + ky*ky;
 
 	val_out[In].x = -val_in[In].x * k2;
@@ -32,13 +34,13 @@ __global__ void k_fft_lap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_ou
 
 
 // inverse laplacian in fourier space - division by kx**2 and ky**2
-__global__ void k_fft_iLap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h)						// Inverse laplace operator in Fourier space
+__global__ void k_fft_iLap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 
-	if(iX >= NX || iY >= NY)
+	if(iX >= Grid.NX || iY >= Grid.NY)
 		return;
 
 	if(iX == 0 && iY == 0)
@@ -47,10 +49,10 @@ __global__ void k_fft_iLap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_o
 		return;
 	}
 
-	int In = iY*NX + iX;
+	int In = iY*Grid.NX + iX;
 
-	double kx = twoPI/(h*NX) * (iX - (iX>NX/2)*NX);						// twoPI/(h*NX) = twoPI/(twoPI/NX*NX) = 1
-	double ky = twoPI/(h*NY) * (iY - (iY>NY/2)*NY);
+	double kx = twoPI/(Grid.hx*Grid.NX) * (iX - (iX>Grid.NX/2)*Grid.NX);						// twoPI/(h*NX) = twoPI/(twoPI/NX*NX) = 1
+	double ky = twoPI/(Grid.hy*Grid.NY) * (iY - (iY>Grid.NY/2)*Grid.NY);
 	double k2 = kx*kx + ky*ky;
 
 	val_out[In].x = -val_in[In].x / k2;
@@ -87,18 +89,18 @@ __global__ void k_fft_iLap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_o
 
 
 // x derivative in fourier space, multiplication by kx
-__global__ void k_fft_dx(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h)						// x derivative in Fourier space
+__global__ void k_fft_dx(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 
-	if(iX >= NX || iY >= NY)
+	if(iX >= Grid.NX || iY >= Grid.NY)
 		return;
 
-	int In = iY*NX + iX;
+	int In = iY*Grid.NX + iX;
 
-	double kx = twoPI/(h*NX) * (iX - (iX>NX/2)*NX);
+	double kx = twoPI/(Grid.hx*Grid.NX) * (iX - (iX>Grid.NX/2)*Grid.NX);
 
 	val_out[In].x = -val_in[In].y * kx;
 	val_out[In].y =  val_in[In].x * kx;
@@ -106,18 +108,18 @@ __global__ void k_fft_dx(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out
 
 
 // y derivative in fourier space, multiplication by ky
-__global__ void k_fft_dy(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h)						// y derivative in Fourier space
+__global__ void k_fft_dy(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 
-	if(iX >= NX || iY >= NY)
+	if(iX >= Grid.NX || iY >= Grid.NY)
 		return;
 
-	int In = iY*NX + iX;
+	int In = iY*Grid.NX + iX;
 
-	double ky = twoPI/(h*NY) * (iY - (iY>NY/2)*NY);
+	double ky = twoPI/(Grid.hy*Grid.NY) * (iY - (iY>Grid.NY/2)*Grid.NY);
 
 	val_out[In].x = -val_in[In].y * ky;
 	val_out[In].y =  val_in[In].x * ky;

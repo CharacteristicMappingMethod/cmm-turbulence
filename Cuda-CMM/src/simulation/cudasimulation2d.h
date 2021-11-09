@@ -12,8 +12,8 @@ double compare_map_with_identity(double *ChiX, double *ChiY, int NX, int NY, dou
 
 
 //map operations
-__global__ void kernel_init_diffeo(double *ChiX, double *ChiY, int NX, int NY, double h);
-__global__ void kernel_incompressibility_check(double *ChiX, double *ChiY, double *gradChi, int NXc, int NYc, double hc, int NXs, int NYs, double hs);	//to improve
+__global__ void kernel_init_diffeo(double *ChiX, double *ChiY, TCudaGrid2D Grid);
+__global__ void kernel_incompressibility_check(double *ChiX, double *ChiY, double *gradChi, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse);
 double incompressibility_check(double *ChiX, double *ChiY, double *gradChi, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse);
 
 __global__ void kernel_compute_total_grid_Chi(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *gradChi, int stack_length, int NXc, int NYc, double hc, int NXs, int NYs, double hs);
@@ -24,8 +24,8 @@ __global__ void kernel_compute_enstropy_increase_rate_factors(double *wHsc, doub
 void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, double *t, double *dt, int loop_ctr);
 
 void advect_using_stream_hermite_grid(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, double *t, double *dt, int loop_ctr);
-__global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, int NXc, int NYc, double hc, TCudaGrid2D Grid_psi, double t, double dt, int time_integration_num, int l_order);
-__global__ void k_map_update(double *Chi, double *Chi_new, int NXc, int NYc, double hc, int map_ord_1, int warp_direc);
+__global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double t, double dt, int time_integration_num, int l_order);
+__global__ void k_map_update(double *Chi, double *Chi_new, TCudaGrid2D Grid_map, int map_ord_1, int warp_direc);
 
 __global__ void kernel_advect_using_velocity_function(double *ChiX, double *ChiY, double *ChiDualX, double *ChiDualY, int NXc, int NYc, double hc, double t, double dt, double ep);
 __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi,
@@ -33,16 +33,17 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 
 
 //map applications
+
+__global__ void kernel_apply_map_and_sample_from_hermite(double *ChiX, double *ChiY, double *fs, double *H, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_vort, TCudaGrid2D Grid_fine, int molly_stencil);	//apply map and sample function from passed hermite
+__global__ void kernel_compare_map_stack_with_identity(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *error, int stack_length, int NXc, int NYc, double hc, int NXs, int NYs, double hs);
+__global__ void kernel_compare_vorticity_with_initial(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *error, int stack_length, TCudaGrid2D Grid_map, TCudaGrid2D Grid_fine, int simulation_num);
+
 void apply_map_stack_to_W_part_All(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double *ChiY,
 		double *W_real, double *Dev_Temp, double *bounds, double *W_initial, int simulation_num);
 
-__global__ void kernel_apply_map_and_sample_from_hermite(double *ChiX, double *ChiY, double *fs, double *H, int NXc, int NYc, double hc, int NXs, int NYs, double hs, int NXh, int NYh, double hh, int molly_stencil);	//apply map and sample function from passed hermite
-__global__ void kernel_compare_map_stack_with_identity(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *error, int stack_length, int NXc, int NYc, double hc, int NXs, int NYs, double hs);
-__global__ void kernel_compare_vorticity_with_initial(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *error, int stack_length, int NXc, int NYc, double hc, int NXs, int NYs, double hs, int simulation_num);
-
-__global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *ChiY, double *x_y, int NXc, int NYc, double hc, int NXs, int NYs, double hs, double xl, double xr, double yl, double yr);
-__global__ void kernel_apply_map_stack_to_W_part_2(double *ChiX_stack, double *ChiY_stack, double *x_y, int NXc, int NYc, double hc, int NXs, int NYs);
-__global__ void kernel_apply_map_stack_to_W_part_3(double *ws, double *x_y, int NXs, int NYs, double hs, double *W_initial, int simulation_num);
+__global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *ChiY, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid);
+__global__ void kernel_apply_map_stack_to_W_part_2(double *ChiX_stack, double *ChiY_stack, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid);
+__global__ void kernel_apply_map_stack_to_W_part_3(double *ws, double *x_y, TCudaGrid2D Grid, double *W_initial, int simulation_num);
 
 
 
@@ -53,7 +54,7 @@ __device__ double device_initial_W(double x, double y, int simulation_num);
 __device__ double device_initial_W_discret(double x, double y, double *W_initial, int NX, int NY);
 __device__ double initHomeoIso(double x, double y);
 
-__global__ void k_sample(double *ChiX, double *ChiY, double *ChiX_s, double *ChiY_s, int NXc, int NYc, double hc, int NXs, int NYs, double hs);
+__global__ void k_sample(double *ChiX, double *ChiY, double *ChiX_s, double *ChiY_s, TCudaGrid2D Grid_map, TCudaGrid2D Grid);
 
 
 #endif

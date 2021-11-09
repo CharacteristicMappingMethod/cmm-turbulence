@@ -21,7 +21,7 @@ void Compute_Palinstrophy(TCudaGrid2D Grid, double *Pal, double *W_real, cufftDo
 	k_real_to_comp<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(W_real, Dev_Temp_C1, Grid.NX, Grid.NY);
 	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_FORWARD);
 	k_normalize<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, Grid.NX, Grid.NY);
-	k_fft_dx<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid.NX, Grid.NY, Grid.h);
+	k_fft_dx<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid);
 	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_INVERSE);
 
 	comp_to_real(Dev_Temp_C2, (cufftDoubleReal*)Dev_Temp_C1, Grid.N);
@@ -34,7 +34,7 @@ void Compute_Palinstrophy(TCudaGrid2D Grid, double *Pal, double *W_real, cufftDo
 	k_real_to_comp<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(W_real, Dev_Temp_C1, Grid.NX, Grid.NY);
 	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_FORWARD);
 	k_normalize<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, Grid.NX, Grid.NY);
-	k_fft_dy<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid.NX, Grid.NY, Grid.h);
+	k_fft_dy<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid);
 	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_INVERSE);
 
 	comp_to_real(Dev_Temp_C2, (cufftDoubleReal*)Dev_Temp_C1, Grid.N);
@@ -167,7 +167,7 @@ void Laplacian_vort(TCudaGrid2D Grid_fine, double *Dev_W_fine, cufftDoubleComple
     cufftExecZ2Z(cufftPlan_fine, Dev_Complex_fine, Dev_Hat_fine, CUFFT_FORWARD);
     k_normalize<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_Complex_fine, Grid_fine.NX, Grid_fine.NY);
 
-    k_fft_lap<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_Hat_fine, Dev_lap_fine_hat, Grid_fine.NX, Grid_fine.NY, Grid_fine.h);
+    k_fft_lap<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_Hat_fine, Dev_lap_fine_hat, Grid_fine);
     cufftExecZ2Z(cufftPlan_fine, Dev_lap_fine_hat, Dev_lap_fine_complex, CUFFT_INVERSE);
     comp_to_real(Dev_lap_fine_complex, Dev_lap_fine_real, Grid_fine.N);
 

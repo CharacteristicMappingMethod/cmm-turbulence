@@ -4,16 +4,17 @@
 
 #include <cufft.h>
 #include <cufftXt.h>
+#include "../grid/cudagrid2d.h"
 
 // it's not bad to define them several times, right?
 #define PI 		3.141592653589793238462643383279502884197169399375105820974944592307816406286208998628034825342117067
 #define twoPI 	6.283185307179586476925286766559005768394338798750211641949889184615632812572417997256069650684234136
 
 // fourier functions
-__global__ void k_fft_lap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h);
-__global__ void k_fft_iLap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h);
-__global__ void k_fft_dx(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h);
-__global__ void k_fft_dy(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, int NX, int NY, double h);
+__global__ void k_fft_lap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
+__global__ void k_fft_iLap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
+__global__ void k_fft_dx(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
+__global__ void k_fft_dy(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
 
 //	__device__ cufftComplex CB_Input_iLap(void *dataIn, size_t offset, void *callerInfo, void *sharedPtr);
 

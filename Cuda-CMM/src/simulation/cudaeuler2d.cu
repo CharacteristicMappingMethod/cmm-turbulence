@@ -420,7 +420,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	
 	double *Dev_Temp_3;
 	long int size_max_temp_3 = 0;
-	if (SettingsMain.getSampleOnGrid()) size_max_temp_3 = std::max(size_max_temp_3, 4*Grid_coarse.sizeNReal);
+	if (SettingsMain.getSampleOnGrid()) size_max_temp_3 = std::max(size_max_temp_3, 4*Grid_sample.sizeNReal);
 	if (SettingsMain.getZoom() && SettingsMain.getZoomSavePsi()) size_max_temp_3 = std::max(size_max_temp_3, 4*Grid_zoom.sizeNReal);
 	// define third temporary variable as safe buffer to be used for sample and zoom
 	if (size_max_temp_3 != 0) {
@@ -463,7 +463,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	*******************************************************************/
 		
 	//initialization of flow map as normal grid
-	kernel_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+	kernel_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
 	
 	//setting initial conditions for vorticity by translating with initial grid
 	translate_initial_condition_through_map_stack(Grid_fine, Map_Stack, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real,
@@ -509,7 +509,9 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 
 		// velocity initialization for inertial particles
 		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p++){
-			Particle_advect_inertia_init<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos + 2*Nb_particles*index_tau_p, Dev_particles_vel + 2*Nb_particles*index_tau_p, Dev_Psi_real, Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h);
+			Particle_advect_inertia_init<<<particle_block, particle_thread>>>(Nb_particles, dt,
+					Dev_particles_pos + 2*Nb_particles*index_tau_p, Dev_particles_vel + 2*Nb_particles*index_tau_p,
+					Dev_Psi_real, Grid_psi);
 		}
 
 		if (SettingsMain.getParticlesSaveInitial()) {
@@ -615,6 +617,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		*							 Initialize variables
 		*******************************************************************/
 		incomp_error[loop_ctr] = incompressibility_check(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, Grid_fine, Grid_coarse);
+//		incomp_error[loop_ctr] = incompressibility_check(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, Grid_coarse, Grid_coarse);
 
 		//resetting map and adding to stack
 		if( incomp_error[loop_ctr] > SettingsMain.getIncompThreshold() && !SettingsMain.getSkipRemapping()) {
@@ -647,7 +650,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			Map_Stack.copy_map_to_host(Dev_ChiX, Dev_ChiY);
 			
 			//resetting map
-			kernel_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h);
+			kernel_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
 		}
 		// save map invetigative details
 		map_gap[loop_ctr] = loop_ctr - old_ctr;
@@ -678,12 +681,12 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		// Particles advection after velocity update to profit from nice avaiable schemes
 	    if (SettingsMain.getParticles()) {
 			Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt, Dev_particles_pos, Dev_Psi_real,
-					Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, SettingsMain.getParticlesTimeIntegrationNum());
+					Grid_psi, SettingsMain.getParticlesTimeIntegrationNum());
 			// loop for all tau p
 			for(int i_tau_p = 1; i_tau_p < SettingsMain.getParticlesTauNum(); i_tau_p+=1){
 				Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt,
 						Dev_particles_pos + 2*Nb_particles*i_tau_p, Dev_particles_vel + 2*Nb_particles*i_tau_p, Dev_Psi_real,
-						Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, SettingsMain.particles_tau[i_tau_p], SettingsMain.getParticlesTimeIntegrationNum());
+						Grid_psi, SettingsMain.particles_tau[i_tau_p], SettingsMain.getParticlesTimeIntegrationNum());
 			}
 			// copy fine particle positions
 			if (SettingsMain.getParticlesSnapshotsPerSec() > 0 && SettingsMain.getSaveFineParticles()) {
@@ -808,7 +811,8 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 
 		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p+=1){
 			Rescale<<<particle_block, particle_thread>>>(Nb_particles, LX, &Dev_particles_pos[2*Nb_particles*index_tau_p]);
-			Particle_advect_inertia_init<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h);
+			Particle_advect_inertia_init<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p],
+					&Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Grid_psi);
 		}
 		// save inital position to check if they are qual
 		writeParticles(SettingsMain, "C0", Host_particles_pos, Dev_particles_pos);
@@ -824,12 +828,12 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		for (int loop_ctr_p = 0; loop_ctr_p < SettingsMain.getParticlesSteps(); ++loop_ctr_p) {
 			// particles advection
 			Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt_p, Dev_particles_pos, Dev_Psi_real,
-					Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, SettingsMain.getParticlesTimeIntegrationNum());
+					Grid_psi, SettingsMain.getParticlesTimeIntegrationNum());
 			// loop for all tau p
 			for(int i_tau_p = 1; i_tau_p < SettingsMain.getParticlesTauNum(); i_tau_p+=1){
 				Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt_p,
 						Dev_particles_pos + 2*Nb_particles*i_tau_p, Dev_particles_vel + 2*Nb_particles*i_tau_p, Dev_Psi_real,
-						Grid_psi.N, Grid_psi.NX, Grid_psi.NY, Grid_psi.h, SettingsMain.particles_tau[i_tau_p], SettingsMain.getParticlesTimeIntegrationNum());
+						Grid_psi, SettingsMain.particles_tau[i_tau_p], SettingsMain.getParticlesTimeIntegrationNum());
 			}
 		}
 
@@ -1033,7 +1037,7 @@ void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCu
 {
 
 	// apply map to w and sample using mollifier, do it on a special grid for vorticity and apply mollification if wanted
-	kernel_apply_map_and_sample_from_hermite<<<Grid_vort.blocksPerGrid, Grid_vort.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C2, Dev_W_H_fine_real, Grid_coarse.NX, Grid_coarse.NY, Grid_coarse.h, Grid_vort.NX, Grid_vort.NY, Grid_vort.h, Grid_fine.NX, Grid_fine.NY, Grid_fine.h, molly_stencil);
+	kernel_apply_map_and_sample_from_hermite<<<Grid_vort.blocksPerGrid, Grid_vort.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C2, Dev_W_H_fine_real, Grid_coarse, Grid_vort, Grid_fine, molly_stencil);
 
 	// forward fft
 	k_real_to_comp<<<Grid_vort.blocksPerGrid, Grid_vort.threadsPerBlock>>>((cufftDoubleReal*)Dev_Temp_C2, Dev_Temp_C1, Grid_vort.NX, Grid_vort.NY);
@@ -1066,7 +1070,7 @@ void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCu
 	k_fft_cut_off_scale<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>(Dev_Temp_C1, Grid_psi.NX, freq_cut_psi);
 
 	// Forming Psi hermite now on psi grid
-	k_fft_iLap<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C2, Grid_psi.NX, Grid_psi.NY, Grid_psi.h);												// Inverse laplacian in Fourier space
+	k_fft_iLap<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C2, Grid_psi);												// Inverse laplacian in Fourier space
 	fourier_hermite(Grid_psi, Dev_Temp_C2, Psi_real, Dev_Temp_C1, cufftPlan_psi);
 }
 // debugging lines, could be needed here to check psi
@@ -1082,7 +1086,7 @@ void psi_upsampling(TCudaGrid2D Grid, double *Dev_W, cufftDoubleComplex *Dev_Tem
 	k_normalize<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, Grid.NX, Grid.NY);
 
 	// Forming Psi hermite
-	k_fft_iLap<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid.NX, Grid.NY, Grid.h);													// Inverse laplacian in Fourier space
+	k_fft_iLap<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid);													// Inverse laplacian in Fourier space
 	fourier_hermite(Grid, Dev_Temp_C1, Dev_Psi, Dev_Temp_C2, cufftPlan);
 }
 
@@ -1092,12 +1096,12 @@ void psi_upsampling(TCudaGrid2D Grid, double *Dev_W, cufftDoubleComplex *Dev_Tem
 void fourier_hermite(TCudaGrid2D Grid, cufftDoubleComplex *Dev_Temp_C1, double *Dev_Output, cufftDoubleComplex *Dev_Temp_C2, cufftHandle cufftPlan) {
 	// dy and dxdy derivates are stored in later parts of output array, we can therefore use the first half as a trash variable
 	// start with dy derivative and store in position 3/4
-	k_fft_dy<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C2, Grid.NX, Grid.NY, Grid.h);													// y-derivative of the vorticity in Fourier space
+	k_fft_dy<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C2, Grid);													// y-derivative of the vorticity in Fourier space
 	cufftExecZ2Z(cufftPlan, Dev_Temp_C2, (cufftDoubleComplex*)Dev_Output, CUFFT_INVERSE);
 	comp_to_real((cufftDoubleComplex*)Dev_Output, Dev_Output + 2*Grid.N, Grid.N);
 
 	// reuse values from Trash_C2 and create dxdy, store in position 4/4
-	k_fft_dx<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, (cufftDoubleComplex*)Dev_Output, Grid.NX, Grid.NY, Grid.h);
+	k_fft_dx<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, (cufftDoubleComplex*)Dev_Output, Grid);
 	cufftExecZ2Z(cufftPlan, (cufftDoubleComplex*)Dev_Output, Dev_Temp_C2, CUFFT_INVERSE);
 	comp_to_real(Dev_Temp_C2, Dev_Output + 3*Grid.N, Grid.N);
 
@@ -1106,7 +1110,7 @@ void fourier_hermite(TCudaGrid2D Grid, cufftDoubleComplex *Dev_Temp_C1, double *
 	comp_to_real(Dev_Temp_C2, Dev_Output, Grid.N);
 
 	// now compute dx derivative and store it
-	k_fft_dx<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C2, Grid.NX, Grid.NY, Grid.h);													// x-derivative of the vorticity in Fourier space
+	k_fft_dx<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C2, Grid);													// x-derivative of the vorticity in Fourier space
 	cufftExecZ2Z(cufftPlan, Dev_Temp_C2, Dev_Temp_C1, CUFFT_INVERSE);
 	comp_to_real(Dev_Temp_C1, Dev_Output + Grid.N, Grid.N);
 }
@@ -1161,7 +1165,7 @@ void sample_compute_and_write(MapStack Map_Stack, TCudaGrid2D Grid_sample, doubl
 	Compute_Energy(&Mesure_sample[3*count_mesure], Dev_sample, Grid_sample);
 
 	// map
-	k_sample<<<Grid_sample.blocksPerGrid,Grid_sample.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Dev_sample, Dev_sample + Grid_sample.N, Map_Stack.Grid->NX, Map_Stack.Grid->NY, Map_Stack.Grid->h, Grid_sample.NX, Grid_sample.NY, Grid_sample.h);
+	k_sample<<<Grid_sample.blocksPerGrid,Grid_sample.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Dev_sample, Dev_sample + Grid_sample.N, *Map_Stack.Grid, Grid_sample);
 	writeTimeVariable(SettingsMain, "Map_ChiX_"+to_str(Grid_sample.NX), i_num, Host_sample, Dev_sample, Grid_sample.sizeNReal, Grid_sample.N);
 	writeTimeVariable(SettingsMain, "Map_ChiY_"+to_str(Grid_sample.NX), i_num, Host_sample, Dev_sample + Grid_sample.N, Grid_sample.sizeNReal, Grid_sample.N);
 }

@@ -1,6 +1,8 @@
 #ifndef __CUDA_HERMITE_2D_H__
 #define __CUDA_HERMITE_2D_H__
 
+#include "../grid/cudagrid2d.h"
+
 
 //Hermite Basis functions//
 // cubic functions with their first derivatives, functions 1 and 2
@@ -36,16 +38,16 @@
 
 #ifdef __CUDACC__
 
-	__device__ double device_hermite_interpolate_2D   (double *H, double x, double y, int NX, int NY, double h);
-	__device__ double device_hermite_interpolate_dx_2D(double *H, double x, double y, int NX, int NY, double h);
-	__device__ double device_hermite_interpolate_dy_2D(double *H, double x, double y, int NX, int NY, double h);
+	__device__ double device_hermite_interpolate_2D   (double *H, double x, double y, TCudaGrid2D Grid);
+	__device__ double device_hermite_interpolate_dx_2D(double *H, double x, double y, TCudaGrid2D Grid);
+	__device__ double device_hermite_interpolate_dy_2D(double *H, double x, double y, TCudaGrid2D Grid);
 
-	__device__ void  device_hermite_interpolate_dx_dy_2D(double *H1, double x, double y, double *fx, double *fy, int NX, int NY, double h);
+	__device__ void  device_hermite_interpolate_dx_dy_2D(double *H1, double x, double y, double *fx, double *fy, TCudaGrid2D Grid);
 
-	__device__ void device_hermite_interpolate_grad_2D(double *H, double *x, double *u, int NX, int NY, double h, int n_l);
+	__device__ void device_hermite_interpolate_grad_2D(double *H, double *x, double *u, TCudaGrid2D Grid, int n_l);
 
-	__device__ void device_diffeo_interpolate_2D(double *Hx, double *Hy, double x, double y, double *x2,  double *y2, int NX, int NY, double h);
-	__device__ double device_diffeo_grad_2D(double *Hx, double *Hy, double x, double y, int NX, int NY, double h);
+	__device__ void device_diffeo_interpolate_2D(double *Hx, double *Hy, double x, double y, double *x2,  double *y2, TCudaGrid2D Grid);
+	__device__ double device_diffeo_grad_2D(double *Hx, double *Hy, double x, double y, TCudaGrid2D Grid);
 
 #endif
 
