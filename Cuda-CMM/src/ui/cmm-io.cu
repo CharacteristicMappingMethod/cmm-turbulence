@@ -5,7 +5,7 @@
 *				     Creation of storage files					   *
 *******************************************************************/
 
-void create_directory_structure(SettingsCMM SettingsMain, double dt, int save_buffer_count, int iterMax)
+void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax)
 {
 	string folder_data = SettingsMain.getWorkspace() + "data";
 	struct stat st = {0};
@@ -58,7 +58,6 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int save_bu
 		file<<"N_vort(resolution vort for psi grid) \t: "<<SettingsMain.getGridVort()<<endl;
 		file<<"time step dt \t\t: "<<dt<<endl;
 		file<<"Final time \t\t: "<<SettingsMain.getFinalTime()<<endl;
-		file<<"save at \t\t: "<<save_buffer_count<<endl;
 		file<<"iter max \t\t: "<<iterMax<<endl;
 		file<<"Incomppressibility Threshold \t: "<<SettingsMain.getIncompThreshold()<<endl;
 		file<<"Map advection epsilon \t: "<<SettingsMain.getMapEpsilon()<<endl;
@@ -162,7 +161,7 @@ void readAllRealFromBinaryFile(int Len, double *var, SettingsCMM SettingsMain, s
 
 		if(!file)
 		{
-			cout<<"Error saving file. Unable to open : "<<fileName<<endl;
+			cout<<"Error reading file. Unable to open : "<<fileName<<endl;
 		}
 
 	for (int l=0; l<Len; l++)
@@ -247,13 +246,11 @@ void writeParticles(SettingsCMM SettingsMain, string i_num, double *Host_particl
         writeAllRealToBinaryFile(2*SettingsMain.getParticlesNum(), Host_particles_pos + i * 2*SettingsMain.getParticlesNum(), SettingsMain, "/Particle_data/Tau=" + to_str(SettingsMain.particles_tau[i]) + "/Particles_pos_" + i_num);
 }
 
-void writeFineParticles(SettingsCMM SettingsMain, string i_num, double *Host_particles_fine_pos, double *Dev_particles_fine_pos, int fine_particle_steps) {
-	cudaMemcpy(Host_particles_fine_pos, Dev_particles_fine_pos, 2*fine_particle_steps*sizeof(double), cudaMemcpyDeviceToHost);
-	writeAllRealToBinaryFile(2*fine_particle_steps, Host_particles_fine_pos, SettingsMain, "/Particle_data/Fluid_fine/Particles_pos_" + i_num);
+void writeFineParticles(SettingsCMM SettingsMain, string i_num, double *Host_particles_fine_pos, int fine_particle_save_num) {
+	writeAllRealToBinaryFile(2*fine_particle_save_num, Host_particles_fine_pos, SettingsMain, "/Particle_data/Fluid_fine/Particles_pos_" + i_num);
 
     for(int i = 1; i < SettingsMain.getParticlesTauNum(); i+=1) {
-		cudaMemcpy(Host_particles_fine_pos, Dev_particles_fine_pos + 2*i*fine_particle_steps, 2*fine_particle_steps*sizeof(double), cudaMemcpyDeviceToHost);
-		writeAllRealToBinaryFile(2*fine_particle_steps, Host_particles_fine_pos, SettingsMain, "/Particle_data/Tau="+to_str(SettingsMain.particles_tau[i])+"_fine/Particles_pos_" + i_num);
+		writeAllRealToBinaryFile(2*fine_particle_save_num, Host_particles_fine_pos, SettingsMain, "/Particle_data/Tau="+to_str(SettingsMain.particles_tau[i])+"_fine/Particles_pos_" + i_num);
     }
 }
 
@@ -300,7 +297,7 @@ Logger::Logger(SettingsCMM SettingsMain)
 {
 	fileName = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/log.txt";
 	file.open(fileName.c_str(), ios::out);
-//	file.open(fileName.c_str(), ios::out || ios::app);  // append to file for continuing simulation
+//	file.open(fileName.c_str(), ios::out | ios::app);  // append to file for continuing simulation
 
 	if(!file)
 	{
@@ -309,7 +306,7 @@ Logger::Logger(SettingsCMM SettingsMain)
 	}
 	else
 	{
-		file<<SettingsMain.getFileName()<<endl;
+		file<<SettingsMain.getFileName()<<endl;  // if file existed, this will basically overwrite it
 		file.close();
 	}
 }

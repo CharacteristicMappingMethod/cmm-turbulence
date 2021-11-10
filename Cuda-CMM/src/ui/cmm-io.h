@@ -31,7 +31,7 @@
 using namespace std;
 
 // general structure
-void create_directory_structure(SettingsCMM SettingsMain, double dt, int save_buffer_count, int iterMax);
+void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax);
 void create_particle_directory_structure(SettingsCMM SettingsMain);
 
 // fundamental save functions
@@ -42,7 +42,7 @@ void readAllRealFromBinaryFile(int Len, double *var, SettingsCMM SettingsMain, s
 void writeTimeStep(SettingsCMM SettingsMain, string i_num, double *Host_save, double *Dev_W_coarse, double *Dev_W_fine, double *Dev_Psi_real, double *Dev_ChiX, double *Dev_ChiY, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi);
 void writeTimeVariable(SettingsCMM SettingsMain, string data_name, string i_num, double *Host_save, double *Dev_save, long int size_N, long int N);
 void writeParticles(SettingsCMM SettingsMain, string i_num, double *Host_particles_pos, double *Dev_particles_pos);
-void writeFineParticles(SettingsCMM SettingsMain, string i_num, double *Host_particles_fine_pos, double *Dev_particles_fine_pos, int fine_particle_steps);
+void writeFineParticles(SettingsCMM SettingsMain, string i_num, double *Host_particles_fine_pos, int fine_particle_save_num);
 
 void writeMapStack(SettingsCMM SettingsMain, MapStack Map_Stack);
 

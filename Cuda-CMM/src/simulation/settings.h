@@ -20,8 +20,8 @@ private:
 	string initial_condition; int initial_condition_num;
 	int verbose;
 	// time stepping properties
-	double final_time, factor_dt_by_grid;
-	int steps_per_sec, snapshots_per_sec;
+	double final_time, factor_dt_by_grid, snapshots_per_sec;
+	int steps_per_sec;
 	bool set_dt_by_steps;
 	bool save_initial, save_final;
 	// minor properties, can be tweaked but mainly remain constant
@@ -39,19 +39,20 @@ private:
 	bool skip_remapping;
 	// sample grid
 	bool sample_on_grid;
-	int grid_sample, sample_snapshots_per_sec;
+	int grid_sample;
+	double sample_snapshots_per_sec;
 	bool sample_save_initial, sample_save_final, conv_init_final;
 	// zoom
 	bool zoom, zoom_save_psi, zoom_save_particles;
-	double zoom_center_x, zoom_center_y, zoom_width_x, zoom_width_y, zoom_repetitions_factor;
-	int grid_zoom, zoom_repetitions, zoom_snapshots_per_sec;
+	double zoom_center_x, zoom_center_y, zoom_width_x, zoom_width_y, zoom_repetitions_factor, zoom_snapshots_per_sec;
+	int grid_zoom, zoom_repetitions;
 	bool zoom_save_initial, zoom_save_final;
 	// particles
 	bool particles, save_fine_particles;
 	int particles_tau_num;
 	bool particles_save_initial, particles_save_final;
 	int particles_num, particles_fine_num;
-	int particles_snapshots_per_sec;
+	double particles_snapshots_per_sec;
 	string particles_time_integration; int particles_time_integration_num;
 
 	int particles_steps;
@@ -106,8 +107,8 @@ public:
 	void setFactorDtByGrid(double factorDtByGrid) { factor_dt_by_grid = factorDtByGrid; }
 	int getStepsPerSec() const { return steps_per_sec; }
 	void setStepsPerSec(int stepsPerSec) { steps_per_sec = stepsPerSec; }
-	int getSnapshotsPerSec() const { return snapshots_per_sec; }
-	void setSnapshotsPerSec(int snapshotsPerSec) { snapshots_per_sec = snapshotsPerSec; }
+	double getSnapshotsPerSec() const { return snapshots_per_sec; }
+	void setSnapshotsPerSec(double snapshotsPerSec) { snapshots_per_sec = snapshotsPerSec; }
 	bool getSetDtBySteps() const { return set_dt_by_steps; }
 	void setSetDtBySteps(bool setDtBySteps) { set_dt_by_steps = setDtBySteps; }
 
@@ -204,8 +205,8 @@ public:
 	void setSampleOnGrid(bool sampleOnGrid) { sample_on_grid = sampleOnGrid; }
 	int getGridSample() const { return grid_sample; }
 	void setGridSample(int gridSample) { grid_sample = gridSample; }
-	int getSampleSnapshotsPerSec() const { return sample_snapshots_per_sec; }
-	void setSampleSnapshotsPerSec(int sampleSnapshotsPerSec) { sample_snapshots_per_sec = sampleSnapshotsPerSec; }
+	double getSampleSnapshotsPerSec() const { return sample_snapshots_per_sec; }
+	void setSampleSnapshotsPerSec(double sampleSnapshotsPerSec) { sample_snapshots_per_sec = sampleSnapshotsPerSec; }
 
 	bool getSampleSaveInitial() const { return sample_save_initial; }
 	void setSampleSaveInitial(bool sampleSaveInitial) { sample_save_initial = sampleSaveInitial; }
@@ -233,13 +234,13 @@ public:
 	double getZoomRepetitionsFactor() const { return zoom_repetitions_factor; }
 	void setZoomRepetitionsFactor(double zoomRepetitionsFactor) { zoom_repetitions_factor = zoomRepetitionsFactor; }
 
-	bool getZoomSavePsi() const { return zoom_save_psi; }
-	void setZoomSavePsi(bool zoomSavePsi) { zoom_save_psi = zoomSavePsi; }
+//	bool getZoomSavePsi() const { return zoom_save_psi; }
+//	void setZoomSavePsi(bool zoomSavePsi) { zoom_save_psi = zoomSavePsi; }
 	bool getZoomSaveParticles() const { return zoom_save_particles; }
 	void setZoomSaveParticles(bool zoomSaveParticles) { zoom_save_particles = zoomSaveParticles; }
 
-	int getZoomSnapshotsPerSec() const { return zoom_snapshots_per_sec; }
-	void setZoomSnapshotsPerSec(int zoomSnapshotsPerSec) { zoom_snapshots_per_sec = zoomSnapshotsPerSec; }
+	double getZoomSnapshotsPerSec() const { return zoom_snapshots_per_sec; }
+	void setZoomSnapshotsPerSec(double zoomSnapshotsPerSec) { zoom_snapshots_per_sec = zoomSnapshotsPerSec; }
 
 	bool getZoomSaveInitial() const { return zoom_save_initial; }
 	void setZoomSaveInitial(bool zoomSaveInitial) { zoom_save_initial = zoomSaveInitial; }
@@ -256,8 +257,8 @@ public:
 	int getParticlesTauNum() const { return particles_tau_num; }
 	void setParticlesTauNum(int particlesTauNum) { particles_tau_num = particlesTauNum; }
 
-	int getParticlesSnapshotsPerSec() const { return particles_snapshots_per_sec; }
-	void setParticlesSnapshotsPerSec(int particlesSnapshotsPerSec) { particles_snapshots_per_sec = particlesSnapshotsPerSec; }
+	double getParticlesSnapshotsPerSec() const { return particles_snapshots_per_sec; }
+	void setParticlesSnapshotsPerSec(double particlesSnapshotsPerSec) { particles_snapshots_per_sec = particlesSnapshotsPerSec; }
 
 	bool getParticlesSaveInitial() const { return particles_save_initial; }
 	void setParticlesSaveInitial(bool particlesSaveInitial) { particles_save_initial = particlesSaveInitial; }
@@ -278,8 +279,6 @@ public:
 		else if (pTimeIntegration == "Heun") { particles_time_integration_num = 20; if (getLagrangeOrder() < 2) lagrange_order = 2; }
 		else if (pTimeIntegration == "RK3") { particles_time_integration_num = 30; if (getLagrangeOrder() < 3) lagrange_order = 3; }
 		else if (pTimeIntegration == "RK4") { particles_time_integration_num = 40; if (getLagrangeOrder() < 4) lagrange_order = 4; }
-		else if (pTimeIntegration == "NicolasMid") { particles_time_integration_num = 25; if (getLagrangeOrder() < 2) lagrange_order = 2; }
-		else if (pTimeIntegration == "NicolasRK3") { particles_time_integration_num = 35; if (getLagrangeOrder() < 3) lagrange_order = 3; }
 		else if (pTimeIntegration == "RK3Mod") { particles_time_integration_num = 31; if (getLagrangeOrder() < 3) lagrange_order = 3; }
 		else if (pTimeIntegration == "RK4Mod") { particles_time_integration_num = 41; if (getLagrangeOrder() < 4) lagrange_order = 4; }
 		else particles_time_integration_num = -1;

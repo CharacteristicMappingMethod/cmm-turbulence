@@ -42,7 +42,7 @@ void SettingsCMM::setPresets() {
 	int steps_per_sec = 32;  // how many steps do we want per seconds?
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
 	// dt will be set in cudaeuler, so that all changes can be applied there
-	int snapshots_per_sec = -1;  // how many times do we want to save data per sec, set <= 0 to disable
+	double snapshots_per_sec = -1;  // how many times do we want to save data per sec, set <= 0 to disable
 	bool save_initial = true;  // consume less data and make it possible to disable saving the initial data
 	bool save_final = true;  // consume less data and make it possible to disable saving the final data
 	bool conv_init_final = true;  // compute initial and final convergence details?
@@ -52,7 +52,7 @@ void SettingsCMM::setPresets() {
 	double map_epsilon = 1e-3;  // distance used for foot points for GALS map advection
 //	double map_epsilon = 6.283185307179/512.0;  // distance used for foot points for GALS map advection
 	// skip remapping, usefull for convergence tests
-	bool skip_remapping = false;
+	bool skip_remapping = true;
 
 	// set memory properties
 	int mem_RAM_CPU_remaps = 4096;  // mem_RAM_CPU_remaps in MB on the CPU
@@ -89,7 +89,7 @@ void SettingsCMM::setPresets() {
 	// possibility to sample values on a specified grid
 	bool sample_on_grid = false;
 	int grid_sample = 1024;
-	int sample_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save sample data per sec, set <= 0 to disable
+	double sample_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save sample data per sec, set <= 0 to disable
 	bool sample_save_initial = true;  // consume less data and make it possible to disable saving the initial data
 	bool sample_save_final = true;  // consume less data and make it possible to disable saving the final data
 
@@ -106,10 +106,10 @@ void SettingsCMM::setPresets() {
 	double zoom_width_y = twoPI * 1e-1;  // twoPI taken as LY, width of the zoom window
 	int zoom_repetitions = 4;  // how many repetitive zooms with decreasing windows?
 	double zoom_repetitions_factor = 0.5;  // how much do we want to decrease the window each time
-	bool zoom_save_psi = true;  // stream function is not a zoom property, but its interesting for fine scale particle behavior
+//	bool zoom_save_psi = true;  // stream function is not a zoom property, but its interesting for fine scale particle behavior
 	bool zoom_save_particles = true;  // if particles are enabled, safe particles in the range too
 	// saving settings
-	int zoom_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save zoom per sec, set <= 0 to disable
+	double zoom_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save zoom per sec, set <= 0 to disable
 	bool zoom_save_initial = true;  // consume less data and make it possible to disable saving the initial zoom
 	bool zoom_save_final = true;  // consume less data and make it possible to disable saving the final zoom
 
@@ -127,7 +127,7 @@ void SettingsCMM::setPresets() {
 	// timestep restriction : tau is coupled to dt due to stability reasons
 	string particles_tau_s = """0, 0.1, 1""";  // all those "s are needed, to have one pair of "s in the string for the conversion
 
-	int particles_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save particles per sec, set <= 0 to disable
+	double particles_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save particles per sec, set <= 0 to disable
 	bool particles_save_initial = false;  // consume less data and make it possible to disable saving the initial data
 	bool particles_save_final = false;  // consume less data and make it possible to disable saving the final data
 	int particles_steps = -1;  // hackery for particle convergence
@@ -140,7 +140,6 @@ void SettingsCMM::setPresets() {
 	 * Second order: "AB2", "RK2"
 	 * Third order: "RK3", "RK3Mod"
 	 * Fourth order: "RK4", "RK4Mod"
-	 * Nicolas: "NicolasMid", "NicolasRK3"
 	 */
 	string particles_time_integration = "RK3Mod";
 	if (!particles) particles_time_integration = "EulerExp";  // check to disable for lagrange settings
@@ -187,7 +186,7 @@ void SettingsCMM::setPresets() {
 	setZoomWidthY(zoom_width_y);
 	setZoomRepetitions(zoom_repetitions);
 	setZoomRepetitionsFactor(zoom_repetitions_factor);
-	setZoomSavePsi(zoom_save_psi);
+//	setZoomSavePsi(zoom_save_psi);
 
 	setZoomSaveParticles(zoom_save_particles);
 	setZoomSnapshotsPerSec(zoom_snapshots_per_sec);
@@ -244,7 +243,7 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "save_initial") setSaveInitial(getBoolFromString(value));
 			else if (command == "save_final") setSaveFinal(getBoolFromString(value));
 			else if (command == "conv_init_final") setConvInitFinal(getBoolFromString(value));
-			else if (command == "snapshots_per_sec") setSnapshotsPerSec(stoi(value));
+			else if (command == "snapshots_per_sec") setSnapshotsPerSec(stod(value));
 
 			else if (command == "mem_RAM_CPU_remaps") setMemRamCpuRemaps(stoi(value));
 			else if (command == "save_map_stack") setSaveMapStack(getBoolFromString(value));
@@ -266,7 +265,7 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "grid_sample") setGridSample(stoi(value));
 			else if (command == "sample_save_initial") setSampleSaveInitial(getBoolFromString(value));
 			else if (command == "sample_save_final") setSampleSaveFinal(getBoolFromString(value));
-			else if (command == "sample_snapshots_per_sec") setSampleSnapshotsPerSec(stoi(value));
+			else if (command == "sample_snapshots_per_sec") setSampleSnapshotsPerSec(stod(value));
 
 			else if (command == "zoom") setZoom(getBoolFromString(value));
 			else if (command == "grid_zoom") setGridZoom(stoi(value));
@@ -276,17 +275,17 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "zoom_width_y") setZoomWidthY(stod(value));
 			else if (command == "zoom_repetitions") setZoomRepetitions(stoi(value));
 			else if (command == "zoom_repetitions_factor") setZoomRepetitionsFactor(stod(value));
-			else if (command == "zoom_save_psi") setZoomSavePsi(getBoolFromString(value));
+//			else if (command == "zoom_save_psi") setZoomSavePsi(getBoolFromString(value));
 			else if (command == "zoom_save_particles") setZoomSaveParticles(getBoolFromString(value));
 			else if (command == "zoom_save_initial") setZoomSaveInitial(getBoolFromString(value));
 			else if (command == "zoom_save_final") setZoomSaveFinal(getBoolFromString(value));
-			else if (command == "zoom_snapshots_per_sec") setZoomSnapshotsPerSec(stoi(value));
+			else if (command == "zoom_snapshots_per_sec") setZoomSnapshotsPerSec(stod(value));
 
 			else if (command == "particles") setParticles(getBoolFromString(value));
 			else if (command == "particles_num") setParticlesNum(stoi(value));
 			else if (command == "particles_tau_num") setParticlesTauNum(stoi(value));
 			else if (command == "particles_tau") string_to_double_array(value, particles_tau);
-			else if (command == "particles_snapshots_per_sec") setParticlesSnapshotsPerSec(stoi(value));
+			else if (command == "particles_snapshots_per_sec") setParticlesSnapshotsPerSec(stod(value));
 			else if (command == "particles_save_initial") setParticlesSaveInitial(getBoolFromString(value));
 			else if (command == "particles_save_final") setParticlesSaveFinal(getBoolFromString(value));
 			else if (command == "save_fine_particles") setSaveFineParticles(getBoolFromString(value));
