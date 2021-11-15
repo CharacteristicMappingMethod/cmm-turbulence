@@ -4,6 +4,7 @@
 TCudaGrid2D::TCudaGrid2D (int NX, int NY, double *bounds)
 {
 	this->NX = NX;
+	this->NX_fft = (int)(NX/2.0+1);
 	this->NY = NY;
 
 	this->h = (bounds[1] - bounds[0]) / (float)NX;  // for quadratic problems, is used everywhere so changing it is tedious
@@ -16,8 +17,11 @@ TCudaGrid2D::TCudaGrid2D (int NX, int NY, double *bounds)
 	}
 
 	this->N = NX*NY;
+	this->Nfft = NX_fft*NY;
+
 	this->sizeNReal = sizeof(double)*N;
 	this->sizeNComplex = sizeof(cufftDoubleComplex)*N;
+	this->sizeNfft = sizeof(cufftDoubleComplex)*Nfft;  // fft D2Z and Z2D size
 
 	//block & grid
 	threadsPerBlock.x = BLOCK_SIZE;
@@ -27,6 +31,10 @@ TCudaGrid2D::TCudaGrid2D (int NX, int NY, double *bounds)
 	blocksPerGrid.x = ceil(NX/(double)threadsPerBlock.x);
 	blocksPerGrid.y = ceil(NY/(double)threadsPerBlock.y);
 	blocksPerGrid.z = 1;
+
+	fft_blocks.x = ceil((NX+1)/2.0/(double)threadsPerBlock.x);
+	fft_blocks.y = ceil(NY/(double)threadsPerBlock.y);
+	fft_blocks.z = 1;
 }
 
 

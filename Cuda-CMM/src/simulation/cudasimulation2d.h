@@ -34,12 +34,12 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 
 //map applications
 
-__global__ void kernel_apply_map_and_sample_from_hermite(double *ChiX, double *ChiY, double *fs, double *H, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_vort, TCudaGrid2D Grid_fine, int molly_stencil);	//apply map and sample function from passed hermite
+__global__ void kernel_apply_map_and_sample_from_hermite(double *ChiX, double *ChiY, double *fs, double *H, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_vort, TCudaGrid2D Grid_fine, int molly_stencil, bool padd_inline_fft);
 __global__ void kernel_compare_map_stack_with_identity(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *error, int stack_length, int NXc, int NYc, double hc, int NXs, int NYs, double hs);
 __global__ void kernel_compare_vorticity_with_initial(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *error, int stack_length, TCudaGrid2D Grid_map, TCudaGrid2D Grid_fine, int simulation_num);
 
 void apply_map_stack_to_W_part_All(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double *ChiY,
-		double *W_real, double *Dev_Temp, double *bounds, double *W_initial, int simulation_num);
+		double *W_real, double *Dev_Temp, double *W_initial, int simulation_num);
 
 __global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *ChiY, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid);
 __global__ void kernel_apply_map_stack_to_W_part_2(double *ChiX_stack, double *ChiY_stack, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid);
@@ -54,7 +54,8 @@ __device__ double device_initial_W(double x, double y, int simulation_num);
 __device__ double device_initial_W_discret(double x, double y, double *W_initial, int NX, int NY);
 __device__ double initHomeoIso(double x, double y);
 
-__global__ void k_sample(double *ChiX, double *ChiY, double *ChiX_s, double *ChiY_s, TCudaGrid2D Grid_map, TCudaGrid2D Grid);
+__global__ void k_h_sample_map(double *ChiX, double *ChiY, double *ChiX_s, double *ChiY_s, TCudaGrid2D Grid_map, TCudaGrid2D Grid);
+__global__ void k_h_sample(double *val, double *val_s, TCudaGrid2D Grid, TCudaGrid2D Grid_s);
 
 
 #endif

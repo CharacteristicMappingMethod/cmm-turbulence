@@ -28,16 +28,16 @@
 struct TCudaGrid2D
 {
 	public:
-		int NX, NY;
-		long int N;
+		int NX, NY, NX_fft;
+		long int N, Nfft;
 		double h;
 
 		double hx, hy;
 		double bounds[4];
 
-		dim3 threadsPerBlock, blocksPerGrid;
+		dim3 threadsPerBlock, blocksPerGrid, fft_blocks;
 
-		long int sizeNReal, sizeNComplex;
+		long int sizeNReal, sizeNComplex, sizeNfft;
 
 		TCudaGrid2D(int NX, int NY, double *bounds);
 };

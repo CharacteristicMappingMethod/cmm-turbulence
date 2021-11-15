@@ -38,7 +38,8 @@ __global__ void kernel_init_diffeo(double *ChiX, double *ChiY, TCudaGrid2D Grid)
 }
 
 
-__global__ void k_sample(double *ChiX, double *ChiY, double *ChiX_s, double *ChiY_s, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
+// sample from hermite of map
+__global__ void k_h_sample_map(double *ChiX, double *ChiY, double *ChiX_s, double *ChiY_s, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -50,13 +51,33 @@ __global__ void k_sample(double *ChiX, double *ChiY, double *ChiX_s, double *Chi
 	int In = iY*Grid.NX + iX;
 	
 	//position
-	double x = iX*Grid.h;
-	double y = iY*Grid.h;
+	double x = Grid.bounds[0] + iX*Grid.hx;
+	double y = Grid.bounds[2] + iY*Grid.hy;
 	
 	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, Grid_map);
 	
 	ChiX_s[In] = x;
 	ChiY_s[In] = y;
+}
+
+
+// sample from hermite
+__global__ void k_h_sample(double *val, double *val_s, TCudaGrid2D Grid, TCudaGrid2D Grid_s)
+{
+	//index
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+
+	if(iX >= Grid_s.NX || iY >= Grid_s.NY)
+		return;
+
+	int In = iY*Grid_s.NX + iX;
+
+	//position
+	double x = Grid_s.bounds[0] + iX*Grid_s.hx;
+	double y = Grid_s.bounds[2] + iY*Grid_s.hy;
+
+	val_s[In] = device_hermite_interpolate_2D(val, x, y, Grid);
 }
 
 
@@ -323,7 +344,8 @@ __global__ void k_map_update(double *Chi, double *Chi_new, TCudaGrid2D Grid_map,
 
 
 // wrapper function for map advection
-void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, double *t, double *dt, int loop_ctr) {
+void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double *ChiX, double *ChiY,
+		double *Chi_new_X, double *Chi_new_Y, double *psi, double *t, double *dt, int loop_ctr) {
 	// compute lagrange coefficients from dt vector for timesteps n+dt and n+dt/2, this makes them dynamic
 	double h_L1[4], h_L12[4];  // constant memory for lagrange coefficient to be computed only once
 	int loop_ctr_l = loop_ctr + SettingsMain.getLagrangeOrder()-1;  // dt and t are shifted because of initial previous steps
@@ -457,16 +479,15 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 
 
 void apply_map_stack_to_W_part_All(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double *ChiY,
-		double *W_real, double *Dev_Temp, double *bounds, double *W_initial, int simulation_num)
+		double *W_real, double *Dev_Temp, double *W_initial, int simulation_num)
 {
 	// copy bounds to constant device memory
-	cudaMemcpyToSymbol(d_bounds, bounds, sizeof(double)*4);
+	cudaMemcpyToSymbol(d_bounds, Grid.bounds, sizeof(double)*4);
 
-	// for normal map stack, bounds has the domain boundaries applied
 	kernel_apply_map_stack_to_W_custom_part_1<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
 
 	// loop over all maps in map stack, where all maps are on host system
-	// this could be parallelized
+	// this could be parallelized between loading and computing?
 	for (int i_map = Map_Stack.map_stack_ctr-1; i_map >= 0; i_map--) {
 		Map_Stack.copy_map_to_device(i_map);
 		kernel_apply_map_stack_to_W_part_2<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack, Dev_Temp, *Map_Stack.Grid, Grid);
@@ -477,6 +498,7 @@ void apply_map_stack_to_W_part_All(TCudaGrid2D Grid, MapStack Map_Stack, double 
 }
 
 
+// like k_h_sample_map but saves all results in one array next to each other
 __global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *ChiY, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
 {
 	//index
@@ -488,12 +510,12 @@ __global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *
 	
 	int In = iY*Grid.NX + iX;
 	
-	double h_temp_x = (d_bounds[1] - d_bounds[0])/Grid.NX;
-	double h_temp_y = (d_bounds[3] - d_bounds[2])/Grid.NY;
+	double h_temp_x = (Grid.bounds[1] - Grid.bounds[0])/Grid.NX;
+	double h_temp_y = (Grid.bounds[3] - Grid.bounds[2])/Grid.NY;
 
 	//position
-	double x = d_bounds[0] + iX * h_temp_x;
-	double y = d_bounds[2] + iY * h_temp_y;
+	double x = Grid.bounds[0] + iX * h_temp_x;
+	double y = Grid.bounds[2] + iY * h_temp_y;
 	
 	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, Grid_map);
 	
@@ -528,8 +550,8 @@ __global__ void kernel_apply_map_stack_to_W_part_3(double *ws, double *x_y, TCud
 	if(iX >= Grid.NX || iY >= Grid.NY)
 		return;
 	
-	int In = iY*Grid.NX + iX;
-	
+	long int In = iY*Grid.NX + iX;
+
 	#ifndef DISCRET
 		ws[In] = device_initial_W(x_y[2*In], x_y[2*In+1], simulation_num);
 	#endif
@@ -569,8 +591,8 @@ __global__ void kernel_compare_vorticity_with_initial(double *ChiX_stack, double
 }
 
 
-// apply mollifier
-__global__ void kernel_apply_map_and_sample_from_hermite(double *ChiX, double *ChiY, double *fs, double *H, TCudaGrid2D Grid_map, TCudaGrid2D Grid_vort, TCudaGrid2D Grid_fine, int molly_stencil)
+// apply mollifier, this function is basically only used by evaluate_stream
+__global__ void kernel_apply_map_and_sample_from_hermite(double *ChiX, double *ChiY, double *fs, double *H, TCudaGrid2D Grid_map, TCudaGrid2D Grid_vort, TCudaGrid2D Grid_fine, int molly_stencil, bool padd_inline_fft)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -579,7 +601,10 @@ __global__ void kernel_apply_map_and_sample_from_hermite(double *ChiX, double *C
 	if(iX >= Grid_vort.NX || iY >= Grid_vort.NY)
 		return;
 
-	int In = iY*Grid_vort.NX + iX;
+	int In;
+	// for evaluate stream hermite we need a specific padding for inline fft
+	if (!padd_inline_fft) In = iY*Grid_vort.NX + iX;
+	else In = iY*Grid_vort.NX_fft*2 + iX;
 
 	//position
 	double x = iX*Grid_vort.hx;
@@ -626,9 +651,8 @@ __global__ void kernel_apply_map_and_sample_from_hermite(double *ChiX, double *C
 	}
 	// else, assume no mollification
 	else {
-		double x2, y2;
-		device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x2, &y2, Grid_map);
-		fs[In] = device_hermite_interpolate_2D(H, x2, y2, Grid_fine);
+		device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, Grid_map);
+		fs[In] = device_hermite_interpolate_2D(H, x, y, Grid_fine);
 	}
 }
 

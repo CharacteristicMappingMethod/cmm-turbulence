@@ -5,6 +5,7 @@ void Compute_Energy(double *E, double *psi, TCudaGrid2D Grid){
 	// parallel reduction using thrust
 	thrust::device_ptr<double> psi_ptr = thrust::device_pointer_cast(psi);
 	*E = 0.5*Grid.h*Grid.h * thrust::transform_reduce(psi_ptr + Grid.N, psi_ptr + 3*Grid.N, thrust::square<double>(), 0.0, thrust::plus<double>());
+	printf("Energ : %f\n", *E);
 }
 
 
@@ -12,37 +13,34 @@ void Compute_Enstrophy(double *E, double *W, TCudaGrid2D Grid){
 	// parallel reduction using thrust
 	thrust::device_ptr<double> W_ptr = thrust::device_pointer_cast(W);
 	*E = 0.5*Grid.h*Grid.h * thrust::transform_reduce(W_ptr, W_ptr + Grid.N, thrust::square<double>(), 0.0, thrust::plus<double>());
+	printf("Enstr : %f\n", *E);
 }
 
 
-// compute palinstrophy using fourier transformations - a bit expensive with two temporary arrays but ca marche
-void Compute_Palinstrophy(TCudaGrid2D Grid, double *Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftDoubleComplex *Dev_Temp_C2, cufftHandle cufftPlan){
+// compute palinstrophy using fourier transformations - a bit more expensive with one temporary array but ca marche
+void Compute_Palinstrophy(TCudaGrid2D Grid, double *Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftHandle cufft_plan_D2Z, cufftHandle cufft_plan_Z2D){
+
 	// round 1: dx dervative
-	k_real_to_comp<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(W_real, Dev_Temp_C1, Grid.NX, Grid.NY);
-	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_FORWARD);
-	k_normalize<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, Grid.NX, Grid.NY);
-	k_fft_dx<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid);
-	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_INVERSE);
+	cufftExecD2Z(cufft_plan_D2Z, W_real, Dev_Temp_C1);
+	k_normalize_h<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Grid);
+	k_fft_dx_h<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, Grid);
+	// i tried inplace transform here, but it didnt work, so i do it this way
+	cufftExecZ2D(cufft_plan_Z2D, Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C1 + Grid.Nfft*2);
 
-	comp_to_real(Dev_Temp_C2, (cufftDoubleReal*)Dev_Temp_C1, Grid.N);
-
-	// parallel reduction using thrust
+	// parallel reduction using thrust working on Grid.Nfft*2 due to inline fft padding
 	thrust::device_ptr<double> Pal_ptr = thrust::device_pointer_cast((cufftDoubleReal*)Dev_Temp_C1);
-	*Pal = 0.5*Grid.h*Grid.h * thrust::transform_reduce(Pal_ptr, Pal_ptr + Grid.N, thrust::square<double>(), 0.0, thrust::plus<double>());
+	*Pal = 0.5*Grid.h*Grid.h * thrust::transform_reduce(Pal_ptr + 2*Grid.Nfft, Pal_ptr + 2*Grid.Nfft + Grid.N, thrust::square<double>(), 0.0, thrust::plus<double>());
 
 	// round 2: dy dervative
-	k_real_to_comp<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(W_real, Dev_Temp_C1, Grid.NX, Grid.NY);
-	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_FORWARD);
-	k_normalize<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, Grid.NX, Grid.NY);
-	k_fft_dy<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C2, Dev_Temp_C1, Grid);
-	cufftExecZ2Z(cufftPlan, Dev_Temp_C1, Dev_Temp_C2, CUFFT_INVERSE);
-
-	comp_to_real(Dev_Temp_C2, (cufftDoubleReal*)Dev_Temp_C1, Grid.N);
+	cufftExecD2Z(cufft_plan_D2Z, W_real, Dev_Temp_C1);
+	k_normalize_h<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Grid);
+	k_fft_dy_h<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, Grid);
+	cufftExecZ2D(cufft_plan_Z2D, Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C1 + Grid.Nfft*2);
 
 	// parallel reduction using thrust
-	*Pal += 0.5*Grid.h*Grid.h * thrust::transform_reduce(Pal_ptr, Pal_ptr + Grid.N, thrust::square<double>(), 0.0, thrust::plus<double>());
+	*Pal += 0.5*Grid.h*Grid.h * thrust::transform_reduce(Pal_ptr + 2*Grid.Nfft, Pal_ptr + 2*Grid.Nfft + Grid.N, thrust::square<double>(), 0.0, thrust::plus<double>());
 
-//	printf("Pal : %f\n", *Pal);
+	printf("Pal : %f\n", *Pal);
 }
 
 
@@ -161,26 +159,14 @@ __global__ void iNDFT_2D(cufftDoubleComplex *X_k, double *x_n, double *p_n, int 
 }
 
 
-void Laplacian_vort(TCudaGrid2D Grid_fine, double *Dev_W_fine, cufftDoubleComplex *Dev_Complex_fine, cufftDoubleComplex *Dev_Hat_fine, double *Dev_lap_fine_real, cufftDoubleComplex *Dev_lap_fine_complex, cufftDoubleComplex *Dev_lap_fine_hat, cufftHandle cufftPlan_fine){
-
-    real_to_comp(Dev_W_fine, Dev_Complex_fine, Grid_fine.N);
-    cufftExecZ2Z(cufftPlan_fine, Dev_Complex_fine, Dev_Hat_fine, CUFFT_FORWARD);
-    k_normalize<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_Complex_fine, Grid_fine.NX, Grid_fine.NY);
-
-    k_fft_lap<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_Hat_fine, Dev_lap_fine_hat, Grid_fine);
-    cufftExecZ2Z(cufftPlan_fine, Dev_lap_fine_hat, Dev_lap_fine_complex, CUFFT_INVERSE);
-    comp_to_real(Dev_lap_fine_complex, Dev_lap_fine_real, Grid_fine.N);
-
-}
-
-__host__ __device__ double L1(double t, double tp, double tm, double tmm){
-    return ((t-tm)*(t-tmm)/((tp-tm)*(tp-tmm)));
-}
-
-__host__ __device__ double L2(double t, double tp, double tm, double tmm){
-    return ((t-tp)*(t-tmm)/((tm-tp)*(tm-tmm)));
-}
-
-__host__ __device__ double L3(double t, double tp, double tm, double tmm){
-    return ((t-tp)*(t-tm)/((tmm-tp)*(tmm-tm)));
-}
+//void Laplacian_vort(TCudaGrid2D Grid_fine, double *Dev_W_fine, cufftDoubleComplex *Dev_Complex_fine, cufftDoubleComplex *Dev_Hat_fine, double *Dev_lap_fine_real, cufftDoubleComplex *Dev_lap_fine_complex, cufftDoubleComplex *Dev_lap_fine_hat, cufftHandle cufftPlan_fine){
+//
+//    real_to_comp(Dev_W_fine, Dev_Complex_fine, Grid_fine.N);
+//    cufftExecZ2Z(cufftPlan_fine, Dev_Complex_fine, Dev_Hat_fine, CUFFT_FORWARD);
+//    k_normalize<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_Complex_fine, Grid_fine.NX, Grid_fine.NY);
+//
+//    k_fft_lap_h<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(Dev_Hat_fine, Dev_lap_fine_hat, Grid_fine);
+//    cufftExecZ2Z(cufftPlan_fine, Dev_lap_fine_hat, Dev_lap_fine_complex, CUFFT_INVERSE);
+//    comp_to_real(Dev_lap_fine_complex, Dev_lap_fine_real, Grid_fine.N);
+//
+//}

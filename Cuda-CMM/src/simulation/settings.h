@@ -234,8 +234,8 @@ public:
 	double getZoomRepetitionsFactor() const { return zoom_repetitions_factor; }
 	void setZoomRepetitionsFactor(double zoomRepetitionsFactor) { zoom_repetitions_factor = zoomRepetitionsFactor; }
 
-//	bool getZoomSavePsi() const { return zoom_save_psi; }
-//	void setZoomSavePsi(bool zoomSavePsi) { zoom_save_psi = zoomSavePsi; }
+	bool getZoomSavePsi() const { return zoom_save_psi; }
+	void setZoomSavePsi(bool zoomSavePsi) { zoom_save_psi = zoomSavePsi; }
 	bool getZoomSaveParticles() const { return zoom_save_particles; }
 	void setZoomSaveParticles(bool zoomSaveParticles) { zoom_save_particles = zoomSaveParticles; }
 

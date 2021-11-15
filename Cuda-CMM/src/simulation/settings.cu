@@ -12,7 +12,7 @@ void SettingsCMM::setPresets() {
 	// max working on V100 : grid_scale = 4096; fine_grid_scale = 16384;
 	int grid_coarse = 512;
 	int grid_fine = 2048;
-	int grid_psi = 1024;  // psi will be (up)sampled on this grid
+	int grid_psi = 1024;  // psi will be (up)sampled on this grid, Restriction: 2*N_fft_psi !> 4*N_coarse
 	int grid_vort = grid_psi;  // vorticity will be sampled on this grid for computation of psi, this changes the scales of the vorticity
 
 	/*
@@ -97,7 +97,7 @@ void SettingsCMM::setPresets() {
 	/*
 	 * Zoom settings
 	 */
-	bool zoom = false;  // en- or disable zoom
+	bool zoom = true;  // en- or disable zoom
 	int grid_zoom = 1024;  // we can set our own gridsize for the zoom
 	// position settings
 	double zoom_center_x = twoPI * 0.75;
@@ -106,7 +106,7 @@ void SettingsCMM::setPresets() {
 	double zoom_width_y = twoPI * 1e-1;  // twoPI taken as LY, width of the zoom window
 	int zoom_repetitions = 4;  // how many repetitive zooms with decreasing windows?
 	double zoom_repetitions_factor = 0.5;  // how much do we want to decrease the window each time
-//	bool zoom_save_psi = true;  // stream function is not a zoom property, but its interesting for fine scale particle behavior
+	bool zoom_save_psi = true;  // stream function is not a zoom property, but its interesting for fine scale particle behavior
 	bool zoom_save_particles = true;  // if particles are enabled, safe particles in the range too
 	// saving settings
 	double zoom_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save zoom per sec, set <= 0 to disable
@@ -186,7 +186,7 @@ void SettingsCMM::setPresets() {
 	setZoomWidthY(zoom_width_y);
 	setZoomRepetitions(zoom_repetitions);
 	setZoomRepetitionsFactor(zoom_repetitions_factor);
-//	setZoomSavePsi(zoom_save_psi);
+	setZoomSavePsi(zoom_save_psi);
 
 	setZoomSaveParticles(zoom_save_particles);
 	setZoomSnapshotsPerSec(zoom_snapshots_per_sec);
@@ -275,7 +275,7 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "zoom_width_y") setZoomWidthY(stod(value));
 			else if (command == "zoom_repetitions") setZoomRepetitions(stoi(value));
 			else if (command == "zoom_repetitions_factor") setZoomRepetitionsFactor(stod(value));
-//			else if (command == "zoom_save_psi") setZoomSavePsi(getBoolFromString(value));
+			else if (command == "zoom_save_psi") setZoomSavePsi(getBoolFromString(value));
 			else if (command == "zoom_save_particles") setZoomSaveParticles(getBoolFromString(value));
 			else if (command == "zoom_save_initial") setZoomSaveInitial(getBoolFromString(value));
 			else if (command == "zoom_save_final") setZoomSaveFinal(getBoolFromString(value));

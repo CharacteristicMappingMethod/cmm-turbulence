@@ -4,16 +4,19 @@
 
 /*******************************************************************
 *						  Fourier operations					   *
+*			All oparate on hermitian input for D2Z and Z2D
+*			that means, that NX row is (NX/2.0+1)
 *******************************************************************/
 
+// functions for hermitian input / for D2Z or Z2D
 // laplacian in fourier space - multiplication by kx**2 and ky**2
-__global__ void k_fft_lap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
+__global__ void k_fft_lap_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 
-	if(iX >= Grid.NX || iY >= Grid.NY)
+	if(iX >= Grid.NX_fft || iY >= Grid.NY)
 		return;
 
 	if(iX == 0 && iY == 0)
@@ -22,7 +25,7 @@ __global__ void k_fft_lap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_ou
 		return;
 	}
 
-	int In = iY*Grid.NX + iX;
+	int In = iY*Grid.NX_fft + iX;
 
 	double kx = twoPI/(Grid.hx*Grid.NX) * (iX - (iX>Grid.NX/2)*Grid.NX);						// twoPI/(h*NX) = 1
 	double ky = twoPI/(Grid.hy*Grid.NY) * (iY - (iY>Grid.NY/2)*Grid.NY);
@@ -34,13 +37,13 @@ __global__ void k_fft_lap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_ou
 
 
 // inverse laplacian in fourier space - division by kx**2 and ky**2
-__global__ void k_fft_iLap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
+__global__ void k_fft_iLap_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 
-	if(iX >= Grid.NX || iY >= Grid.NY)
+	if(iX >= Grid.NX_fft || iY >= Grid.NY)
 		return;
 
 	if(iX == 0 && iY == 0)
@@ -49,80 +52,58 @@ __global__ void k_fft_iLap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_o
 		return;
 	}
 
-	int In = iY*Grid.NX + iX;
+	int In = iY*Grid.NX_fft + iX;
 
-	double kx = twoPI/(Grid.hx*Grid.NX) * (iX - (iX>Grid.NX/2)*Grid.NX);						// twoPI/(h*NX) = twoPI/(twoPI/NX*NX) = 1
+	double kx = twoPI/(Grid.hx*Grid.NX) * (iX - (iX>Grid.NX/2)*Grid.NX);  // twoPI/(h*NX) = twoPI/(twoPI/NX*NX) = 1
 	double ky = twoPI/(Grid.hy*Grid.NY) * (iY - (iY>Grid.NY/2)*Grid.NY);
 	double k2 = kx*kx + ky*ky;
 
 	val_out[In].x = -val_in[In].x / k2;
 	val_out[In].y = -val_in[In].y / k2;
 }
-// try to setup callback function for functions to get rid of one complex trash variable
-//__device__ cufftComplex CB_Input_iLap(void *dataIn, size_t offset, void *callerInfo, void *sharedPtr)
-//{
-//	//index
-//	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
-//	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-//
-//	double* helper_array = (double*)callerInfo;
-//	int NX = (int)helper_array[0];
-//	int NY = (int)helper_array[1];
-//	double h = (double)helper_array[2];
-//
-//	// In is already given by offset
-//	// int In = iY*NX + iX;
-//
-//	double kx = twoPI/(h*NX) * (iX - (iX>NX/2)*NX);
-//	double ky = twoPI/(h*NY) * (iY - (iY>NY/2)*NY);
-//	double k2 = kx*kx + ky*ky;
-//
-////	if ((int)offset == 100) {
-//		printf("In=100, NX=%d, NY=%d, h=%f, k2=%f", NX, NY, h, k2);
-////	}
-//
-//	((cufftComplex*)dataIn)[offset].x = - ((cufftComplex*)dataIn)[offset].x / k2;
-//	((cufftComplex*)dataIn)[offset].y = - ((cufftComplex*)dataIn)[offset].y / k2;
-//
-//    return ((cufftComplex*)dataIn)[offset];
-//}
 
 
 // x derivative in fourier space, multiplication by kx
-__global__ void k_fft_dx(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
+__global__ void k_fft_dx_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 
-	if(iX >= Grid.NX || iY >= Grid.NY)
+	if(iX >= Grid.NX_fft || iY >= Grid.NY)
 		return;
 
-	int In = iY*Grid.NX + iX;
+	int In = iY*Grid.NX_fft + iX;
 
 	double kx = twoPI/(Grid.hx*Grid.NX) * (iX - (iX>Grid.NX/2)*Grid.NX);
 
-	val_out[In].x = -val_in[In].y * kx;
-	val_out[In].y =  val_in[In].x * kx;
+	double2 temp = val_in[In];
+//	temp.x = val_in[In].x; temp.y = val_in[In].y;
+
+	val_out[In].x = -temp.y * kx;
+	val_out[In].y =  temp.x * kx;
 }
 
 
 // y derivative in fourier space, multiplication by ky
-__global__ void k_fft_dy(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
+__global__ void k_fft_dy_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 
-	if(iX >= Grid.NX || iY >= Grid.NY)
+	if(iX >= Grid.NX_fft || iY >= Grid.NY)
 		return;
 
-	int In = iY*Grid.NX + iX;
+	int In = iY*Grid.NX_fft + iX;
 
 	double ky = twoPI/(Grid.hy*Grid.NY) * (iY - (iY>Grid.NY/2)*Grid.NY);
 
-	val_out[In].x = -val_in[In].y * ky;
-	val_out[In].y =  val_in[In].x * ky;
+	double2 temp = val_in[In];
+//	temp.x = val_in[In].x; temp.y = val_in[In].y;
+
+	val_out[In].x = -temp.y * ky;
+	val_out[In].y =  temp.x * ky;
 }
 
 
@@ -234,21 +215,74 @@ __global__ void k_fft_cut_off_scale(cufftDoubleComplex *W, int NX, double freq)
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 
+	if(iX >= NX || iY >= NX)
+		return;
+
 	int In = iY*NX + iX;
 
-	int i = In/NX;
-	int j = In%NX;
 	// take symmetry into account
-	if (i > NX/2) i = NX-i;
-	if (j > NX/2) j = NX-j;
+	if (iX > NX/2) iX = NX-iX;
+	if (iY > NX/2) iY = NX-iY;
 	// cut at frequency in a round circle
-	if ((i*i + j*j) > freq*freq || In == 0) {
+	if ((iX*iX + iY*iY) > freq*freq || In == 0) {
 //	if (i > freq || j > freq || In == 0) {
 		W[In].x = 0;
 		W[In].y = 0;
 	}
 }
 
+__global__ void k_fft_cut_off_scale_h(cufftDoubleComplex *W, TCudaGrid2D Grid, double freq)
+{
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+
+	if(iX >= (int)(Grid.NX/2.0+1) || iY >= Grid.NY)
+		return;
+
+	int In = iY*(int)(Grid.NX/2.0+1) + iX;
+
+	// take symmetry into account, warp to lower half
+	iX += (iX > Grid.NX/2.0) * (Grid.NX - 2*iX);
+	iY += (iY > Grid.NY/2.0) * (Grid.NY - 2*iY);
+	// cut at frequency in a round circle
+	if ((iX*iX + iY*iY) > freq*freq || In == 0) {
+//	if (i > freq || j > freq || In == 0) {
+		W[In].x = 0;
+		W[In].y = 0;
+	}
+}
+
+
+/*
+ * Grid moving - the new, better zeropad-technology
+ * transcribe all elements and add zero for unwanted ones
+ * start from the back to ensure, that we do not overwrite values
+ * this works inline (input=output) or with two seperate values
+ */
+__global__ void k_fft_grid_move(cufftDoubleComplex *In, cufftDoubleComplex *Out, TCudaGrid2D Grid_out, TCudaGrid2D Grid_in) {
+	int iXc = Grid_out.NX_fft - (blockDim.x * blockIdx.x + threadIdx.x);
+	int iYc = Grid_out.NY     - (blockDim.y * blockIdx.y + threadIdx.y);
+
+	if(iXc >= Grid_out.NX_fft || iYc >= Grid_out.NY || iXc < 0 || iYc < 0)
+		return;
+
+	int Inc = iYc*Grid_out.NX_fft + iXc;
+
+	// check if we have to set values to 0, transform index to lower half and compare to gridsize
+	if ((iXc + (iXc > Grid_out.NX/2.0) * (Grid_out.NX - 2*iXc) > Grid_in.NX/2.0) || (iYc + (iYc > Grid_out.NY/2.0) * (Grid_out.NY - 2*iYc) > Grid_in.NY/2.0)) {
+		Out[Inc].x = Out[Inc].y = 0;
+	}
+	else {
+		// get new positions and shift upper half to the outer edge
+		int iXs = iXc + (iXc > Grid_out.NX/2.0) * (Grid_in.NX - Grid_out.NX);
+		int iYs = iYc + (iYc > Grid_out.NY/2.0) * (Grid_in.NY - Grid_out.NY);
+		// get index in new system
+		int Ins = iYs*Grid_in.NX_fft+ iXs;
+		// transcribe, add values and leave hole in the middle
+		Out[Inc].x = In[Ins].x;
+		Out[Inc].y = In[Ins].y;
+	}
+}
 /*
  * zero padding, all outer elements are moved, conserving symmetry of spectrum
  * take care about entries when making grid larger, data needs to be set to zero first with memset
@@ -258,6 +292,9 @@ __global__ void k_fft_cut_off_scale(cufftDoubleComplex *W, int NX, double freq)
 __global__ void k_fft_grid_add(cufftDoubleComplex *In, cufftDoubleComplex *Out, double Nc, double Ns) {
 	int iXc = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iYc = (blockDim.y * blockIdx.y + threadIdx.y);
+
+	if(iXc >= Nc || iYc >= Nc)
+		return;
 
 	int Inc = iYc*Nc + iXc;
 
@@ -281,6 +318,9 @@ __global__ void k_fft_grid_remove(cufftDoubleComplex *In, cufftDoubleComplex *Ou
 	int iXc = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iYc = (blockDim.y * blockIdx.y + threadIdx.y);
 
+	if(iXc >= Nc || iYc >= Nc)
+		return;
+
 	int Inc = iYc*Nc + iXc;
 
 	// get new positions
@@ -295,6 +335,43 @@ __global__ void k_fft_grid_remove(cufftDoubleComplex *In, cufftDoubleComplex *Ou
 	}
 	// get index in new system
 	int Ins = iYs*Ns + iXs;
+	// transcribe, inverse of add so we actually ignore the middle entries
+	Out[Inc].x = In[Ins].x;
+	Out[Inc].y = In[Ins].y;
+}
+
+__global__ void k_fft_grid_add_h(cufftDoubleComplex *In, cufftDoubleComplex *Out, TCudaGrid2D Grid_c, TCudaGrid2D Grid_s) {
+	int iXc = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iYc = (blockDim.y * blockIdx.y + threadIdx.y);
+
+	if(iXc >= (int)(Grid_c.NX/2.0+1) || iYc >= Grid_c.NY)
+		return;
+
+	int Inc = iYc*(int)(Grid_c.NX/2.0+1) + iXc;
+
+	// get new positions and shift upper half to the outer edge
+	int iXs = iXc + (iXc > Grid_c.NX/2.0) * (Grid_s.NX - Grid_c.NX);
+	int iYs = iYc + (iYc > Grid_c.NY/2.0) * (Grid_s.NY - Grid_c.NY);
+	// get index in new system
+	int Ins = iYs*(int)(Grid_s.NX/2.0+1) + iXs;
+	// transcribe, add values and leave hole in the middle
+	Out[Ins].x = In[Inc].x;
+	Out[Ins].y = In[Inc].y;
+}
+__global__ void k_fft_grid_remove_h(cufftDoubleComplex *In, cufftDoubleComplex *Out, TCudaGrid2D Grid_c, TCudaGrid2D Grid_s) {
+	int iXc = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iYc = (blockDim.y * blockIdx.y + threadIdx.y);
+
+	if(iXc >= (int)(Grid_c.NX/2.0+1) || iYc >= Grid_c.NY)
+		return;
+
+	int Inc = iYc*(int)(Grid_c.NX/2.0+1) + iXc;
+
+	// get new positions and shift upper half to the outer edge
+	int iXs = iXc + (iXc > Grid_c.NX/2.0) * (Grid_s.NX - Grid_c.NX);
+	int iYs = iYc + (iYc > Grid_c.NY/2.0) * (Grid_s.NY - Grid_c.NY);
+	// get index in new system
+	int Ins = iYs*(int)(Grid_s.NX/2.0+1) + iXs;
 	// transcribe, inverse of add so we actually ignore the middle entries
 	Out[Inc].x = In[Ins].x;
 	Out[Inc].y = In[Ins].y;
@@ -316,6 +393,23 @@ __global__ void k_normalize(cufftDoubleComplex *F, int NX, int NY)
 
 	F[In].x /= (double)N;
 	F[In].y /= (double)N;
+}
+
+
+// divide all values by grid size
+__global__ void k_normalize_h(cufftDoubleComplex *F, TCudaGrid2D Grid)
+{
+	//index
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+
+	if(iX >= (int)(Grid.NX/2.0+1) || iY >= Grid.NY)
+		return;
+
+	int In = iY*(int)(Grid.NX/2.0+1) + iX;
+
+	F[In].x /= (double)Grid.N;
+	F[In].y /= (double)Grid.N;
 }
 
 

@@ -11,10 +11,16 @@
 #define twoPI 	6.283185307179586476925286766559005768394338798750211641949889184615632812572417997256069650684234136
 
 // fourier functions
-__global__ void k_fft_lap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
-__global__ void k_fft_iLap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
-__global__ void k_fft_dx(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
-__global__ void k_fft_dy(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
+//__global__ void k_fft_lap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
+//__global__ void k_fft_iLap(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
+//__global__ void k_fft_dx(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
+//__global__ void k_fft_dy(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
+
+// fourier functions for hermitian data / with D2Z and Z2D
+__global__ void k_fft_lap_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
+__global__ void k_fft_iLap_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
+__global__ void k_fft_dx_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
+__global__ void k_fft_dy_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
 
 //	__device__ cufftComplex CB_Input_iLap(void *dataIn, size_t offset, void *callerInfo, void *sharedPtr);
 
@@ -30,8 +36,13 @@ __global__ void k_comp_to_real_H(cufftDoubleComplex *varC, double *varR, int NX,
 __global__ void k_fft_cut_off_scale(cufftDoubleComplex *W, int NX, double freq);
 __global__ void k_fft_grid_add(cufftDoubleComplex *In, cufftDoubleComplex *Out, double Nc, double Ns);
 __global__ void k_fft_grid_remove(cufftDoubleComplex *In, cufftDoubleComplex *Out, double Nc, double Ns);
+__global__ void k_fft_cut_off_scale_h(cufftDoubleComplex *W, TCudaGrid2D Grid, double freq);
+__global__ void k_fft_grid_move(cufftDoubleComplex *In, cufftDoubleComplex *Out, TCudaGrid2D Grid_c, TCudaGrid2D Grid_s);
+__global__ void k_fft_grid_add_h(cufftDoubleComplex *In, cufftDoubleComplex *Out, TCudaGrid2D Grid_c, TCudaGrid2D Grid_s);
+__global__ void k_fft_grid_remove_h(cufftDoubleComplex *In, cufftDoubleComplex *Out, TCudaGrid2D Grid_c, TCudaGrid2D Grid_s);
 
 __global__ void k_normalize(cufftDoubleComplex *F, int NX, int NY);
+__global__ void k_normalize_h(cufftDoubleComplex *F, TCudaGrid2D Grid);
 
 
 #endif
