@@ -1,7 +1,7 @@
 #include "cmm-timestep.h"
 
 #include "../numerical/cmm-hermite.h"
-#include "../grid/cudagrid2d.h"
+#include "../grid/cmm-grid2d.h"
 
 #include "stdio.h"
 

@@ -1,9 +1,9 @@
 #include "cmm-particles.h"
 
-#include "../grid/cudagrid2d.h"
+#include "../grid/cmm-grid2d.h"
 #include "../numerical/cmm-timestep.h"
 #include "stdio.h"
-#include "../simulation/settings.h"
+#include "../ui/settings.h"
 
 /*******************************************************************
 *						  Particule advection        			   *

@@ -1,4 +1,4 @@
-#include "cudagrid2d.h"
+#include "cmm-grid2d.h"
 
 
 TCudaGrid2D::TCudaGrid2D (int NX, int NY, double *bounds)

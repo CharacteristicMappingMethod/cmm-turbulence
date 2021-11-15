@@ -1,6 +1,6 @@
 #include "settings.h"
 
-#include "../grid/cudagrid2d.h"  // for PI and twoPI
+#include "../grid/cmm-grid2d.h"  // for PI and twoPI
 
 void SettingsCMM::setPresets() {
 	// naming and saving settings of the simulation
@@ -12,8 +12,8 @@ void SettingsCMM::setPresets() {
 	// max working on V100 : grid_scale = 4096; fine_grid_scale = 16384;
 	int grid_coarse = 512;
 	int grid_fine = 2048;
-	int grid_psi = 1024;  // psi will be (up)sampled on this grid, Restriction: 2*N_fft_psi !> 4*N_coarse
-	int grid_vort = grid_psi;  // vorticity will be sampled on this grid for computation of psi, this changes the scales of the vorticity
+	int grid_psi = grid_coarse;  // psi will be (up)sampled on this grid, Restriction: 2*N_fft_psi !> 4*N_coarse
+	int grid_vort = grid_fine;  // vorticity will be sampled on this grid for computation of psi, this changes the scales of the vorticity
 
 	/*
 	 *  Initial conditions
@@ -33,11 +33,12 @@ void SettingsCMM::setPresets() {
 	 *  0	-	no console outputs besides errors
 	 *  1	-	Initialization and finishing output
 	 *  2	-	Step and Saving output
+	 *  3	-	Version stuff and Conservation results
 	 */
-	int verbose = 2;
+	int verbose = 3;
 
 	// set time properties
-	double final_time = 4;  // end of computation
+	double final_time = 2;  // end of computation
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
 	int steps_per_sec = 32;  // how many steps do we want per seconds?
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid

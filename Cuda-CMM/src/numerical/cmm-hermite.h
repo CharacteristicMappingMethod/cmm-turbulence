@@ -1,7 +1,7 @@
 #ifndef __CUDA_HERMITE_2D_H__
 #define __CUDA_HERMITE_2D_H__
 
-#include "../grid/cudagrid2d.h"
+#include "../grid/cmm-grid2d.h"
 
 
 //Hermite Basis functions//

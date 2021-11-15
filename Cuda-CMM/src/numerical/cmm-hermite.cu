@@ -1,6 +1,6 @@
 #include "cmm-hermite.h"
 
-#include "../grid/cudagrid2d.h"
+#include "../grid/cmm-grid2d.h"
 
 /*******************************************************************
 *						  Hermite interpolation					   *

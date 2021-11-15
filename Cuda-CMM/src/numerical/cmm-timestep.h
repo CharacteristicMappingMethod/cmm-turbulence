@@ -1,7 +1,7 @@
 #ifndef __CMM_TIMESTEP_H__
 #define __CMM_TIMESTEP_H__
 
-#include "../grid/cudagrid2d.h"
+#include "../grid/cmm-grid2d.h"
 
 // first order
 __device__ void euler_exp(double *psi, double *d_L1, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order);

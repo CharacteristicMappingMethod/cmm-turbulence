@@ -1,4 +1,4 @@
-#include "cudasimulation2d.h"
+#include "cmm-simulation-kernel.h"
 
 #include "stdio.h"
 
@@ -8,31 +8,28 @@
 #include <curand.h>
 #include <curand_kernel.h>
 
-// parallel reduce
-#include <thrust/transform_reduce.h>
-#include <thrust/functional.h>
-#include <thrust/device_ptr.h>
 
 __constant__ double d_L1[4], d_L12[4], d_c1[12], d_cx[12], d_cy[12], d_cxy[12], d_bounds[4];
 
-////////////////////////////////////////////////////////////////////////
-__global__ void kernel_init_diffeo(double *ChiX, double *ChiY, TCudaGrid2D Grid)
+
+// init uniform map
+__global__ void k_init_diffeo(double *ChiX, double *ChiY, TCudaGrid2D Grid)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-	
+
 	if(iX >= Grid.NX || iY >= Grid.NY)
 		return;
 
 	int In = iY*Grid.NX + iX;
-	
+
 	ChiX[In] = iX*Grid.hx;
 	ChiY[In] = iY*Grid.hy;
-	
+
 	// x dx = y dy = 1
 	ChiX[1*Grid.N+In] = ChiY[2*Grid.N+In] = 1;
-	
+
 	// x dy = y dx = dxdy = 0
 	ChiX[2*Grid.N+In] = ChiY[1*Grid.N+In] = ChiX[3*Grid.N+In] = ChiY[3*Grid.N+In] = 0;
 }
@@ -44,18 +41,18 @@ __global__ void k_h_sample_map(double *ChiX, double *ChiY, double *ChiX_s, doubl
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-	
+
 	if(iX >= Grid.NX || iY >= Grid.NY)
 		return;
-	
+
 	int In = iY*Grid.NX + iX;
-	
+
 	//position
 	double x = Grid.bounds[0] + iX*Grid.hx;
 	double y = Grid.bounds[2] + iY*Grid.hy;
-	
+
 	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, Grid_map);
-	
+
 	ChiX_s[In] = x;
 	ChiY_s[In] = y;
 }
@@ -81,66 +78,24 @@ __global__ void k_h_sample(double *val, double *val_s, TCudaGrid2D Grid, TCudaGr
 }
 
 
-// function to get difference to 1 for thrust parallel reduction
-struct absto1
-{
-    __host__ __device__
-        double operator()(const double &x) const {
-            return fabs(1-x);
-        }
-};
-double incompressibility_check(double *ChiX, double *ChiY, double *gradChi, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse) {
-	// compute determinant of gradient and save in gradchi
-	kernel_incompressibility_check<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(ChiX, ChiY, gradChi, Grid_fine, Grid_coarse);
-
-	// compute maximum using thrust parallel reduction
-	thrust::device_ptr<double> gradChi_ptr = thrust::device_pointer_cast(gradChi);
-	return thrust::transform_reduce(gradChi_ptr, gradChi_ptr + Grid_fine.N, absto1(), 0.0, thrust::maximum<double>());
-}
-
-
-__global__ void kernel_incompressibility_check(double *ChiX, double *ChiY, double *gradChi, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse)
+// incompressibility check by computing determinant of jacobi of map
+__global__ void k_incompressibility_check(double *ChiX, double *ChiY, double *gradChi, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-	
+
 	if(iX >= Grid_fine.NX || iY >= Grid_fine.NY)
 		return;
-	
+
 	int In = iY*Grid_fine.NX + iX;
-	
+
 	//position shifted by half a point to compute at off-grid
 	double x = iX*Grid_fine.hx + 0.5*Grid_fine.hx;
 	double y = iY*Grid_fine.hy + 0.5*Grid_fine.hy;
 //	double x = iX*Grid_fine.hx;
 //	double y = iY*Grid_fine.hy;
 	gradChi[In] = device_diffeo_grad_2D(ChiX, ChiY, x, y, Grid_coarse);
-}
-
-
-// advect stream where footpoints are just neighbouring points
-void advect_using_stream_hermite_grid(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, double *t, double *dt, int loop_ctr) {
-	// compute lagrange coefficients from dt vector for timesteps n+dt and n+dt/2, this makes them dynamic
-	double h_L1[4], h_L12[4];  // constant memory for lagrange coefficient to be computed only once
-	int loop_ctr_l = loop_ctr + SettingsMain.getLagrangeOrder()-1;  // dt and t are shifted because of initial previous steps
-	for (int i_p = 0; i_p < SettingsMain.getLagrangeOrder(); ++i_p) {
-		h_L1[i_p] = get_L_coefficient(t, t[loop_ctr_l+1], loop_ctr_l, i_p, SettingsMain.getLagrangeOrder());
-		h_L12[i_p] = get_L_coefficient(t, t[loop_ctr_l] + dt[loop_ctr_l+1]/2.0, loop_ctr_l, i_p, SettingsMain.getLagrangeOrder());
-	}
-
-	// copy to constant memory
-	cudaMemcpyToSymbol(d_L1, h_L1, sizeof(double)*4); cudaMemcpyToSymbol(d_L12, h_L12, sizeof(double)*4);
-
-	// first of all: compute footpoints at gridpoints, here we could speedup the first sampling of u by directly using the values, as we start at exact grid point locations
-	k_compute_footpoints<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock>>>(ChiX, ChiY, Chi_new_X, Chi_new_Y, psi,
-			Grid_map, Grid_psi, t[loop_ctr_l+1], dt[loop_ctr_l+1],
-			SettingsMain.getTimeIntegrationNum(), SettingsMain.getLagrangeOrder());
-
-	// update map, x and y can be done seperately
-	int shared_size = (18+2*SettingsMain.getMapUpdateOrderNum())*(18+2*SettingsMain.getMapUpdateOrderNum());  // how many points do we want to load?
-	k_map_update<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock, shared_size*sizeof(double)>>>(ChiX, Chi_new_X, Grid_map, SettingsMain.getMapUpdateOrderNum()+1, 0);
-	k_map_update<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock, shared_size*sizeof(double)>>>(ChiY, Chi_new_Y, Grid_map, SettingsMain.getMapUpdateOrderNum()+1, 1);
 }
 
 
@@ -189,7 +144,8 @@ __global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new
 }
 
 
-// update map, this should hopefully use some funky cuda techniques
+// update map by grid itself, this should hopefully use some funky cuda techniques
+// it works, but is not accurate enough in comparison to footpoint method
 // do template for map update orders to help the compiler
 __global__ void k_map_update(double *Chi, double *Chi_new, TCudaGrid2D Grid_map, int map_ord_1, int warp_direc) {
 	// shared memory for loading the data - block widened by map_ord_1
@@ -343,53 +299,13 @@ __global__ void k_map_update(double *Chi, double *Chi_new, TCudaGrid2D Grid_map,
 
 
 
-// wrapper function for map advection
-void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double *ChiX, double *ChiY,
-		double *Chi_new_X, double *Chi_new_Y, double *psi, double *t, double *dt, int loop_ctr) {
-	// compute lagrange coefficients from dt vector for timesteps n+dt and n+dt/2, this makes them dynamic
-	double h_L1[4], h_L12[4];  // constant memory for lagrange coefficient to be computed only once
-	int loop_ctr_l = loop_ctr + SettingsMain.getLagrangeOrder()-1;  // dt and t are shifted because of initial previous steps
-	for (int i_p = 0; i_p < SettingsMain.getLagrangeOrder(); ++i_p) {
-		h_L1[i_p] = get_L_coefficient(t, t[loop_ctr_l+1], loop_ctr_l, i_p, SettingsMain.getLagrangeOrder());
-		h_L12[i_p] = get_L_coefficient(t, t[loop_ctr_l] + dt[loop_ctr_l+1]/2.0, loop_ctr_l, i_p, SettingsMain.getLagrangeOrder());
-	}
-
-	double h_c[3];  // constant memory for map update coefficient to be computed only once
-	switch (SettingsMain.getMapUpdateOrderNum()) {
-		case 2: { h_c[0] = +3.0/8.0; h_c[1] = -3.0/20.0; h_c[2] = +1.0/40.0; break; }  // 6th order interpolation
-		case 1: { h_c[0] = +1.0/3.0; h_c[1] = -1.0/12.0; break; }  // 4th order interpolation
-		case 0: { h_c[0] = +1.0/4.0; break; }  // 2th order interpolation
-	}
-
-	double h_c1[12], h_cx[12], h_cy[12], h_cxy[12];  // compute coefficients for each direction only once
-	// already compute final coefficients with appropriate sign
-	for (int i_foot = 0; i_foot < 4+4*SettingsMain.getMapUpdateOrderNum(); ++i_foot) {
-		h_c1 [i_foot] = h_c[i_foot/4];
-		h_cx [i_foot] = h_c[i_foot/4] * (1 - 2*((i_foot/2)%2))     / SettingsMain.getMapEpsilon() / double(i_foot/4 + 1);
-		h_cy [i_foot] = h_c[i_foot/4] * (1 - 2*(((i_foot+1)/2)%2)) / SettingsMain.getMapEpsilon() / double(i_foot/4 + 1);
-		h_cxy[i_foot] = h_c[i_foot/4] * (1 - 2*(i_foot%2)) / SettingsMain.getMapEpsilon() / SettingsMain.getMapEpsilon() / double(i_foot/4 + 1) / double(i_foot/4 + 1);
-	}
-
-	// copy to constant memory
-	cudaMemcpyToSymbol(d_L1, h_L1, sizeof(double)*4);  cudaMemcpyToSymbol(d_L12, h_L12, sizeof(double)*4);
-	cudaMemcpyToSymbol(d_c1, h_c1, sizeof(double)*12); cudaMemcpyToSymbol(d_cx, h_cx, sizeof(double)*12);
-	cudaMemcpyToSymbol(d_cy, h_cy, sizeof(double)*12); cudaMemcpyToSymbol(d_cxy, h_cxy, sizeof(double)*12);
-
-	// now launch the kernel
-	kernel_advect_using_stream_hermite<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock>>>(ChiX, ChiY, Chi_new_X, Chi_new_Y,
-			psi, Grid_map, Grid_psi, t[loop_ctr_l+1], dt[loop_ctr_l+1],
-			SettingsMain.getMapEpsilon(), SettingsMain.getTimeIntegrationNum(),
-			SettingsMain.getMapUpdateOrderNum(), SettingsMain.getLagrangeOrder());
-}
-
-
 /*
  * Main advection function of the flow map using the stream function
  * Loop over footpoints to apply GALS
  * For each foot point: advect using the stream function and time stepping scheme
  * At the end: combine results of all footpoints using specific map update scheme
  */
-__global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi,
+__global__ void k_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi,
 		TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num, int l_order)
 {
 	bool debug = false;
@@ -473,126 +389,98 @@ __global__ void kernel_advect_using_stream_hermite(double *ChiX, double *ChiY, d
 }
 
 
-/*******************************************************************
-*						 Apply remapping						   *
-*******************************************************************/
-
-
-void apply_map_stack_to_W_part_All(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double *ChiY,
-		double *W_real, double *Dev_Temp, double *W_initial, int simulation_num)
-{
-	// copy bounds to constant device memory
-	cudaMemcpyToSymbol(d_bounds, Grid.bounds, sizeof(double)*4);
-
-	kernel_apply_map_stack_to_W_custom_part_1<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
-
-	// loop over all maps in map stack, where all maps are on host system
-	// this could be parallelized between loading and computing?
-	for (int i_map = Map_Stack.map_stack_ctr-1; i_map >= 0; i_map--) {
-		Map_Stack.copy_map_to_device(i_map);
-		kernel_apply_map_stack_to_W_part_2<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack, Dev_Temp, *Map_Stack.Grid, Grid);
-	}
-
-	// initial condition
-	kernel_apply_map_stack_to_W_part_3<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(W_real, Dev_Temp, Grid, W_initial, simulation_num);
-}
-
-
+// apply first map
 // like k_h_sample_map but saves all results in one array next to each other
-__global__ void kernel_apply_map_stack_to_W_custom_part_1(double *ChiX, double *ChiY, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
+__global__ void k_apply_map_stack_to_W_custom_part_1(double *ChiX, double *ChiY, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-	
+
 	if(iX >= Grid.NX || iY >= Grid.NY)
 		return;
-	
+
 	int In = iY*Grid.NX + iX;
-	
+
 	double h_temp_x = (Grid.bounds[1] - Grid.bounds[0])/Grid.NX;
 	double h_temp_y = (Grid.bounds[3] - Grid.bounds[2])/Grid.NY;
 
 	//position
 	double x = Grid.bounds[0] + iX * h_temp_x;
 	double y = Grid.bounds[2] + iY * h_temp_y;
-	
+
 	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, Grid_map);
-	
+
 	// save in two points in array
 	x_y[2*In  ] = x;
 	x_y[2*In+1] = y;
 
 }
-
-__global__ void kernel_apply_map_stack_to_W_part_2(double *ChiX_stack, double *ChiY_stack, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
+// apply intermediate maps
+__global__ void k_apply_map_stack_to_W_part_2(double *ChiX_stack, double *ChiY_stack, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-	
+
 	if(iX >= Grid.NX || iY >= Grid.NY)
 		return;
-	
+
 	int In = iY*Grid.NX + iX;
-	
+
 	//for(int k = stack_length - 1; k >= 0; k--)
 	device_diffeo_interpolate_2D(ChiX_stack, ChiY_stack, x_y[2*In], x_y[2*In+1], &x_y[2*In], &x_y[2*In+1], Grid_map);
-	
-}
 
-__global__ void kernel_apply_map_stack_to_W_part_3(double *ws, double *x_y, TCudaGrid2D Grid, double *W_initial, int simulation_num)
+}
+// sample from initial condition
+__global__ void k_apply_map_stack_to_W_part_3(double *ws, double *x_y, TCudaGrid2D Grid, double *W_initial, int simulation_num)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-	
+
 	if(iX >= Grid.NX || iY >= Grid.NY)
 		return;
-	
+
 	long int In = iY*Grid.NX + iX;
 
 	#ifndef DISCRET
-		ws[In] = device_initial_W(x_y[2*In], x_y[2*In+1], simulation_num);
+		ws[In] = d_initial_W(x_y[2*In], x_y[2*In+1], simulation_num);
 	#endif
-	
+
 	#ifdef DISCRET
-		ws[In] = device_hermite_interpolate_2D(W_initial, x_y[2*In], x_y[2*In+1], Grid);
+		ws[In] = d_hermite_interpolate_2D(W_initial, x_y[2*In], x_y[2*In+1], Grid);
 	#endif
-	
 }
 
 
-/*******************************************************************
-*						 										   *
-*******************************************************************/
-
-
-__global__ void kernel_compare_vorticity_with_initial(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *error, int stack_length, TCudaGrid2D Grid_map, TCudaGrid2D Grid_fine, int simulation_num)
+// this function is nice, but not implemented for cpu mapstack yet
+__global__ void k_compare_vorticity_with_initial(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *error, int stack_length, TCudaGrid2D Grid_map, TCudaGrid2D Grid_fine, int simulation_num)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-	
+
 	if(iX >= Grid_fine.NX || iY >= Grid_fine.NY)
 		return;
-	
+
 	int In = iY*Grid_fine.NX + iX;
-	
+
 	//position
 	double x = iX*Grid_fine.hx;
 	double y = iY*Grid_fine.hy;
-	
+
 	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, Grid_map);
 	for(int k = stack_length - 1; k >= 0; k--)
 		device_diffeo_interpolate_2D(&ChiX_stack[k*Grid_map.N*4], &ChiY_stack[k*Grid_map.N*4], x, y, &x, &y, Grid_map);
-	
-	error[In] = fabs(device_initial_W(x, y, simulation_num) - device_initial_W(iX*Grid_fine.hx, iY*Grid_fine.hy, simulation_num));
+
+	error[In] = fabs(d_initial_W(x, y, simulation_num) - d_initial_W(iX*Grid_fine.hx, iY*Grid_fine.hy, simulation_num));
 }
 
 
-// apply mollifier, this function is basically only used by evaluate_stream
-__global__ void kernel_apply_map_and_sample_from_hermite(double *ChiX, double *ChiY, double *fs, double *H, TCudaGrid2D Grid_map, TCudaGrid2D Grid_vort, TCudaGrid2D Grid_fine, int molly_stencil, bool padd_inline_fft)
+
+// apply map, sample from fine vorticity and apply mollifier, this function is basically only used by evaluate_stream
+__global__ void k_apply_map_and_sample_from_hermite(double *ChiX, double *ChiY, double *fs, double *H, TCudaGrid2D Grid_map, TCudaGrid2D Grid_vort, TCudaGrid2D Grid_fine, int molly_stencil, bool padd_inline_fft)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -663,7 +551,7 @@ __global__ void kernel_apply_map_and_sample_from_hermite(double *ChiX, double *C
 *						 Initial condition						   *
 *******************************************************************/
 
-__device__ double device_initial_W(double x, double y, int simulation_num)
+__device__ double d_initial_W(double x, double y, int simulation_num)
 {
 // "4_nodes"		"quadropole"		"three_vortices"		"single_shear_layer"		"two_votices"
 
@@ -801,14 +689,14 @@ __device__ double device_initial_W(double x, double y, int simulation_num)
 
 
 
-__device__ double device_initial_W_discret(double x, double y, double *W_initial, int NX, int NY){
+__device__ double d_initial_W_discret(double x, double y, double *W_initial, int NX, int NY){
 	// map position back into domain
 	x = fmod(x, twoPI) - floor(x/twoPI)*twoPI;
 	y = fmod(y, twoPI) - floor(y/twoPI)*twoPI;
-	
+
 	// compute index
 	int In = floor(y/twoPI * NY) * NX + floor(x/twoPI * NX);
-	//In = floor(x * NY) * NX + floor(y * NX); 
-	
+	//In = floor(x * NY) * NX + floor(y * NX);
+
 	return W_initial[In];
 }

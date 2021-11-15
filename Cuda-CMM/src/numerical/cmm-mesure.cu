@@ -1,11 +1,11 @@
-#include "cudamesure2d.h"
+#include "../numerical/cmm-mesure.h"
 
 
 void Compute_Energy(double *E, double *psi, TCudaGrid2D Grid){
 	// parallel reduction using thrust
 	thrust::device_ptr<double> psi_ptr = thrust::device_pointer_cast(psi);
 	*E = 0.5*Grid.h*Grid.h * thrust::transform_reduce(psi_ptr + Grid.N, psi_ptr + 3*Grid.N, thrust::square<double>(), 0.0, thrust::plus<double>());
-	printf("Energ : %f\n", *E);
+//	printf("Energ : %f\n", *E);
 }
 
 
@@ -13,7 +13,7 @@ void Compute_Enstrophy(double *E, double *W, TCudaGrid2D Grid){
 	// parallel reduction using thrust
 	thrust::device_ptr<double> W_ptr = thrust::device_pointer_cast(W);
 	*E = 0.5*Grid.h*Grid.h * thrust::transform_reduce(W_ptr, W_ptr + Grid.N, thrust::square<double>(), 0.0, thrust::plus<double>());
-	printf("Enstr : %f\n", *E);
+//	printf("Enstr : %f\n", *E);
 }
 
 
@@ -40,7 +40,7 @@ void Compute_Palinstrophy(TCudaGrid2D Grid, double *Pal, double *W_real, cufftDo
 	// parallel reduction using thrust
 	*Pal += 0.5*Grid.h*Grid.h * thrust::transform_reduce(Pal_ptr + 2*Grid.Nfft, Pal_ptr + 2*Grid.Nfft + Grid.N, thrust::square<double>(), 0.0, thrust::plus<double>());
 
-	printf("Pal : %f\n", *Pal);
+//	printf("Pal : %f\n", *Pal);
 }
 
 

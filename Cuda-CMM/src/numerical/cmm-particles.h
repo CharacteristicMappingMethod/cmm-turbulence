@@ -2,8 +2,8 @@
 #define __CUDA_PARTICLES_H__
 
 #include "../numerical/cmm-hermite.h"
-#include "../grid/cudagrid2d.h"
-#include "../simulation/settings.h"
+#include "../grid/cmm-grid2d.h"
+#include "../ui/settings.h"
 
 #ifdef __CUDACC__
 

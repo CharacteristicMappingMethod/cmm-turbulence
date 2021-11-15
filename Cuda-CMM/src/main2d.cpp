@@ -1,5 +1,5 @@
-#include "simulation/cudaeuler2d.h"
-#include "simulation/settings.h"
+#include "simulation/cmm-euler2d.h"
+#include "ui/settings.h"
 
 
 

@@ -20,8 +20,8 @@
 #include <sys/stat.h>
 
 // programs from here
-#include "../grid/cudagrid2d.h"
-#include "../simulation/settings.h"
+#include "../grid/cmm-grid2d.h"
+#include "../ui/settings.h"
 
 // HDF5_INCLUDE switch is implemented at compile level in the makefile
 #ifdef HDF5_INCLUDE
