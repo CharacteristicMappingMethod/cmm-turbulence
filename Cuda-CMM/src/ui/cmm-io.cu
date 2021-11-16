@@ -343,3 +343,8 @@ const std::string currentDateTime() {
     return buf;
 }
 
+// helper function to format time to readable format
+string format_duration(double sec) {
+	return to_str(floor(sec/3600.0)) + "h " + to_str(floor(std::fmod(sec, 3600)/60.0)) + "m " + to_str(std::fmod(sec, 60)) + "s";
+}
+

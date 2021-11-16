@@ -12,7 +12,6 @@
 #include "sstream"
 #include <iostream>
 #include <string>
-#include <stdio.h>
 #include <time.h>
 
 // mkdir
@@ -62,12 +61,24 @@ private:
 const string currentDateTime();
 
 
+// little function to format datatype to string
 template<typename Type> string to_str (const Type & t)
 {
   ostringstream os;
-  if (std::is_same<Type, double>::value) os.precision(3);
+  if (std::is_same<Type, double>::value) os.precision(8);
   os << t;
   return os.str ();
 }
+// little function to format datatype to string with specific precision
+template<typename Type> string to_str (const Type & t, int prec)
+{
+  ostringstream os;
+  os.precision(prec);
+  os << t;
+  return os.str ();
+}
+
+// little function to format milliseconds to readable format
+string format_duration(double sec);
 
 #endif

@@ -497,9 +497,9 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 					cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 					Dev_Temp_C1, Mesure, Mesure_fine, count_mesure);
 			if (SettingsMain.getVerbose() >= 3) {
-				message = "Cons : Energ = " + to_str(Mesure[3*count_mesure])
-						+    " \t Enstr = " + to_str(Mesure[3*count_mesure+1])
-						+ " \t Palinstr = " + to_str(Mesure[3*count_mesure+2]);
+				message = "Cons : Energ = " + to_str(Mesure[3*count_mesure], 8)
+						+    " \t Enstr = " + to_str(Mesure[3*count_mesure+1], 8)
+						+ " \t Palinstr = " + to_str(Mesure[3*count_mesure+2], 8);
 				cout<<message+"\n"; logger.push(message);
 			}
 			count_mesure++;
@@ -513,9 +513,9 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 				Dev_ChiX, Dev_ChiY, bounds, Dev_W_H_initial, SettingsMain, "0",
 				Mesure_sample, count_mesure_sample);
 		if (SettingsMain.getVerbose() >= 3) {
-			message = "Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample])
-					+    " \t Enstr = " + to_str(Mesure_sample[3*count_mesure_sample+1])
-					+ " \t Palinstr = " + to_str(Mesure_sample[3*count_mesure_sample+2]);
+			message = "Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample], 8)
+					+    " \t Enstr = " + to_str(Mesure_sample[3*count_mesure_sample+1], 8)
+					+ " \t Palinstr = " + to_str(Mesure_sample[3*count_mesure_sample+2], 8);
 			cout<<message+"\n"; logger.push(message);
 		}
 		count_mesure_sample++;
@@ -628,6 +628,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		t_vec[loop_ctr_l + 1] = t_vec[loop_ctr_l] + dt_now;
 		dt_vec[loop_ctr_l + 1] = dt_now;
 
+
 		/*
 		 * Map advection
 		 *  - Velocity is already intialized, so we can safely do that here
@@ -656,6 +657,11 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		*******************************************************************/
 		incomp_error[loop_ctr] = incompressibility_check(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, Grid_fine, Grid_coarse);
 //		incomp_error[loop_ctr] = incompressibility_check(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, Grid_coarse, Grid_coarse);
+
+		if (loop_ctr == 0) {
+			cudaMemcpy(Host_save, Dev_Temp_C1, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
+			writeAllRealToBinaryFile(Grid_fine.N, Host_save, SettingsMain, "/Test");
+		}
 
 		//resetting map and adding to stack
 		if( incomp_error[loop_ctr] > SettingsMain.getIncompThreshold() && !SettingsMain.getSkipRemapping()) {
@@ -711,7 +717,6 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 				Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
 				Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
 
-
 		/*
 		 * Particles advection after velocity update to profit from nice avaiable accelerated schemes
 		 */
@@ -756,9 +761,9 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 						cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 						Dev_Temp_C1, Mesure, Mesure_fine, count_mesure);
 				if (SettingsMain.getVerbose() >= 3) {
-					message = "Cons : Energ = " + to_str(Mesure[3*count_mesure])
-							+    " \t Enstr = " + to_str(Mesure[3*count_mesure+1])
-							+ " \t Palinstr = " + to_str(Mesure[3*count_mesure+2]);
+					message = "Cons : Energ = " + to_str(Mesure[3*count_mesure], 8)
+							+    " \t Enstr = " + to_str(Mesure[3*count_mesure+1], 8)
+							+ " \t Palinstr = " + to_str(Mesure[3*count_mesure+2], 8);
 					cout<<message+"\n"; logger.push(message);
 				}
 				count_mesure++;
@@ -775,9 +780,9 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 						Dev_ChiX, Dev_ChiY, bounds, Dev_W_H_initial, SettingsMain, to_str(t_vec[loop_ctr_l+1]),
 						Mesure_sample, count_mesure_sample);
 				if (SettingsMain.getVerbose() >= 3) {
-					message = "Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample])
-							+    " \t Enstr = " + to_str(Mesure_sample[3*count_mesure_sample+1])
-							+ " \t Palinstr = " + to_str(Mesure_sample[3*count_mesure_sample+2]);
+					message = "Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample], 8)
+							+    " \t Enstr = " + to_str(Mesure_sample[3*count_mesure_sample+1], 8)
+							+ " \t Palinstr = " + to_str(Mesure_sample[3*count_mesure_sample+2], 8);
 					cout<<message+"\n"; logger.push(message);
 				}
 				count_mesure_sample++;
@@ -892,15 +897,6 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			// particles advection
 	    	particles_advect(SettingsMain, Grid_psi, Dev_particles_pos, Dev_particles_vel, Dev_Psi_real,
 	    			t_vec, dt_vec, loop_ctr, particle_block, particle_thread);
-
-//			Particle_advect<<<particle_block, particle_thread>>>(Nb_particles, dt_p, Dev_particles_pos, Dev_Psi_real,
-//					Grid_psi, SettingsMain.getParticlesTimeIntegrationNum());
-//			// loop for all tau p
-//			for(int i_tau_p = 1; i_tau_p < SettingsMain.getParticlesTauNum(); i_tau_p+=1){
-//				Particle_advect_inertia<<<particle_block, particle_thread>>>(Nb_particles, dt_p,
-//						Dev_particles_pos + 2*Nb_particles*i_tau_p, Dev_particles_vel + 2*Nb_particles*i_tau_p, Dev_Psi_real,
-//						Grid_psi, SettingsMain.particles_tau[i_tau_p], SettingsMain.getParticlesTimeIntegrationNum());
-//			}
 		}
 
 		// force synchronize after loop to wait until everything is finished
@@ -941,9 +937,9 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 					cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 					Dev_Temp_C1, Mesure, Mesure_fine, count_mesure);
 			if (SettingsMain.getVerbose() >= 3) {
-				message = "Cons : Energ = " + to_str(Mesure[3*count_mesure])
-						+    " \t Enstr = " + to_str(Mesure[3*count_mesure+1])
-						+ " \t Palinstr = " + to_str(Mesure[3*count_mesure+2]);
+				message = "Cons : Energ = " + to_str(Mesure[3*count_mesure], 8)
+						+    " \t Enstr = " + to_str(Mesure[3*count_mesure+1], 8)
+						+ " \t Palinstr = " + to_str(Mesure[3*count_mesure+2], 8);
 				cout<<message+"\n"; logger.push(message);
 			}
 			count_mesure++;
@@ -958,9 +954,9 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 				Dev_ChiX, Dev_ChiY, bounds, Dev_W_H_initial, SettingsMain, "final",
 				Mesure_sample, count_mesure_sample);
 		if (SettingsMain.getVerbose() >= 3) {
-			message = "Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample])
-					+    " \t Enstr = " + to_str(Mesure_sample[3*count_mesure_sample+1])
-					+ " \t Palinstr = " + to_str(Mesure_sample[3*count_mesure_sample+2]);
+			message = "Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample], 8)
+					+    " \t Enstr = " + to_str(Mesure_sample[3*count_mesure_sample+1], 8)
+					+ " \t Palinstr = " + to_str(Mesure_sample[3*count_mesure_sample+2], 8);
 			cout<<message+"\n"; logger.push(message);
 		}
 		count_mesure_sample++;
@@ -1019,8 +1015,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	delete [] Host_save;
 	
 	// Chi
-	cudaFree(Dev_ChiX);
-	cudaFree(Dev_ChiY);
+	cudaFree(Dev_ChiX); cudaFree(Dev_ChiY);
 
 	// Chistack
 	Map_Stack.free_res();
@@ -1076,7 +1071,4 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 }
 
 
-// helper function to format time to readable format
-string format_duration(double sec) {
-	return to_str(floor(sec/3600.0)) + "h " + to_str(floor(std::fmod(sec, 3600)/60.0)) + "m " + to_str(std::fmod(sec, 60)) + "s";
-}
+

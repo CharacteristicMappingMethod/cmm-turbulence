@@ -95,11 +95,25 @@ void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map,
 	cudaMemcpyToSymbol(d_c1, h_c1, sizeof(double)*12); cudaMemcpyToSymbol(d_cx, h_cx, sizeof(double)*12);
 	cudaMemcpyToSymbol(d_cy, h_cy, sizeof(double)*12); cudaMemcpyToSymbol(d_cxy, h_cxy, sizeof(double)*12);
 
+	cudaDeviceSynchronize();
+
+	double energ_test;
+	Compute_Energy(&energ_test, psi, Grid_psi);
+	std::string message = "Energ: " + to_str(energ_test, 16);
+	std::cout<<message+"\n";
+
 	// now launch the kernel
 	k_advect_using_stream_hermite<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock>>>(ChiX, ChiY, Chi_new_X, Chi_new_Y,
 			psi, Grid_map, Grid_psi, t[loop_ctr_l+1], dt[loop_ctr_l+1],
 			SettingsMain.getMapEpsilon(), SettingsMain.getTimeIntegrationNum(),
 			SettingsMain.getMapUpdateOrderNum(), SettingsMain.getLagrangeOrder());
+
+	double inc_test = incompressibility_check(ChiX, ChiY, Chi_new_Y + 4*Grid_map.N, Grid_map, Grid_map);;
+	message = "Incomp old: " + to_str(inc_test, 16);
+	std::cout<<message+"\n";
+	inc_test = incompressibility_check(Chi_new_X, Chi_new_Y, Chi_new_Y + 4*Grid_map.N, Grid_map, Grid_map);;
+	message = "Incomp: " + to_str(inc_test, 16);
+	std::cout<<message+"\n";
 }
 
 
@@ -165,6 +179,11 @@ void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCu
 
 	// apply map to w and sample using mollifier, do it on a special grid for vorticity and apply mollification if wanted
 	k_apply_map_and_sample_from_hermite<<<Grid_vort.blocksPerGrid, Grid_vort.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_fine_real, Grid_coarse, Grid_vort, Grid_fine, molly_stencil, true);
+
+	double enstr_test;
+	Compute_Enstrophy(&enstr_test, (cufftDoubleReal*)Dev_Temp_C1, Grid_vort);
+	std::string message = "Enstr: " + to_str(enstr_test, 16);
+	std::cout<<message+"\n";
 
 	// forward fft
 	cufftExecD2Z(cufft_plan_vort, (cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C1);

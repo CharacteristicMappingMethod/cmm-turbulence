@@ -9,7 +9,7 @@ void SettingsCMM::setPresets() {
 
 	// grid settings for coarse and fine grid
 	// 32		64		128		256		512		1024		2048		4096		8192		16384
-	// max working on V100 : grid_scale = 4096; fine_grid_scale = 16384;
+	// max working on V100 : grid_scale = 8192; fine_grid_scale = 16384;
 	int grid_coarse = 512;
 	int grid_fine = 2048;
 	int grid_psi = grid_coarse;  // psi will be (up)sampled on this grid, Restriction: 2*N_fft_psi !> 4*N_coarse
@@ -257,7 +257,7 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 			else if (command == "time_integration") setTimeIntegration(value);
 			else if (command == "lagrange_override") setLagrangeOverride(stoi(value));
 			else if (command == "map_update_order") setMapUpdateOrder(value);
-			else if (command == "map_update_order") setMapUpdateGrid(getBoolFromString(value));
+			else if (command == "map_update_grid") setMapUpdateGrid(getBoolFromString(value));
 			else if (command == "molly_stencil") setMollyStencil(stoi(value));
 			else if (command == "freq_cut_psi") setFreqCutPsi(stod(value));
 			else if (command == "skip_remapping") setSkipRemapping(getBoolFromString(value));
