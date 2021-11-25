@@ -11,7 +11,7 @@
 
 __constant__ double d_Lp12[4];
 
-__global__ void Rescale(int Nb_particle, double s, double *particles_pos){  // Rescaling the particles uniform distribution on the square [0,s]x[0,s] (s = twoPI)
+__global__ void k_rescale(int Nb_particle, double particles_center_x, double particles_center_y, double particles_width_x, double particles_width_y, double *particles_pos, double LX, double LY) {  // Rescaling the particles uniform distribution on the square [0,s]x[0,s] (s = twoPI)
 
 	int i = (blockDim.x * blockIdx.x + threadIdx.x);  // (thread_num_max * block_num + thread_num) - gives position
 
@@ -19,8 +19,12 @@ __global__ void Rescale(int Nb_particle, double s, double *particles_pos){  // R
 	if (i >= Nb_particle)
 		return;
 
-    particles_pos[2 * i] *= s;
-    particles_pos[2 * i + 1] *= s;
+	double part_pos_old[2];
+	part_pos_old[0] = particles_center_x + particles_width_x * (particles_pos[2*i  ] - 0.5);
+	part_pos_old[1] = particles_center_y + particles_width_y * (particles_pos[2*i+1] - 0.5);
+
+	particles_pos[2*i]   = part_pos_old[0] - floor(part_pos_old[0]/LX)*LX;
+	particles_pos[2*i+1] = part_pos_old[1] - floor(part_pos_old[1]/LY)*LX;
 }
 
 

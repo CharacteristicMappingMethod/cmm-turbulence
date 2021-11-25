@@ -16,6 +16,21 @@ void Compute_Enstrophy(double *E, double *W, TCudaGrid2D Grid){
 //	printf("Enstr : %f\n", *E);
 }
 
+// function to get square for complex values
+struct compl_square
+{
+    __host__ __device__
+        double operator()(const cufftDoubleComplex &x) const {
+            return x.x*x.x + x.y*x.y;
+        }
+};
+void Compute_Enstrophy_fourier(double *E, cufftDoubleComplex *W, TCudaGrid2D Grid){
+	// parallel reduction using thrust
+	thrust::device_ptr<cufftDoubleComplex> W_ptr = thrust::device_pointer_cast(W);
+	*E = twoPI * twoPI * thrust::transform_reduce(W_ptr, W_ptr + Grid.Nfft, compl_square(), 0.0, thrust::plus<double>());
+//	printf("Enstr : %f\n", *E);
+}
+
 
 // compute palinstrophy using fourier transformations - a bit more expensive with one temporary array but ca marche
 void Compute_Palinstrophy(TCudaGrid2D Grid, double *Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftHandle cufft_plan_D2Z, cufftHandle cufft_plan_Z2D){

@@ -47,9 +47,9 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	double dt;															// time - step final
 	int iterMax;														// time - maximum iteration count for safety
 
-	string workspace = SettingsMain.getWorkspace();						// folder where we work in
-	string sim_name = SettingsMain.getSimName();						// name of the simulation
-	string initial_condition = SettingsMain.getInitialCondition();		// name of the initial condition
+	std::string workspace = SettingsMain.getWorkspace();						// folder where we work in
+	std::string sim_name = SettingsMain.getSimName();						// name of the simulation
+	std::string initial_condition = SettingsMain.getInitialCondition();		// name of the initial condition
 	int snapshots_per_second = SettingsMain.getSnapshotsPerSec();		// saves per second
 
 	double mb_used_RAM_GPU;  // count memory usage by variables in mbyte
@@ -69,31 +69,31 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	int cpu_map_num = int(double(SettingsMain.getMemRamCpuRemaps())/map_size/double(Nb_array_RAM));  // define how many more remappings we can save on CPU than on GPU
 	
 	// build file name together
-	string file_name = sim_name + "_" + initial_condition + "_C" + to_str(NX_coarse) + "_F" + to_str(NX_fine) + "_t" + to_str(1.0/dt) + "_T" + to_str(tf);
+	std::string file_name = sim_name + "_" + initial_condition + "_C" + to_str(NX_coarse) + "_F" + to_str(NX_fine) + "_t" + to_str(1.0/dt) + "_T" + to_str(tf);
 	SettingsMain.setFileName(file_name);
 
 	create_directory_structure(SettingsMain, dt, iterMax);
     Logger logger(SettingsMain);
 
-    string message;  // string to be used for console output
+    std::string message;  // string to be used for console output
     // print version details
     if (SettingsMain.getVerbose() >= 3) {
 		int version;
 		cudaRuntimeGetVersion(&version);
-    	message = "Cuda runtime version = " + to_str(version); cout<<message+"\n"; logger.push(message);
+    	message = "Cuda runtime version = " + to_str(version); std::cout<<message+"\n"; logger.push(message);
 		cudaDriverGetVersion(&version);
-    	message = "Cuda driver version = " + to_str(version); cout<<message+"\n"; logger.push(message);
+    	message = "Cuda driver version = " + to_str(version); std::cout<<message+"\n"; logger.push(message);
 		cufftGetVersion(&version);
-		message = "CuFFT version = " + to_str(version); cout<<message+"\n\n"; logger.push(message);
+		message = "CuFFT version = " + to_str(version); std::cout<<message+"\n\n"; logger.push(message);
     }
 
     // print simulation details
     if (SettingsMain.getVerbose() >= 1) {
-		message = "Initial condition = " + initial_condition; cout<<message+"\n"; logger.push(message);
-		message = "Iter max = " + to_str(iterMax); cout<<message+"\n"; logger.push(message);
-		message = "Map stack length on CPU = " + to_str(cpu_map_num); cout<<message+"\n"; logger.push(message);
-		message = "Map stack length total on CPU = " + to_str(cpu_map_num * Nb_array_RAM); cout<<message+"\n"; logger.push(message);
-		message = "Name of simulation = " + SettingsMain.getFileName(); cout<<message+"\n"; logger.push(message);
+		message = "Initial condition = " + initial_condition; std::cout<<message+"\n"; logger.push(message);
+		message = "Iter max = " + to_str(iterMax); std::cout<<message+"\n"; logger.push(message);
+		message = "Map stack length on CPU = " + to_str(cpu_map_num); std::cout<<message+"\n"; logger.push(message);
+		message = "Map stack length total on CPU = " + to_str(cpu_map_num * Nb_array_RAM); std::cout<<message+"\n"; logger.push(message);
+		message = "Name of simulation = " + SettingsMain.getFileName(); std::cout<<message+"\n"; logger.push(message);
     }
 	
 	
@@ -223,9 +223,8 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	// we actually only need one host array, as we always just copy from and to this and never really read files
 	long int size_max_r = std::max(4*Grid_fine.N, 4*Grid_psi.N);
 	size_max_r = std::max(size_max_r, 4*Grid_coarse.N);
-	if (SettingsMain.getSampleOnGrid()) {
-		size_max_r = std::max(size_max_r, 4*Grid_sample.N);
-	}
+	if (SettingsMain.getSampleOnGrid()) { size_max_r = std::max(size_max_r, 4*Grid_sample.N); }
+	if (SettingsMain.getZoom()) { size_max_r = std::max(size_max_r, 4*Grid_zoom.N); }
 	double *Host_save;
 	Host_save = new double[size_max_r];
 
@@ -254,7 +253,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	MapStack Map_Stack(&Grid_coarse, cpu_map_num);
 	mb_used_RAM_GPU += 8*Grid_coarse.sizeNReal / 1e6;
 	if (SettingsMain.getVerbose() >= 2) {
-		message = "Map Stack Initialized"; cout<<message+"\n"; logger.push(message);
+		message = "Map Stack Initialized"; std::cout<<message+"\n"; logger.push(message);
 	}
 	
 	
@@ -269,8 +268,9 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	cudaMalloc((void**)&Dev_W_coarse, Grid_coarse.sizeNReal);
 	mb_used_RAM_GPU += Grid_coarse.sizeNReal / 1e6;
 	//vorticity hermite
-	cudaMalloc((void**)&Dev_W_H_fine_real, 4*Grid_fine.sizeNReal);
-	mb_used_RAM_GPU += 4*Grid_fine.sizeNReal / 1e6;
+	cudaMalloc((void**)&Dev_W_H_fine_real, 3*Grid_fine.sizeNReal + Grid_fine.sizeNfft);
+	Dev_W_H_fine_real += 2*Grid_fine.Nfft - Grid_fine.N; // shift to hide beginning buffer
+	mb_used_RAM_GPU += (3*Grid_fine.sizeNReal + Grid_fine.sizeNfft) / 1e6;
 	
 	
 	/*******************************************************************
@@ -296,7 +296,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		fourier_hermite(Grid_fine, Dev_Temp_C1, Dev_W_H_initial, cufft_plan_fine_Z2D);
 		delete [] Host_W_initial;
 		
-		message = cudaGetErrorName(cudaGetLastError()); cout<<message+"\n\n"; logger.push(message);
+		message = cudaGetErrorName(cudaGetLastError()); std::cout<<message+"\n\n"; logger.push(message);
 		
 	#endif
 	
@@ -309,8 +309,10 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	
 	//stream hermite on coarse computational grid, previous timesteps for lagrange interpolation included in array
 	double *Dev_Psi_real;
-	cudaMalloc((void**) &Dev_Psi_real, 4*SettingsMain.getLagrangeOrder()*Grid_psi.sizeNReal);
-	mb_used_RAM_GPU += 4*SettingsMain.getLagrangeOrder()*Grid_psi.sizeNReal / 1e6;
+	size_t size_psi = 3*Grid_psi.sizeNReal+Grid_psi.sizeNfft + (SettingsMain.getLagrangeOrder()-1)*4*Grid_psi.sizeNReal;
+	cudaMalloc((void**) &Dev_Psi_real, size_psi);
+	Dev_Psi_real += 2*Grid_psi.Nfft - Grid_psi.N;  // shift to hide beginning buffer
+	mb_used_RAM_GPU += size_psi / 1e6;
 	
 	
 	/*******************************************************************
@@ -335,12 +337,18 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		cudaMalloc((void**) &Dev_particles_vel, 2*Nb_particles*SettingsMain.getParticlesTauNum()*sizeof(double));
 		mb_used_RAM_GPU += 4*Nb_particles*SettingsMain.getParticlesTauNum()*sizeof(double) / 1e6;
 
-		// create initial positions from random distribution
+		// initialize randomizer
 		curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_DEFAULT);
-		curandGenerateUniformDouble(prng, Dev_particles_pos, 2*Nb_particles*SettingsMain.getParticlesTauNum());
+		// set seed
+		curandSetPseudoRandomGeneratorSeed(prng, SettingsMain.getParticlesSeed());
+		// create initial positions from random distribution
+		curandGenerateUniformDouble(prng, Dev_particles_pos, 2*Nb_particles);
 
 		// Particles position initialization, make here to be absolutely sure to have the same positions
-		Rescale<<<particle_block, particle_thread>>>(Nb_particles, LX, Dev_particles_pos);  // project 0-1 onto 0-LX
+		// project 0-1 onto particle frame
+		k_rescale<<<particle_block, particle_thread>>>(SettingsMain.getParticlesNum(),
+				SettingsMain.getParticlesCenterX(), SettingsMain.getParticlesCenterY(), SettingsMain.getParticlesWidthX(), SettingsMain.getParticlesWidthY(),
+				Dev_particles_pos, LX, LY);
 
 		// copy all starting positions onto the other tau values
 		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p+=1)
@@ -363,10 +371,10 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 
 		if (SettingsMain.getVerbose() >= 1) {
 			message = "Number of particles = " + to_str(Nb_particles);
-			cout<<message+"\n"; logger.push(message);
+			std::cout<<message+"\n"; logger.push(message);
 			if (SettingsMain.getParticlesSnapshotsPerSec() > 0 && SettingsMain.getSaveFineParticles()) {
 				message = "Number of fine particles = " + to_str(SettingsMain.getParticlesFineNum());
-				cout<<message+"\n"; logger.push(message);
+				std::cout<<message+"\n"; logger.push(message);
 			}
 		}
 	}
@@ -435,7 +443,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	
 	double *Dev_Temp_2;
 	long int size_max_temp_2 = 0;
-	if (SettingsMain.getSampleOnGrid()) size_max_temp_2 = std::max(size_max_temp_2, 4*Grid_sample.sizeNReal);
+	if (SettingsMain.getSampleOnGrid()) size_max_temp_2 = std::max(size_max_temp_2, 3*Grid_sample.sizeNReal + Grid_sample.sizeNfft);
 	// define third temporary variable as safe buffer to be used for sample and zoom
 	if (size_max_temp_2 != 0) {
 		cudaMalloc((void**)&Dev_Temp_2, size_max_temp_2);
@@ -445,7 +453,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	// print estimated gpu memory usage in mb before initialization
 	if (SettingsMain.getVerbose() >= 1) {
 		message = "estimated GPU RAM usage in mb = " + to_str(mb_used_RAM_GPU);
-		cout<<message+"\n"; logger.push(message);
+		std::cout<<message+"\n"; logger.push(message);
 	}
 
 
@@ -456,13 +464,10 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		
 	//initialization of flow map as normal grid
 	k_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
-	
+
 	//setting initial conditions for vorticity by translating with initial grid
 	translate_initial_condition_through_map_stack(Grid_fine, Map_Stack, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real,
 			cufft_plan_fine_D2Z, cufft_plan_fine_Z2D, Dev_W_H_initial, SettingsMain.getInitialConditionNum(), Dev_Temp_C1);
-
-//	cudaMemcpy(Host_save, Dev_W_H_fine_real, 4*Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
-//	writeAllRealToBinaryFile(4*Grid_fine.N, Host_save, SettingsMain, "/Test1");
 
 	// compute first psi
 	// compute stream hermite from vorticity, we have two different versions avaiable
@@ -470,13 +475,60 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
 			Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
 
-//	cudaMemcpy(Host_save, Dev_Psi_real, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToHost);
-//	writeAllRealToBinaryFile(4*Grid_psi.N, Host_save, SettingsMain, "/Test2");
+	bool init_stream = false;
+	if (init_stream) {
+		// first try on computing the previous values by explicit euler
+		if (SettingsMain.getLagrangeOrder() > 1) {
+			std::string time_integration_init = SettingsMain.getTimeIntegration();
+			int lagrange_order_init = SettingsMain.getLagrangeOrder();  // in case there was an override, we set it back to that
+			SettingsMain.setTimeIntegration("EulerExp");  // set method to euler exp - no lagrange needed
+			SettingsMain.setLagrangeOrder(1);  // we have to set this too
+			// init fitting dt and t vectors
+			double t_init[2] = {0, -dt}; double dt_init[2] = {-dt, -dt};
+			// loop for all points needed
+			for (int i_lagrange = 1; i_lagrange < lagrange_order_init; i_lagrange++) {
+				// map advection
+				advect_using_stream_hermite(SettingsMain, Grid_coarse, Grid_psi, Dev_ChiX, Dev_ChiY,
+						(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)(Dev_Temp_C1) + 4*Grid_coarse.N, Dev_Psi_real + 4*Grid_psi.N*(i_lagrange-1), t_init, dt_init, 0);
+				cudaMemcpyAsync(Dev_ChiX, (cufftDoubleReal*)(Dev_Temp_C1), 			   		 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice, streams[2]);
+				cudaMemcpyAsync(Dev_ChiY, (cufftDoubleReal*)(Dev_Temp_C1) + 4*Grid_coarse.N, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice, streams[3]);
+				cudaDeviceSynchronize();
+				// test: incompressibility error
+				double incomp_init = incompressibility_check(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, Grid_fine, Grid_coarse);
+				// take into account the shifting occuring, so we have to copy parts every time, use first part as buffer because it's recomputed anyways
+				cudaMemcpy(Dev_Psi_real,
+						   Dev_Psi_real + 4*Grid_psi.N*i_lagrange + Grid_psi.N - 2*Grid_psi.Nfft, 2*Grid_psi.Nfft - Grid_psi.N, cudaMemcpyDeviceToDevice);
+				// compute stream function at one of the previous steps
+				evaluate_stream_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
+						Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real + 4*Grid_psi.N*i_lagrange,
+						cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
+						Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
+				// copy shift part back
+				cudaMemcpy(Dev_Psi_real + 4*Grid_psi.N*i_lagrange + Grid_psi.N - 2*Grid_psi.Nfft,
+						   Dev_Psi_real, 2*Grid_psi.Nfft - Grid_psi.N, cudaMemcpyDeviceToDevice);
+				if (SettingsMain.getVerbose() >= 2) {
+					message = "Init step = " + to_str(i_lagrange) + "/" + to_str(lagrange_order_init-1)
+							+ " \t IncompErr = " + to_str(incomp_init)
+							+ " \t C-Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+					std::cout<<message+"\n"; logger.push(message);
+				}
+			}
+			// reset everything
+			SettingsMain.setTimeIntegration(time_integration_init);
+			SettingsMain.setLagrangeOrder(lagrange_order_init);
+			k_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
+		}
 
-    //evaulate_stream_hermite(Grid_2048, Grid_fine, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_W_2048, Dev_Psi_2048_previous, cufftPlan_2048, Dev_Complex_fine, Dev_Hat_fine, Dev_Hat_fine_bis);
-    // set previous psi value to first psi value
-	for (int i_lagrange = 1; i_lagrange < SettingsMain.getLagrangeOrder(); i_lagrange++) {
-		cudaMemcpyAsync(Dev_Psi_real + 4*Grid_psi.N*i_lagrange, Dev_Psi_real, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice, streams[i_lagrange]);
+		evaluate_stream_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
+				Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
+				Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
+
+		}
+	else {
+		// set previous psi value to first psi value
+		for (int i_lagrange = 1; i_lagrange < SettingsMain.getLagrangeOrder(); i_lagrange++) {
+			cudaMemcpyAsync(Dev_Psi_real + 4*Grid_psi.N*i_lagrange, Dev_Psi_real, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice, streams[i_lagrange]);
+		}
 	}
 
 	// save function to save variables, combined so we always save in the same way and location
@@ -500,7 +552,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 				message = "Cons : Energ = " + to_str(Mesure[3*count_mesure], 8)
 						+    " \t Enstr = " + to_str(Mesure[3*count_mesure+1], 8)
 						+ " \t Palinstr = " + to_str(Mesure[3*count_mesure+2], 8);
-				cout<<message+"\n"; logger.push(message);
+				std::cout<<message+"\n"; logger.push(message);
 			}
 			count_mesure++;
 		}
@@ -516,7 +568,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			message = "Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample], 8)
 					+    " \t Enstr = " + to_str(Mesure_sample[3*count_mesure_sample+1], 8)
 					+ " \t Palinstr = " + to_str(Mesure_sample[3*count_mesure_sample+2], 8);
-			cout<<message+"\n"; logger.push(message);
+			std::cout<<message+"\n"; logger.push(message);
 		}
 		count_mesure_sample++;
 	}
@@ -561,7 +613,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		double u_max = thrust::reduce(temp_ptr, temp_ptr + Grid_psi.N, 0.0, thrust::maximum<double>());
 
 		message = "W min = " + to_str(w_min) + " - W max = " + to_str(w_max) + " - U max = " + to_str(u_max);
-		cout<<message+"\n"; logger.push(message);
+		std::cout<<message+"\n"; logger.push(message);
 	}
 	
 	double t_vec[iterMax+SettingsMain.getLagrangeOrder()], dt_vec[iterMax+SettingsMain.getLagrangeOrder()];
@@ -580,7 +632,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		time_values[loop_ctr] = diff; // loop_ctr was already increased
 	}
 	if (SettingsMain.getVerbose() >= 2) {
-		message = "Initialization Time = " + format_duration(time_values[loop_ctr]); cout<<message+"\n"; logger.push(message);
+		message = "Initialization Time = " + format_duration(time_values[loop_ctr]); std::cout<<message+"\n"; logger.push(message);
 	}
 
 	/*******************************************************************
@@ -588,7 +640,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	*******************************************************************/
 
 	if (SettingsMain.getVerbose() >= 1) {
-		message = cudaGetErrorName(cudaGetLastError()); cout<<message+"\n\n"; logger.push(message);
+		message = cudaGetErrorName(cudaGetLastError()); std::cout<<message+"\n\n"; logger.push(message);
 	}
 
 	/*******************************************************************
@@ -628,7 +680,6 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		t_vec[loop_ctr_l + 1] = t_vec[loop_ctr_l] + dt_now;
 		dt_vec[loop_ctr_l + 1] = dt_now;
 
-
 		/*
 		 * Map advection
 		 *  - Velocity is already intialized, so we can safely do that here
@@ -658,11 +709,6 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		incomp_error[loop_ctr] = incompressibility_check(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, Grid_fine, Grid_coarse);
 //		incomp_error[loop_ctr] = incompressibility_check(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, Grid_coarse, Grid_coarse);
 
-		if (loop_ctr == 0) {
-			cudaMemcpy(Host_save, Dev_Temp_C1, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
-			writeAllRealToBinaryFile(Grid_fine.N, Host_save, SettingsMain, "/Test");
-		}
-
 		//resetting map and adding to stack
 		if( incomp_error[loop_ctr] > SettingsMain.getIncompThreshold() && !SettingsMain.getSkipRemapping()) {
 
@@ -670,7 +716,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			if(Map_Stack.map_stack_ctr > Map_Stack.cpu_map_num*Map_Stack.Nb_array_RAM)
 			{
 				if (SettingsMain.getVerbose() >= 0) {
-					message = "Stack Saturated : Exiting"; cout<<message+"\n"; logger.push(message);
+					message = "Stack Saturated : Exiting"; std::cout<<message+"\n"; logger.push(message);
 				}
 				break;
 			}
@@ -678,7 +724,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			if (SettingsMain.getVerbose() >= 2) {
 				message = "Refining Map : Step = " + to_str(loop_ctr) + " \t Maps = " + to_str(Map_Stack.map_stack_ctr) + " ; "
 						+ to_str(Map_Stack.map_stack_ctr/Map_Stack.cpu_map_num) + " \t Gap = " + to_str(loop_ctr - old_ctr);
-				cout<<message+"\n"; logger.push(message);
+				std::cout<<message+"\n"; logger.push(message);
 			}
 			old_ctr = loop_ctr;
 			
@@ -688,7 +734,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			
 			if ((Map_Stack.map_stack_ctr%Map_Stack.cpu_map_num) == 0 && SettingsMain.getVerbose() >= 2){
 				message = "Starting to use map stack array number " + to_str(Map_Stack.map_stack_ctr/Map_Stack.cpu_map_num);
-				cout<<message+"\n"; logger.push(message);
+				std::cout<<message+"\n"; logger.push(message);
 			}
 
 			Map_Stack.copy_map_to_host(Dev_ChiX, Dev_ChiY);
@@ -700,13 +746,14 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		map_gap[loop_ctr] = loop_ctr - old_ctr;
 		map_ctr[loop_ctr] = Map_Stack.map_stack_ctr;
 
+
 	    /*
 	     * Evaluation of stream hermite for the velocity at end of step to resemble velocity after timestep
 	     *  - first copy the old values
 	     *  - afterwards compute the new
 	     *  - done before particles so that particles can benefit from nice timesteppings
 	     */
-        //copy Psi to Psi_previous and Psi_previous to Psi_previous_previous
+        //copy Psi to previous locations, from oldest-1 upwards, take care of needed buffer for fourier_hermite
 		for (int i_lagrange = 1; i_lagrange < SettingsMain.getLagrangeOrder(); i_lagrange++) {
 			cudaMemcpy(Dev_Psi_real + 4*Grid_psi.N*(SettingsMain.getLagrangeOrder()-i_lagrange),
 					   Dev_Psi_real + 4*Grid_psi.N*(SettingsMain.getLagrangeOrder()-i_lagrange-1), 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice);
@@ -746,7 +793,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			if( fmod(t_vec[loop_ctr_l+1]+dt*1e-5, 1.0/(double)SettingsMain.getSnapshotsPerSec()) < dt_vec[loop_ctr_l+1] ) {
 				if (SettingsMain.getVerbose() >= 2) {
 					message = "Saving data : T = " + to_str(t_vec[loop_ctr_l+1]) + " \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
-					cout<<message+"\n"; logger.push(message);
+					std::cout<<message+"\n"; logger.push(message);
 				}
 
 				// save function to save variables, combined so we always save in the same way and location
@@ -764,7 +811,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 					message = "Cons : Energ = " + to_str(Mesure[3*count_mesure], 8)
 							+    " \t Enstr = " + to_str(Mesure[3*count_mesure+1], 8)
 							+ " \t Palinstr = " + to_str(Mesure[3*count_mesure+2], 8);
-					cout<<message+"\n"; logger.push(message);
+					std::cout<<message+"\n"; logger.push(message);
 				}
 				count_mesure++;
 			}
@@ -773,7 +820,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	    	if( fmod(t_vec[loop_ctr_l+1]+dt*1e-5, 1.0/(double)SettingsMain.getSampleSnapshotsPerSec()) < dt_vec[loop_ctr_l+1] ) {
 				if (SettingsMain.getVerbose() >= 2) {
 					message = "Saving sample data : T = " + to_str(t_vec[loop_ctr_l+1]) + " \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
-					cout<<message+"\n"; logger.push(message);
+					std::cout<<message+"\n"; logger.push(message);
 				}
 				sample_compute_and_write(Map_Stack, Grid_sample, Host_save, Dev_Temp_2,
 						cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
@@ -783,7 +830,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 					message = "Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample], 8)
 							+    " \t Enstr = " + to_str(Mesure_sample[3*count_mesure_sample+1], 8)
 							+ " \t Palinstr = " + to_str(Mesure_sample[3*count_mesure_sample+2], 8);
-					cout<<message+"\n"; logger.push(message);
+					std::cout<<message+"\n"; logger.push(message);
 				}
 				count_mesure_sample++;
 	    	}
@@ -793,7 +840,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			if( fmod(t_vec[loop_ctr_l+1]+dt*1e-5, 1.0/(double)SettingsMain.getParticlesSnapshotsPerSec()) < dt_vec[loop_ctr_l+1] ) {
 				if (SettingsMain.getVerbose() >= 2) {
 					message = "Saving particles : T = " + to_str(t_vec[loop_ctr_l+1]) + " \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
-					cout<<message+"\n"; logger.push(message);
+					std::cout<<message+"\n"; logger.push(message);
 				}
 
 				// save particle positions
@@ -814,7 +861,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			if( fmod(t_vec[loop_ctr_l+1]+dt*1e-5, 1.0/(double)SettingsMain.getZoomSnapshotsPerSec()) < dt_vec[loop_ctr_l+1] ) {
 				if (SettingsMain.getVerbose() >= 2) {
 					message = "Saving Zoom : T = " + to_str(t_vec[loop_ctr_l+1]) + " \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
-					cout<<message+"\n"; logger.push(message);
+					std::cout<<message+"\n"; logger.push(message);
 				}
 
 				Zoom(SettingsMain, Map_Stack, Grid_zoom, Grid_psi, Dev_ChiX, Dev_ChiY,
@@ -837,7 +884,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		if(error != 0)
 		{
 			if (SettingsMain.getVerbose() >= 0) {
-				message = "Exited early : Last Cuda Error = " + to_str(error); cout<<message+"\n"; logger.push(message);
+				message = "Exited early : Last Cuda Error = " + to_str(error); std::cout<<message+"\n"; logger.push(message);
 			}
 			exit(0);
 			break;
@@ -854,7 +901,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 					+ " \t S-Time = " + to_str(t_vec[loop_ctr_l+1]) + "/" + to_str(tf)
 					+ " \t IncompErr = " + to_str(incomp_error[loop_ctr-1])
 					+ " \t C-Time = " + format_duration(time_values[loop_ctr]);
-			cout<<message+"\n"; logger.push(message);
+			std::cout<<message+"\n"; logger.push(message);
 		}
 
 	}
@@ -869,16 +916,18 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		}
 		// initialize particles again
 		curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_DEFAULT);
-		curandGenerateUniformDouble(prng, Dev_particles_pos, 2*Nb_particles*SettingsMain.getParticlesTauNum());
+		curandGenerateUniformDouble(prng, Dev_particles_pos, 2*Nb_particles);
+
+		// project 0-1 onto particle frame
+		k_rescale<<<particle_block, particle_thread>>>(SettingsMain.getParticlesNum(),
+				SettingsMain.getParticlesCenterX(), SettingsMain.getParticlesCenterY(), SettingsMain.getParticlesWidthX(), SettingsMain.getParticlesWidthY(),
+				Dev_particles_pos, LX, LY);
 
 		// copy all starting positions onto the other tau values
 		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p+=1)
 			cudaMemcpy(&Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_pos[0], 2*Nb_particles*sizeof(double), cudaMemcpyDeviceToDevice);
 
-		Rescale<<<particle_block, particle_thread>>>(Nb_particles, LX, Dev_particles_pos);  // project 0-1 onto 0-LX
-
 		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p+=1){
-			Rescale<<<particle_block, particle_thread>>>(Nb_particles, LX, &Dev_particles_pos[2*Nb_particles*index_tau_p]);
 			Particle_advect_inertia_init<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p],
 					&Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Grid_psi);
 		}
@@ -888,7 +937,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		auto begin_P = std::chrono::high_resolution_clock::now();
 		if (SettingsMain.getVerbose() >= 2) {
 			message = "Starting extra particle loop : Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(begin_P - begin).count()/1e6);
-			cout<<message+"\n"; logger.push(message);
+			std::cout<<message+"\n"; logger.push(message);
 		}
 
 		// main loop until time 1
@@ -905,7 +954,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		auto end_P = std::chrono::high_resolution_clock::now();
 		if (SettingsMain.getVerbose() >= 2) {
 			message = "Finished extra particle loop : Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(end_P - begin).count()/1e6);
-			cout<<message+"\n"; logger.push(message);
+			std::cout<<message+"\n"; logger.push(message);
 		}
 
 		double time_p[1] = { std::chrono::duration_cast<std::chrono::microseconds>(end_P - begin_P).count()/1e6 };
@@ -940,7 +989,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 				message = "Cons : Energ = " + to_str(Mesure[3*count_mesure], 8)
 						+    " \t Enstr = " + to_str(Mesure[3*count_mesure+1], 8)
 						+ " \t Palinstr = " + to_str(Mesure[3*count_mesure+2], 8);
-				cout<<message+"\n"; logger.push(message);
+				std::cout<<message+"\n"; logger.push(message);
 			}
 			count_mesure++;
 		}
@@ -957,7 +1006,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			message = "Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample], 8)
 					+    " \t Enstr = " + to_str(Mesure_sample[3*count_mesure_sample+1], 8)
 					+ " \t Palinstr = " + to_str(Mesure_sample[3*count_mesure_sample+2], 8);
-			cout<<message+"\n"; logger.push(message);
+			std::cout<<message+"\n"; logger.push(message);
 		}
 		count_mesure_sample++;
 	}
@@ -997,7 +1046,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			Map_Stack.copy_map_to_host(Dev_ChiX, Dev_ChiY);
 		}
 		if (SettingsMain.getVerbose() >= 2) {
-			message = "Saving MapStack : Maps = " + to_str(Map_Stack.map_stack_ctr) + " \t Filesize = " + to_str(Map_Stack.map_stack_ctr*map_size) + "mb"; cout<<message+"\n"; logger.push(message);
+			message = "Saving MapStack : Maps = " + to_str(Map_Stack.map_stack_ctr) + " \t Filesize = " + to_str(Map_Stack.map_stack_ctr*map_size) + "mb"; std::cout<<message+"\n"; logger.push(message);
 		}
 		writeMapStack(SettingsMain, Map_Stack);
 	}
@@ -1006,7 +1055,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	/*******************************************************************
 	*						 Freeing memory							   *
 	*******************************************************************/
-	
+
 	cudaFree(Dev_W_H_initial);
 	
 	// Trash variable
@@ -1022,14 +1071,14 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	
 	// Vorticity
 	cudaFree(Dev_W_coarse);
-	cudaFree(Dev_W_H_fine_real);
+	cudaFree(Dev_W_H_fine_real + Grid_fine.N - 2*Grid_fine.Nfft);  // including reshift
 	
 	#ifdef DISCRET
 		cudaFree(Dev_W_H_Initial);
 	#endif
 
-	// Psi
-	cudaFree(Dev_Psi_real);
+	// Psi with reshift
+	cudaFree(Dev_Psi_real + Grid_psi.N - 2*Grid_psi.Nfft);
 
 	// CuFFT plans
 	cufftDestroy(cufft_plan_coarse_D2Z); cufftDestroy(cufft_plan_coarse_Z2D);
@@ -1066,7 +1115,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 
 	if (SettingsMain.getVerbose() >= 1) {
 		message = "Finished - Last Cuda Error = " + to_str(cudaGetErrorName(cudaGetLastError())) + " , Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
-		cout<<message+"\n"; logger.push(message);
+		std::cout<<message+"\n"; logger.push(message);
 	}
 }
 

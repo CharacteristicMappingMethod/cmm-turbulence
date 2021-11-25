@@ -8,16 +8,13 @@
 #include <iostream>
 
 
-using namespace std;
-
-
 class SettingsCMM {
 
 private:
 	// main properties, needed to be able to run
-	string workspace, sim_name, file_name;
+	std::string workspace, sim_name, file_name;
 	int grid_coarse, grid_fine, grid_psi, grid_vort;
-	string initial_condition; int initial_condition_num;
+	std::string initial_condition; int initial_condition_num;
 	int verbose;
 	// time stepping properties
 	double final_time, factor_dt_by_grid, snapshots_per_sec;
@@ -30,9 +27,9 @@ private:
 	//memory variables
 	int mem_RAM_CPU_remaps; bool save_map_stack;
 	// specific
-	string time_integration; int time_integration_num;
+	std::string time_integration; int time_integration_num;
 	int lagrange_order, lagrange_override;
-	string map_update_order; int map_update_order_num;
+	std::string map_update_order; int map_update_order_num;
 	bool map_update_grid;
 	int molly_stencil;
 	double freq_cut_psi;
@@ -49,11 +46,13 @@ private:
 	bool zoom_save_initial, zoom_save_final;
 	// particles
 	bool particles, save_fine_particles;
+	unsigned long long particles_seed;
+	double particles_center_x, particles_center_y, particles_width_x, particles_width_y;
 	int particles_tau_num;
 	bool particles_save_initial, particles_save_final;
 	int particles_num, particles_fine_num;
 	double particles_snapshots_per_sec;
-	string particles_time_integration; int particles_time_integration_num;
+	std::string particles_time_integration; int particles_time_integration_num;
 
 	int particles_steps;
 
@@ -63,7 +62,7 @@ public:
 	double particles_tau[100];
 
 	// main functions
-	SettingsCMM(string sim_name, int gridCoarse, int gridFine, string initialCondition);
+	SettingsCMM(std::string sim_name, int gridCoarse, int gridFine, std::string initialCondition);
 	SettingsCMM();
 	SettingsCMM(int argc, char *args[]);
 
@@ -72,10 +71,10 @@ public:
 	// function to apply commands from command line
 	void applyCommands(int argc, char *args[]);
 	// helper functions
-	bool getBoolFromString(string value);
+	bool getBoolFromString(std::string value);
 	// work with arrays
-	void string_to_int_array(string s_array, int *array);
-	void string_to_double_array(string s_array, double *array);
+	void string_to_int_array(std::string s_array, int *array);
+	void string_to_double_array(std::string s_array, double *array);
 	void transcribe_int_array(int *array_in, int *array_save, int num) { for (int i_num = 0; i_num < num; ++i_num) array_save[i_num] = array_in[i_num]; }
 	void transcribe_double_array(double *array_in, double *array_save, int num) { for (int i_num = 0; i_num < num; ++i_num) array_save[i_num] = array_in[i_num]; }
 
@@ -83,12 +82,12 @@ public:
 
 
 	// name
-	string getWorkspace() const { return workspace; }
-	void setWorkspace(string Workspace) { workspace = Workspace; }
-	string getSimName() const { return sim_name; }
-	void setSimName(string simName) { sim_name = simName; }
-	string getFileName() const { return file_name; }
-	void setFileName(string fileName) { file_name = fileName; }
+	std::string getWorkspace() const { return workspace; }
+	void setWorkspace(std::string Workspace) { workspace = Workspace; }
+	std::string getSimName() const { return sim_name; }
+	void setSimName(std::string simName) { sim_name = simName; }
+	std::string getFileName() const { return file_name; }
+	void setFileName(std::string fileName) { file_name = fileName; }
 	// grid settings
 	int getGridCoarse() const { return grid_coarse; }
 	void setGridCoarse(int gridCoarse) { grid_coarse = gridCoarse; }
@@ -120,8 +119,8 @@ public:
 	void setConvInitFinal(bool convInitFinal) { conv_init_final = convInitFinal; }
 
 	// initial conditions setting
-	string getInitialCondition() const { return initial_condition; }
-	void setInitialCondition(string initialCondition) {
+	std::string getInitialCondition() const { return initial_condition; }
+	void setInitialCondition(std::string initialCondition) {
 		initial_condition = initialCondition;
 		// tied to num, for faster handling
 		if(initialCondition == "4_nodes") initial_condition_num = 0;
@@ -152,8 +151,8 @@ public:
 	void setSaveMapStack(bool saveMapStack) { save_map_stack = saveMapStack; }
 
 	// map update order handling the stencil of footpoints
-	string getMapUpdateOrder() const { return map_update_order; }
-	void setMapUpdateOrder(string mapUpdateOrder) {
+	std::string getMapUpdateOrder() const { return map_update_order; }
+	void setMapUpdateOrder(std::string mapUpdateOrder) {
 		map_update_order = mapUpdateOrder;
 		// tied to num, for faster handling
 		if (mapUpdateOrder == "2nd") map_update_order_num = 0;
@@ -174,8 +173,8 @@ public:
 	void setFreqCutPsi(double freqCutPsi) { freq_cut_psi = freqCutPsi; }
 
 	// time integration for map advection
-	string getTimeIntegration() const { return time_integration; }
-	void setTimeIntegration(string timeIntegration) {
+	std::string getTimeIntegration() const { return time_integration; }
+	void setTimeIntegration(std::string timeIntegration) {
 		time_integration = timeIntegration;
 		if (timeIntegration == "EulerExp") { time_integration_num = 10; if (getLagrangeOrder() < 1) lagrange_order = 1; }
 		else if (timeIntegration == "RK2") { time_integration_num = 21; if (getLagrangeOrder() < 2) lagrange_order = 2; }
@@ -254,6 +253,18 @@ public:
 	int getParticlesNum() const { return particles_num; }
 	void setParticlesNum(int particlesNum) { particles_num = particlesNum; }
 
+	unsigned long long getParticlesSeed() const { return particles_seed; }
+	void setParticlesSeed(unsigned long long particlesSeed) { particles_seed = particlesSeed; }
+
+	double getParticlesCenterX() const { return particles_center_x; }
+	void setParticlesCenterX(double particlesCenterX) { particles_center_x = particlesCenterX; }
+	double getParticlesCenterY() const { return particles_center_y; }
+	void setParticlesCenterY(double particlesCenterY) { particles_center_y = particlesCenterY; }
+	double getParticlesWidthX() const { return particles_width_x; }
+	void setParticlesWidthX(double particlesWidthX) { particles_width_x = particlesWidthX; }
+	double getParticlesWidthY() const { return particles_width_y; }
+	void setParticlesWidthY(double particlesWidthY) { particles_width_y = particlesWidthY; }
+
 	int getParticlesTauNum() const { return particles_tau_num; }
 	void setParticlesTauNum(int particlesTauNum) { particles_tau_num = particlesTauNum; }
 
@@ -272,8 +283,8 @@ public:
 	void setParticlesFineNum(int particlesFineNum) { particles_fine_num = particlesFineNum; }
 
 	// particle time integration
-	string getParticlesTimeIntegration() const { return particles_time_integration; }
-	void setParticlesTimeIntegration(string pTimeIntegration) {
+	std::string getParticlesTimeIntegration() const { return particles_time_integration; }
+	void setParticlesTimeIntegration(std::string pTimeIntegration) {
 		particles_time_integration = pTimeIntegration;
 		if (pTimeIntegration == "EulerExp") { particles_time_integration_num = 10; if (getLagrangeOrder() < 1) lagrange_order = 1; }
 		else if (pTimeIntegration == "Heun") { particles_time_integration_num = 20; if (getLagrangeOrder() < 2) lagrange_order = 2; }

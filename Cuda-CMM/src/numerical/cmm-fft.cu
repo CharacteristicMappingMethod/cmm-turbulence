@@ -134,6 +134,22 @@ void comp_to_real(cufftDoubleComplex *varC, double *varR, long int N)
 }
 
 
+// function to shift all values, here memcpy cannot be used
+__global__ void k_copy_shift(double *varR, TCudaGrid2D Grid, int shift, long int length)
+{
+	//index, assumed 1D, since we want to shift with ascending In
+	long int In = (blockDim.x * blockIdx.x + threadIdx.x);
+
+	if (shift > 0) In *= -1;
+
+	if(In >= length or In < 0)
+		return;
+
+	// shift values
+	varR[In+shift] = varR[In];
+}
+
+
 // real to complex, initialize imaginary part as 0
 __global__ void k_real_to_comp(double *varR, cufftDoubleComplex *varC, int NX, int NY)
 {
@@ -195,15 +211,11 @@ __global__ void k_fft_cut_off_scale_h(cufftDoubleComplex *W, TCudaGrid2D Grid, d
 /*
  * Grid moving - the new, better zeropad-technology
  * transcribe all elements and add zero for unwanted ones
- * if psi > vort : start from the back to ensure, that we do not overwrite values
- * this works inline (input=output) or with two seperate values
+ * this does not work inline (input=output)!
  */
 __global__ void k_fft_grid_move(cufftDoubleComplex *In, cufftDoubleComplex *Out, TCudaGrid2D Grid_out, TCudaGrid2D Grid_in) {
 	int iXc = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iYc = (blockDim.y * blockIdx.y + threadIdx.y);
-
-	if (Grid_out.NX > Grid_in.NX) iXc = Grid_out.NX_fft - iXc;
-	if (Grid_out.NY > Grid_in.NY) iYc = Grid_out.NY     - iYc;
 
 	if(iXc >= Grid_out.NX_fft || iYc >= Grid_out.NY || iXc < 0 || iYc < 0)
 		return;
@@ -220,14 +232,15 @@ __global__ void k_fft_grid_move(cufftDoubleComplex *In, cufftDoubleComplex *Out,
 		int iYs = iYc + (iYc > Grid_out.NY/2.0) * (Grid_in.NY - Grid_out.NY);
 		// get index in new system
 		int Ins = iYs*Grid_in.NX_fft+ iXs;
+
 		// transcribe, add values and leave hole in the middle
 		double2 temp = In[Ins];
 		Out[Inc].x = temp.x;
 		Out[Inc].y = temp.y;
 
-		if (blockIdx.x+blockIdx.y == 0) {
+//		if (blockIdx.x+blockIdx.y == 0) {
 //			printf("In - %d \t iXc - %d \t iYc - %d \t iXs - %d \t iYs - %d \n", Inc, iXc, iYc, iXs, iYs);
-		}
+//		}
 	}
 }
 

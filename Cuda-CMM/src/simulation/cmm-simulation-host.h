@@ -47,13 +47,13 @@ void compute_conservation_targets(TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse
 // Sample on a specific grid and save everything
 void sample_compute_and_write(MapStack Map_Stack, TCudaGrid2D Grid_sample, double *Host_sample, double *Dev_sample,
 		cufftHandle cufft_plan_sample_D2Z, cufftHandle cufft_plan_sample_Z2D, cufftDoubleComplex *Dev_Temp_C1,
-		double *Dev_ChiX, double*Dev_ChiY, double *bounds, double *W_initial, SettingsCMM SettingsMain, string i_num,
+		double *Dev_ChiX, double*Dev_ChiY, double *bounds, double *W_initial, SettingsCMM SettingsMain, std::string i_num,
 		double *Mesure_sample, int count_mesure);
 
 // sample vorticity with mapstack at arbitrary frame
 void Zoom(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Grid_zoom, TCudaGrid2D Grid_psi,
 		double *Dev_ChiX, double *Dev_ChiY, double *Dev_Temp, double *W_initial, double *psi,
-		double *Host_particles_pos, double *Dev_particles_pos, double *Host_debug, string i_num);
+		double *Host_particles_pos, double *Dev_particles_pos, double *Host_debug, std::string i_num);
 
 //void Zoom_load_frame(string File, int grid_scale, int fine_grid_scale, string t_nb);
 

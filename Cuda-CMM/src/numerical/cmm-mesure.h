@@ -19,6 +19,7 @@
 
 void Compute_Energy(double *E, double *psi, TCudaGrid2D Grid);
 void Compute_Enstrophy(double *E, double *W, TCudaGrid2D Grid);
+void Compute_Enstrophy_fourier(double *E, cufftDoubleComplex *W, TCudaGrid2D Grid);
 void Compute_Palinstrophy(TCudaGrid2D Grid, double *Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftHandle cufft_plan_D2Z, cufftHandle cufft_plan_Z2D);
 
 

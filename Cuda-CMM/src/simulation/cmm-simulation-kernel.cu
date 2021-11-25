@@ -308,7 +308,6 @@ __global__ void k_map_update(double *Chi, double *Chi_new, TCudaGrid2D Grid_map,
 __global__ void k_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi,
 		TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num, int l_order)
 {
-	bool debug = true;
 //	if ((blockIdx.x == 0) && (blockIdx.y == 0)) { debug = true; }
 
 	//index
@@ -372,18 +371,6 @@ __global__ void k_advect_using_stream_hermite(double *ChiX, double *ChiY, double
 		// chi grad x y - cross central differences with stencil +NE -SE +SW -NW
 		Chi_full_x[3] += x_f[0] * d_cxy[k_foot]; Chi_full_y[3] += x_f[1] * d_cxy[k_foot];
 
-		if (debug and In == 260863) {
-			printf("Id : %d \t ifoot : %d \t fpoint x : %.20f \t fpoint y : %.20f \n", In, k_foot, x_f[0], x_f[1]);
-//			printf("Fac: Id : %d \t Val : %.20f \t x : %.20f \t y : %.20f \t xy : %.20f \n", In, d_c1 [k_foot], d_cx [k_foot], d_cy [k_foot], d_cxy[k_foot]);
-
-			printf("X: Id : %d \t Val : %.20f \t x : %.20f \t y : %.20f \t xy : %.20f \n", In, Chi_full_x[0], Chi_full_x[1], Chi_full_x[2], Chi_full_x[3]);
-			printf("Y: Id : %d \t Val : %.20f \t x : %.20f \t y : %.20f \t xy : %.20f \n", In, Chi_full_y[0], Chi_full_y[1], Chi_full_y[2], Chi_full_y[3]);
-		}
-	}
-
-	if (debug and In == 260863) {
-		printf("X: Id : %d \t Val : %.20f \t x : %.20f \t y : %.20f \t xy : %.20f \n", In, Chi_full_x[0], Chi_full_x[1], Chi_full_x[2], Chi_full_x[3]);
-		printf("Y: Id : %d \t Val : %.20f \t x : %.20f \t y : %.20f \t xy : %.20f \n", In, Chi_full_y[0], Chi_full_y[1], Chi_full_y[2], Chi_full_y[3]);
 	}
 
 	// can't use Chi because we still use it for diffeo_interpolate

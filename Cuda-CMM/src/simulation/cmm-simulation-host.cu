@@ -28,13 +28,13 @@ struct absto1
             return fabs(1-x);
         }
 };
-double incompressibility_check(double *ChiX, double *ChiY, double *gradChi, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse) {
+double incompressibility_check(double *ChiX, double *ChiY, double *gradChi, TCudaGrid2D Grid_check, TCudaGrid2D Grid_map) {
 	// compute determinant of gradient and save in gradchi
-	k_incompressibility_check<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(ChiX, ChiY, gradChi, Grid_fine, Grid_coarse);
+	k_incompressibility_check<<<Grid_check.blocksPerGrid, Grid_check.threadsPerBlock>>>(ChiX, ChiY, gradChi, Grid_check, Grid_map);
 
 	// compute maximum using thrust parallel reduction
 	thrust::device_ptr<double> gradChi_ptr = thrust::device_pointer_cast(gradChi);
-	return thrust::transform_reduce(gradChi_ptr, gradChi_ptr + Grid_fine.N, absto1(), 0.0, thrust::maximum<double>());
+	return thrust::transform_reduce(gradChi_ptr, gradChi_ptr + Grid_check.N, absto1(), 0.0, thrust::maximum<double>());
 }
 
 
@@ -95,25 +95,13 @@ void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map,
 	cudaMemcpyToSymbol(d_c1, h_c1, sizeof(double)*12); cudaMemcpyToSymbol(d_cx, h_cx, sizeof(double)*12);
 	cudaMemcpyToSymbol(d_cy, h_cy, sizeof(double)*12); cudaMemcpyToSymbol(d_cxy, h_cxy, sizeof(double)*12);
 
-	cudaDeviceSynchronize();
-
-	double energ_test;
-	Compute_Energy(&energ_test, psi, Grid_psi);
-	std::string message = "Energ: " + to_str(energ_test, 16);
-	std::cout<<message+"\n";
+//	printf("Time - %f \t dt - %f \t TimeInt - %d \t Lagrange - %d \n", t[loop_ctr_l+1], dt[loop_ctr_l+1], SettingsMain.getTimeIntegrationNum(), SettingsMain.getLagrangeOrder());
 
 	// now launch the kernel
 	k_advect_using_stream_hermite<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock>>>(ChiX, ChiY, Chi_new_X, Chi_new_Y,
 			psi, Grid_map, Grid_psi, t[loop_ctr_l+1], dt[loop_ctr_l+1],
 			SettingsMain.getMapEpsilon(), SettingsMain.getTimeIntegrationNum(),
 			SettingsMain.getMapUpdateOrderNum(), SettingsMain.getLagrangeOrder());
-
-	double inc_test = incompressibility_check(ChiX, ChiY, Chi_new_Y + 4*Grid_map.N, Grid_map, Grid_map);;
-	message = "Incomp old: " + to_str(inc_test, 16);
-	std::cout<<message+"\n";
-	inc_test = incompressibility_check(Chi_new_X, Chi_new_Y, Chi_new_Y + 4*Grid_map.N, Grid_map, Grid_map);;
-	message = "Incomp: " + to_str(inc_test, 16);
-	std::cout<<message+"\n";
 }
 
 
@@ -156,7 +144,7 @@ void translate_initial_condition_through_map_stack(TCudaGrid2D Grid_fine, MapSta
 			W_H_real, W_H_real+Grid_fine.N, W_initial, simulation_num_c);
 
 	// go to comlex space
-	cufftExecD2Z(cufftPlan_fine_D2Z, W_H_real, Dev_Temp_C1);  // inline transformation
+	cufftExecD2Z(cufftPlan_fine_D2Z, W_H_real, Dev_Temp_C1);
 	k_normalize_h<<<Grid_fine.fft_blocks, Grid_fine.threadsPerBlock>>>(Dev_Temp_C1, Grid_fine);
 
 	// cut_off frequencies at N_fine/3 for turbulence (effectively 2/3)
@@ -178,12 +166,8 @@ void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCu
 {
 
 	// apply map to w and sample using mollifier, do it on a special grid for vorticity and apply mollification if wanted
-	k_apply_map_and_sample_from_hermite<<<Grid_vort.blocksPerGrid, Grid_vort.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_fine_real, Grid_coarse, Grid_vort, Grid_fine, molly_stencil, true);
-
-	double enstr_test;
-	Compute_Enstrophy(&enstr_test, (cufftDoubleReal*)Dev_Temp_C1, Grid_vort);
-	std::string message = "Enstr: " + to_str(enstr_test, 16);
-	std::cout<<message+"\n";
+	k_apply_map_and_sample_from_hermite<<<Grid_vort.blocksPerGrid, Grid_vort.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
+			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_fine_real, Grid_coarse, Grid_vort, Grid_fine, molly_stencil, true);
 
 	// forward fft
 	cufftExecD2Z(cufft_plan_vort, (cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C1);
@@ -198,16 +182,22 @@ void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCu
 	cufftExecZ2D(cufft_plan_coarse_Z2D, (cufftDoubleComplex*) Psi_real, W_real);
 
 	// transition to stream function grid with three cases : grid_vort < grid_psi, grid_vort > grid_psi (a bit dumb) and grid_vort == grid_psi
-	// first case : we have to do zero padding in the middle and increase the gridsize
+	// grid change because inline data movement is nasty, we can use psi_real as buffer anyways
 	if (Grid_vort.NX != Grid_psi.NX || Grid_vort.NY != Grid_psi.NY) {
-		k_fft_grid_move<<<Grid_psi.fft_blocks, Grid_psi.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, Grid_psi, Grid_vort);
+		k_fft_grid_move<<<Grid_psi.fft_blocks, Grid_psi.threadsPerBlock>>>(Dev_Temp_C1, (cufftDoubleComplex*) Psi_real, Grid_psi, Grid_vort);
+	}
+	// no movement needed, just copy data over
+	else {
+		cudaMemcpy(Psi_real, Dev_Temp_C1, Grid_vort.sizeNfft, cudaMemcpyDeviceToDevice);
 	}
 
 	// cut high frequencies in fourier space, however not that much happens after zero move add from coarse grid
-	k_fft_cut_off_scale_h<<<Grid_psi.fft_blocks, Grid_psi.threadsPerBlock>>>(Dev_Temp_C1, Grid_psi, freq_cut_psi);
+	k_fft_cut_off_scale_h<<<Grid_psi.fft_blocks, Grid_psi.threadsPerBlock>>>((cufftDoubleComplex*) Psi_real, Grid_psi, freq_cut_psi);
 
 	// Forming Psi hermite now on psi grid
-	k_fft_iLap_h<<<Grid_psi.fft_blocks, Grid_psi.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, Grid_psi);												// Inverse laplacian in Fourier space
+	k_fft_iLap_h<<<Grid_psi.fft_blocks, Grid_psi.threadsPerBlock>>>((cufftDoubleComplex*) Psi_real, Dev_Temp_C1, Grid_psi);
+
+	// Inverse laplacian in Fourier space
 	fourier_hermite(Grid_psi, Dev_Temp_C1, Psi_real, cufft_plan_psi);
 }
 // debugging lines, could be needed here to check psi
@@ -232,19 +222,28 @@ void psi_upsampling(TCudaGrid2D Grid, double *Dev_W, cufftDoubleComplex *Dev_Tem
 // compute hermite with derivatives in fourier space, uniform helper function fitted for all grids to utilize only input temporary variable
 // input has size (NX+1)/2*NY and output 4*NX*NY, output is therefore used as temporary variable
 void fourier_hermite(TCudaGrid2D Grid, cufftDoubleComplex *Dev_In, double *Dev_Out, cufftHandle cufft_plan) {
+
+	// reshift for transforming so that we have enough space for everything
+	Dev_Out += Grid.N - 2*Grid.Nfft;
+
 	// dy and dxdy derivates are stored in later parts of output array, we can therefore use the first half as a temporary variable
 	// start with computing dy derivative
 	k_fft_dy_h<<<Grid.fft_blocks, Grid.threadsPerBlock>>>(Dev_In, (cufftDoubleComplex*)Dev_Out, Grid);
+
 	// compute dxdy afterwards, to combine backwards transformations
-	k_fft_dx_h<<<Grid.fft_blocks, Grid.threadsPerBlock>>>((cufftDoubleComplex*)Dev_Out, (cufftDoubleComplex*)(Dev_Out) + Grid.N, Grid);
+	k_fft_dx_h<<<Grid.fft_blocks, Grid.threadsPerBlock>>>((cufftDoubleComplex*)Dev_Out, (cufftDoubleComplex*)(Dev_Out) + Grid.Nfft, Grid);
 
 	// backwards transformation, store dx in position 3/4 and dy in position 4/4
-	cufftExecZ2D(cufft_plan, (cufftDoubleComplex*)(Dev_Out) + Grid.N, Dev_Out + 3*Grid.N);
-	cufftExecZ2D(cufft_plan, (cufftDoubleComplex*)Dev_Out, Dev_Out + 2*Grid.N);
+	cufftExecZ2D(cufft_plan, (cufftDoubleComplex*)(Dev_Out) + Grid.Nfft, Dev_Out + 2*Grid.N + 2*Grid.Nfft);
+	cufftExecZ2D(cufft_plan, (cufftDoubleComplex*)Dev_Out, Dev_Out + Grid.N + 2*Grid.Nfft);
 
-	// now compute dx derivative and safe it in 2/4
+	// now compute dx derivative on itself and store it in the right place
 	k_fft_dx_h<<<Grid.fft_blocks, Grid.threadsPerBlock>>>(Dev_In, (cufftDoubleComplex*)Dev_Out, Grid);
-	cufftExecZ2D(cufft_plan, (cufftDoubleComplex*)Dev_Out, Dev_Out + Grid.N);// x-derivative of the vorticity in Fourier space
+	cufftExecZ2D(cufft_plan, (cufftDoubleComplex*)Dev_Out, Dev_Out + 2*Grid.Nfft);// x-derivative of the vorticity in Fourier space
+
+	// shift again just before final store
+	Dev_Out += 2*Grid.Nfft - Grid.N;
+
 	// at last, store normal values
 	cufftExecZ2D(cufft_plan, Dev_In, Dev_Out);
 }
@@ -291,13 +290,14 @@ void sample_compute_and_write(MapStack Map_Stack, TCudaGrid2D Grid_sample, doubl
 	Compute_Enstrophy(&Mesure_sample[1 + 3*count_mesure], Dev_sample, Grid_sample);
 	Compute_Palinstrophy(Grid_sample, &Mesure_sample[2 + 3*count_mesure], Dev_sample, Dev_Temp_C1, cufft_plan_sample_D2Z, cufft_plan_sample_Z2D);
 
-	// reuse sampled vorticity to compute psi
-	psi_upsampling(Grid_sample, Dev_sample, Dev_Temp_C1, Dev_sample, cufft_plan_sample_D2Z, cufft_plan_sample_Z2D);
+	// reuse sampled vorticity to compute psi, take fourier_hermite reshifting into account
+	long int shift = 2*Grid_sample.Nfft - Grid_sample.N;
+	psi_upsampling(Grid_sample, Dev_sample, Dev_Temp_C1, Dev_sample+shift, cufft_plan_sample_D2Z, cufft_plan_sample_Z2D);
 
-	writeTimeVariable(SettingsMain, "Stream_function_Psi_"+to_str(Grid_sample.NX), i_num, Host_sample, Dev_sample, 4*Grid_sample.sizeNReal, 4*Grid_sample.N);
+	writeTimeVariable(SettingsMain, "Stream_function_Psi_"+to_str(Grid_sample.NX), i_num, Host_sample, Dev_sample+shift, 4*Grid_sample.sizeNReal, 4*Grid_sample.N);
 
 	// compute energy
-	Compute_Energy(&Mesure_sample[3*count_mesure], Dev_sample, Grid_sample);
+	Compute_Energy(&Mesure_sample[3*count_mesure], Dev_sample+shift, Grid_sample);
 
 	// map
 	k_h_sample_map<<<Grid_sample.blocksPerGrid,Grid_sample.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Dev_sample, Dev_sample + Grid_sample.N, *Map_Stack.Grid, Grid_sample);

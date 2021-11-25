@@ -65,7 +65,7 @@ const string currentDateTime();
 template<typename Type> string to_str (const Type & t)
 {
   ostringstream os;
-  if (std::is_same<Type, double>::value) os.precision(8);
+  if (std::is_same<Type, double>::value) os.precision(3);
   os << t;
   return os.str ();
 }
