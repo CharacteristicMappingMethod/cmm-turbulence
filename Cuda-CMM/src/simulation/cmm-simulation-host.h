@@ -38,6 +38,10 @@ void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCu
 void psi_upsampling(TCudaGrid2D Grid, double *Dev_W,cufftDoubleComplex *Dev_Temp_C1,
 		double *Dev_Psi, cufftHandle cufft_plan_D2Z, cufftHandle cufft_plan_Z2D);
 
+// compute laplacian of vorticity
+void Laplacian_vort(TCudaGrid2D Grid, double *Dev_W, double *Dev_Lap, cufftDoubleComplex *Dev_Temp_C1,
+		cufftHandle cufft_plan_D2Z, cufftHandle cufft_plan_Z2D);
+
 // Computation of Global conservation values
 void compute_conservation_targets(TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
 		double *Host_save, double *Dev_Psi, double *Dev_W_coarse, double *Dev_W_H_fine,

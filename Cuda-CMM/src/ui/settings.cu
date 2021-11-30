@@ -11,9 +11,9 @@ void SettingsCMM::setPresets() {
 	// 32		64		128		256		512		1024		2048		4096		8192		16384
 	// max working on V100 : grid_scale = 8192; fine_grid_scale = 16384;
 	int grid_coarse = 1024;
-	int grid_fine = 4096;
+	int grid_fine = 2048;
 	int grid_psi = 1024;  // psi will be (up)sampled on this grid, Restriction: 2*N_fft_psi !> 4*N_coarse
-	int grid_vort = 4096;  // vorticity will be sampled on this grid for computation of psi, this changes the scales of the vorticity
+	int grid_vort = grid_fine;  // vorticity will be sampled on this grid for computation of psi, this changes the scales of the vorticity
 
 	/*
 	 *  Initial conditions
@@ -82,10 +82,10 @@ void SettingsCMM::setPresets() {
 	bool map_update_grid = false;  // should map update be computed with grid or footpoints?
 
 	// mollification settings, stencil size, 0, 4, 8
-	int molly_stencil = 8;
+	int molly_stencil = 0;
 
 	// in addition to the upsampling, we want to lowpass in fourier space by cutting high frequencies
-	double freq_cut_psi = (double)(grid_coarse*4)/2.0;  // take into account, that frequencies are symmetric around N/2
+	double freq_cut_psi = (double)(grid_coarse)/2.0;  // take into account, that frequencies are symmetric around N/2
 
 	// possibility to sample values on a specified grid
 	bool sample_on_grid = false;
@@ -231,89 +231,96 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 	for( int count = 0; count < argc; count++ ) {
 		// construct string for command
 		std::string command_full = args[count];
-		// check for = sign
-		int pos_equal = command_full.find("=");
-		if (pos_equal != std::string::npos) {
-			// construct two substrings
-			std::string command = command_full.substr(0, pos_equal);
-			std::string value = command_full.substr(pos_equal+1, command_full.length());
-
-			// big if else for different commands
-			// this beast is becoming larger and larger, i should convert it to something more automatic
-			// link to site for that: https://stackoverflow.com/questions/4480788/c-c-switch-case-with-string
-			if (command == "workspace") setWorkspace(value);
-			else if (command == "sim_name") setSimName(value);
-			else if (command == "grid_coarse") setGridCoarse(std::stoi(value));
-			else if (command == "grid_fine") setGridFine(std::stoi(value));
-			else if (command == "grid_psi") setGridPsi(std::stoi(value));
-			else if (command == "grid_vort") setGridVort(std::stoi(value));
-
-			else if (command == "final_time") setFinalTime(std::stod(value));
-			else if (command == "factor_dt_by_grid") setFactorDtByGrid(std::stod(value));
-			else if (command == "steps_per_sec") setStepsPerSec(std::stoi(value));
-			else if (command == "set_dt_by_steps") setSetDtBySteps(getBoolFromString(value));
-			else if (command == "save_initial") setSaveInitial(getBoolFromString(value));
-			else if (command == "save_final") setSaveFinal(getBoolFromString(value));
-			else if (command == "conv_init_final") setConvInitFinal(getBoolFromString(value));
-			else if (command == "snapshots_per_sec") setSnapshotsPerSec(std::stod(value));
-
-			else if (command == "mem_RAM_CPU_remaps") setMemRamCpuRemaps(std::stoi(value));
-			else if (command == "save_map_stack") setSaveMapStack(getBoolFromString(value));
-
-			else if (command == "verbose") setVerbose(std::stoi(value));
-
-			else if (command == "initial_condition") setInitialCondition(value);
-			else if (command == "incomp_threshold") setIncompThreshold(std::stod(value));
-			else if (command == "map_epsilon") setMapEpsilon(std::stod(value));
-			else if (command == "time_integration") setTimeIntegration(value);
-			else if (command == "lagrange_override") setLagrangeOverride(std::stoi(value));
-			else if (command == "map_update_order") setMapUpdateOrder(value);
-			else if (command == "map_update_grid") setMapUpdateGrid(getBoolFromString(value));
-			else if (command == "molly_stencil") setMollyStencil(std::stoi(value));
-			else if (command == "freq_cut_psi") setFreqCutPsi(std::stod(value));
-			else if (command == "skip_remapping") setSkipRemapping(getBoolFromString(value));
-
-			else if (command == "sample_on_grid") setSampleOnGrid(getBoolFromString(value));
-			else if (command == "grid_sample") setGridSample(std::stoi(value));
-			else if (command == "sample_save_initial") setSampleSaveInitial(getBoolFromString(value));
-			else if (command == "sample_save_final") setSampleSaveFinal(getBoolFromString(value));
-			else if (command == "sample_snapshots_per_sec") setSampleSnapshotsPerSec(std::stod(value));
-
-			else if (command == "zoom") setZoom(getBoolFromString(value));
-			else if (command == "grid_zoom") setGridZoom(std::stoi(value));
-			else if (command == "zoom_center_x") setZoomCenterX(std::stod(value));
-			else if (command == "zoom_center_y") setZoomCenterY(std::stod(value));
-			else if (command == "zoom_width_x") setZoomWidthX(std::stod(value));
-			else if (command == "zoom_width_y") setZoomWidthY(std::stod(value));
-			else if (command == "zoom_repetitions") setZoomRepetitions(std::stoi(value));
-			else if (command == "zoom_repetitions_factor") setZoomRepetitionsFactor(std::stod(value));
-			else if (command == "zoom_save_psi") setZoomSavePsi(getBoolFromString(value));
-			else if (command == "zoom_save_particles") setZoomSaveParticles(getBoolFromString(value));
-			else if (command == "zoom_save_initial") setZoomSaveInitial(getBoolFromString(value));
-			else if (command == "zoom_save_final") setZoomSaveFinal(getBoolFromString(value));
-			else if (command == "zoom_snapshots_per_sec") setZoomSnapshotsPerSec(std::stod(value));
-
-			else if (command == "particles") setParticles(getBoolFromString(value));
-			else if (command == "particles_seed") setParticlesSeed(std::stoull(value));
-			else if (command == "particles_center_x") setParticlesCenterX(std::stod(value));
-			else if (command == "particles_center_y") setParticlesCenterY(std::stod(value));
-			else if (command == "particles_width_x") setParticlesWidthX(std::stod(value));
-			else if (command == "particles_width_y") setParticlesWidthY(std::stod(value));
-			else if (command == "particles_num") setParticlesNum(std::stoi(value));
-			else if (command == "particles_tau_num") setParticlesTauNum(std::stoi(value));
-			else if (command == "particles_tau") string_to_double_array(value, particles_tau);
-			else if (command == "particles_snapshots_per_sec") setParticlesSnapshotsPerSec(std::stod(value));
-			else if (command == "particles_save_initial") setParticlesSaveInitial(getBoolFromString(value));
-			else if (command == "particles_save_final") setParticlesSaveFinal(getBoolFromString(value));
-			else if (command == "save_fine_particles") setSaveFineParticles(getBoolFromString(value));
-			else if (command == "particles_fine_num") setParticlesFineNum(std::stoi(value));
-			else if (command == "particles_time_integration") setParticlesTimeIntegration(value);
-
-			// hackery for particle convergence
-			else if (command == "particles_steps") setParticlesSteps(std::stoi(value));
-		}
+		// set variable, separated by = sign
+		setVariable(command_full, "=");
 	}
 	//	 cout << "  args[" << count << "]   " << args[count] << "\n";
+}
+
+
+// function to apply command with variable delimiter to change it
+void SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
+	// check for delimiter position
+	int pos_equal = command_full.find(delimiter);
+	if (pos_equal != std::string::npos) {
+		// construct two substrings
+		std::string command = command_full.substr(0, pos_equal);
+		std::string value = command_full.substr(pos_equal+1, command_full.length());
+
+		// big if else for different commands
+		// this beast is becoming larger and larger, i should convert it to something more automatic
+		// link to site for that: https://stackoverflow.com/questions/4480788/c-c-switch-case-with-string
+		if (command == "workspace") setWorkspace(value);
+		else if (command == "sim_name") setSimName(value);
+		else if (command == "grid_coarse") setGridCoarse(std::stoi(value));
+		else if (command == "grid_fine") setGridFine(std::stoi(value));
+		else if (command == "grid_psi") setGridPsi(std::stoi(value));
+		else if (command == "grid_vort") setGridVort(std::stoi(value));
+
+		else if (command == "final_time") setFinalTime(std::stod(value));
+		else if (command == "factor_dt_by_grid") setFactorDtByGrid(std::stod(value));
+		else if (command == "steps_per_sec") setStepsPerSec(std::stoi(value));
+		else if (command == "set_dt_by_steps") setSetDtBySteps(getBoolFromString(value));
+		else if (command == "save_initial") setSaveInitial(getBoolFromString(value));
+		else if (command == "save_final") setSaveFinal(getBoolFromString(value));
+		else if (command == "conv_init_final") setConvInitFinal(getBoolFromString(value));
+		else if (command == "snapshots_per_sec") setSnapshotsPerSec(std::stod(value));
+
+		else if (command == "mem_RAM_CPU_remaps") setMemRamCpuRemaps(std::stoi(value));
+		else if (command == "save_map_stack") setSaveMapStack(getBoolFromString(value));
+
+		else if (command == "verbose") setVerbose(std::stoi(value));
+
+		else if (command == "initial_condition") setInitialCondition(value);
+		else if (command == "incomp_threshold") setIncompThreshold(std::stod(value));
+		else if (command == "map_epsilon") setMapEpsilon(std::stod(value));
+		else if (command == "time_integration") setTimeIntegration(value);
+		else if (command == "lagrange_override") setLagrangeOverride(std::stoi(value));
+		else if (command == "map_update_order") setMapUpdateOrder(value);
+		else if (command == "map_update_grid") setMapUpdateGrid(getBoolFromString(value));
+		else if (command == "molly_stencil") setMollyStencil(std::stoi(value));
+		else if (command == "freq_cut_psi") setFreqCutPsi(std::stod(value));
+		else if (command == "skip_remapping") setSkipRemapping(getBoolFromString(value));
+
+		else if (command == "sample_on_grid") setSampleOnGrid(getBoolFromString(value));
+		else if (command == "grid_sample") setGridSample(std::stoi(value));
+		else if (command == "sample_save_initial") setSampleSaveInitial(getBoolFromString(value));
+		else if (command == "sample_save_final") setSampleSaveFinal(getBoolFromString(value));
+		else if (command == "sample_snapshots_per_sec") setSampleSnapshotsPerSec(std::stod(value));
+
+		else if (command == "zoom") setZoom(getBoolFromString(value));
+		else if (command == "grid_zoom") setGridZoom(std::stoi(value));
+		else if (command == "zoom_center_x") setZoomCenterX(std::stod(value));
+		else if (command == "zoom_center_y") setZoomCenterY(std::stod(value));
+		else if (command == "zoom_width_x") setZoomWidthX(std::stod(value));
+		else if (command == "zoom_width_y") setZoomWidthY(std::stod(value));
+		else if (command == "zoom_repetitions") setZoomRepetitions(std::stoi(value));
+		else if (command == "zoom_repetitions_factor") setZoomRepetitionsFactor(std::stod(value));
+		else if (command == "zoom_save_psi") setZoomSavePsi(getBoolFromString(value));
+		else if (command == "zoom_save_particles") setZoomSaveParticles(getBoolFromString(value));
+		else if (command == "zoom_save_initial") setZoomSaveInitial(getBoolFromString(value));
+		else if (command == "zoom_save_final") setZoomSaveFinal(getBoolFromString(value));
+		else if (command == "zoom_snapshots_per_sec") setZoomSnapshotsPerSec(std::stod(value));
+
+		else if (command == "particles") setParticles(getBoolFromString(value));
+		else if (command == "particles_seed") setParticlesSeed(std::stoull(value));
+		else if (command == "particles_center_x") setParticlesCenterX(std::stod(value));
+		else if (command == "particles_center_y") setParticlesCenterY(std::stod(value));
+		else if (command == "particles_width_x") setParticlesWidthX(std::stod(value));
+		else if (command == "particles_width_y") setParticlesWidthY(std::stod(value));
+		else if (command == "particles_num") setParticlesNum(std::stoi(value));
+		else if (command == "particles_tau_num") setParticlesTauNum(std::stoi(value));
+		else if (command == "particles_tau") string_to_double_array(value, particles_tau);
+		else if (command == "particles_snapshots_per_sec") setParticlesSnapshotsPerSec(std::stod(value));
+		else if (command == "particles_save_initial") setParticlesSaveInitial(getBoolFromString(value));
+		else if (command == "particles_save_final") setParticlesSaveFinal(getBoolFromString(value));
+		else if (command == "save_fine_particles") setSaveFineParticles(getBoolFromString(value));
+		else if (command == "particles_fine_num") setParticlesFineNum(std::stoi(value));
+		else if (command == "particles_time_integration") setParticlesTimeIntegration(value);
+
+		// hackery for particle convergence
+		else if (command == "particles_steps") setParticlesSteps(std::stoi(value));
+	}
 }
 
 

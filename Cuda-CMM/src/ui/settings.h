@@ -70,6 +70,8 @@ public:
 	void setPresets();
 	// function to apply commands from command line
 	void applyCommands(int argc, char *args[]);
+	// function to set variables, useful for param file or command line args
+	void setVariable(std::string command_full, std::string delimiter);
 	// helper functions
 	bool getBoolFromString(std::string value);
 	// work with arrays

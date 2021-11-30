@@ -121,7 +121,8 @@ void apply_map_stack_to_W_part_All(TCudaGrid2D Grid, MapStack Map_Stack, double 
 	// this could be parallelized between loading and computing?
 	for (int i_map = Map_Stack.map_stack_ctr-1; i_map >= 0; i_map--) {
 		Map_Stack.copy_map_to_device(i_map);
-		k_apply_map_stack_to_W_part_2<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack, Dev_Temp, *Map_Stack.Grid, Grid);
+		k_apply_map_stack_to_W_part_2<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
+				Dev_Temp, *Map_Stack.Grid, Grid);
 	}
 
 	// initial condition
@@ -212,8 +213,19 @@ void psi_upsampling(TCudaGrid2D Grid, double *Dev_W, cufftDoubleComplex *Dev_Tem
 	k_normalize_h<<<Grid.fft_blocks, Grid.threadsPerBlock>>>(Dev_Temp_C1, Grid);
 
 	// Forming Psi hermite
-	k_fft_iLap_h<<<Grid.fft_blocks, Grid.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, Grid);													// Inverse laplacian in Fourier space
+	k_fft_iLap_h<<<Grid.fft_blocks, Grid.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, Grid);
 	fourier_hermite(Grid, Dev_Temp_C1, Dev_Psi, cufft_plan_Z2D);
+}
+
+
+
+// compute laplacian from vorticity, grid not set
+void Laplacian_vort(TCudaGrid2D Grid, double *Dev_W, double *Dev_Lap, cufftDoubleComplex *Dev_Temp_C1, cufftHandle cufft_plan_D2Z, cufftHandle cufft_plan_Z2D){
+    cufftExecD2Z(cufft_plan_D2Z, Dev_W, Dev_Temp_C1);
+    k_normalize_h<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Grid);
+
+    k_fft_lap_h<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, Grid);
+    cufftExecZ2D(cufft_plan_Z2D, Dev_Temp_C1, Dev_Lap);
 }
 
 

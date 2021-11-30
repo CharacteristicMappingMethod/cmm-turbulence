@@ -12,6 +12,7 @@
 
 #include <unistd.h>
 #include <chrono>
+#include <math.h>
 
 // parallel reduce
 #include <thrust/transform_reduce.h>
@@ -76,6 +77,14 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
     Logger logger(SettingsMain);
 
     std::string message;  // string to be used for console output
+
+	// introduce part to console
+	if (SettingsMain.getVerbose() >= 2) {
+		message = "Starting memory initialization"
+				  " \t C-Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+		std::cout<<"\n"+message+"\n\n"; logger.push(message);
+	}
+
     // print version details
     if (SettingsMain.getVerbose() >= 3) {
 		int version;
@@ -252,9 +261,6 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	
 	MapStack Map_Stack(&Grid_coarse, cpu_map_num);
 	mb_used_RAM_GPU += 8*Grid_coarse.sizeNReal / 1e6;
-	if (SettingsMain.getVerbose() >= 2) {
-		message = "Map Stack Initialized"; std::cout<<message+"\n"; logger.push(message);
-	}
 	
 	
 	/*******************************************************************
@@ -450,10 +456,12 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		mb_used_RAM_GPU += size_max_temp_2 / 1e6;
 	}
 
-	// print estimated gpu memory usage in mb before initialization
+	// introduce part to console and print estimated gpu memory usage in mb before initialization
 	if (SettingsMain.getVerbose() >= 1) {
-		message = "estimated GPU RAM usage in mb = " + to_str(mb_used_RAM_GPU);
-		std::cout<<message+"\n"; logger.push(message);
+		message = "Memory initialization finished"
+				  " \t estimated GPU RAM usage in mb = " + to_str(mb_used_RAM_GPU);
+				+ " \t C-Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+		std::cout<<"\n"+message+"\n\n"; logger.push(message);
 	}
 
 
@@ -461,6 +469,13 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	/*******************************************************************
 	*						   Initialization						   *
 	*******************************************************************/
+
+	// introduce part to console
+	if (SettingsMain.getVerbose() >= 2) {
+		message = "Starting simulation initialization"
+				  " \t C-Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+		std::cout<<"\n"+message+"\n\n"; logger.push(message);
+	}
 		
 	//initialization of flow map as normal grid
 	k_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
@@ -475,60 +490,107 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
 			Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
 
-	bool init_stream = false;
-	if (init_stream) {
-		// first try on computing the previous values by explicit euler
-		if (SettingsMain.getLagrangeOrder() > 1) {
-			std::string time_integration_init = SettingsMain.getTimeIntegration();
-			int lagrange_order_init = SettingsMain.getLagrangeOrder();  // in case there was an override, we set it back to that
-			SettingsMain.setTimeIntegration("EulerExp");  // set method to euler exp - no lagrange needed
-			SettingsMain.setLagrangeOrder(1);  // we have to set this too
-			// init fitting dt and t vectors
-			double t_init[2] = {0, -dt}; double dt_init[2] = {-dt, -dt};
-			// loop for all points needed
-			for (int i_lagrange = 1; i_lagrange < lagrange_order_init; i_lagrange++) {
+	// initialize previous velocity points for lagrange interpolations
+	bool init_higher_order = true;  // switch to initialize in higher order, disabled by default but i already programmed it so why remove it
+	if (SettingsMain.getLagrangeOrder() > 1) {
+		// store settings for now
+		std::string time_integration_init = SettingsMain.getTimeIntegration();
+		int lagrange_order_init = SettingsMain.getLagrangeOrder();  // in case there was an override, we set it back to that
+
+		// init fitting dt and t vectors, directly should work until 4th order, with right direction of first computation
+		double dt_now = dt*pow(-1, lagrange_order_init);
+		double t_init[5] = {0, dt_now, 2*dt_now, 3*dt_now, 4*dt_now};
+		double dt_init[5] = {dt_now, dt_now, dt_now, dt_now, dt_now};
+
+		// loop, where we increase the order each time and change the direction
+		for (int i_order = 1; i_order <= lagrange_order_init; i_order++) {
+			// if we only use first order, we can skip all iterations besides last one
+			if (!init_higher_order and i_order != lagrange_order_init) {
+				// switch direction to always alternate, done so we dont have to keep track of it
+				for (int i_dt = 0; i_dt < 5; i_dt++) {
+					dt_init[i_dt] = -1 * dt_init[i_dt];
+					t_init[i_dt] = -1 * t_init[i_dt];
+				}
+				continue;
+			}
+
+			// set method, most accurate versions were chosen arbitrarily
+			if (init_higher_order) {
+				switch (i_order) {
+					case 1: { SettingsMain.setTimeIntegration("EulerExp"); break; }
+					case 2: { SettingsMain.setTimeIntegration("RK2"); break; }
+					case 3: { SettingsMain.setTimeIntegration("RK3"); break; }
+					case 4: { SettingsMain.setTimeIntegration("RK4"); break; }
+				}
+				SettingsMain.setLagrangeOrder(i_order);  // we have to set this explicitly too
+			}
+			else {
+				SettingsMain.setTimeIntegration("EulerExp");
+				SettingsMain.setLagrangeOrder(1);  // we have to set this explicitly too
+			}
+
+			// output init details to console
+			if (SettingsMain.getVerbose() >= 2) {
+				message = "Init order = " + to_str(i_order) + "/" + to_str(lagrange_order_init)
+						+ " \t Method = " + SettingsMain.getTimeIntegration()
+						+ " \t C-Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+				std::cout<<message+"\n"; logger.push(message);
+			}
+
+			// loop for all points needed, last time is reduced by one point (final order is just repetition)
+			for (int i_step_init = 1; i_step_init <= i_order-(i_order==lagrange_order_init); i_step_init++) {
+
 				// map advection
 				advect_using_stream_hermite(SettingsMain, Grid_coarse, Grid_psi, Dev_ChiX, Dev_ChiY,
-						(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)(Dev_Temp_C1) + 4*Grid_coarse.N, Dev_Psi_real + 4*Grid_psi.N*(i_lagrange-1), t_init, dt_init, 0);
+						(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)(Dev_Temp_C1) + 4*Grid_coarse.N, Dev_Psi_real, t_init, dt_init, 0);
 				cudaMemcpyAsync(Dev_ChiX, (cufftDoubleReal*)(Dev_Temp_C1), 			   		 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice, streams[2]);
 				cudaMemcpyAsync(Dev_ChiY, (cufftDoubleReal*)(Dev_Temp_C1) + 4*Grid_coarse.N, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice, streams[3]);
 				cudaDeviceSynchronize();
+
 				// test: incompressibility error
 				double incomp_init = incompressibility_check(Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, Grid_fine, Grid_coarse);
-				// take into account the shifting occuring, so we have to copy parts every time, use first part as buffer because it's recomputed anyways
-				cudaMemcpy(Dev_Psi_real,
-						   Dev_Psi_real + 4*Grid_psi.N*i_lagrange + Grid_psi.N - 2*Grid_psi.Nfft, 2*Grid_psi.Nfft - Grid_psi.N, cudaMemcpyDeviceToDevice);
-				// compute stream function at one of the previous steps
+
+				//copy Psi to previous locations, from oldest-1 upwards
+				for (int i_lagrange = 1; i_lagrange <= i_order-(i_order==lagrange_order_init); i_lagrange++) {
+					cudaMemcpy(Dev_Psi_real + 4*Grid_psi.N*(i_order-(i_order==lagrange_order_init)-i_lagrange+1),
+							   Dev_Psi_real + 4*Grid_psi.N*(i_order-(i_order==lagrange_order_init)-i_lagrange), 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice);
+				}
+				// compute stream hermite from vorticity for computed time step
 				evaluate_stream_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
-						Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real + 4*Grid_psi.N*i_lagrange,
-						cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
+						Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
 						Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
-				// copy shift part back
-				cudaMemcpy(Dev_Psi_real + 4*Grid_psi.N*i_lagrange + Grid_psi.N - 2*Grid_psi.Nfft,
-						   Dev_Psi_real, 2*Grid_psi.Nfft - Grid_psi.N, cudaMemcpyDeviceToDevice);
+
+				// output step details to console
 				if (SettingsMain.getVerbose() >= 2) {
-					message = "Init step = " + to_str(i_lagrange) + "/" + to_str(lagrange_order_init-1)
+					message = "   Init step = " + to_str(i_step_init) + "/" + to_str(i_order-(i_order==lagrange_order_init))
 							+ " \t IncompErr = " + to_str(incomp_init)
 							+ " \t C-Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
 					std::cout<<message+"\n"; logger.push(message);
 				}
 			}
-			// reset everything
-			SettingsMain.setTimeIntegration(time_integration_init);
-			SettingsMain.setLagrangeOrder(lagrange_order_init);
+
+			// switch direction to always alternate
+			for (int i_dt = 0; i_dt < 5; i_dt++) {
+				dt_init[i_dt] = -1 * dt_init[i_dt];
+				t_init[i_dt] = -1 * t_init[i_dt];
+			}
+
+			// to switch direction, we have to reverse psi arrangement too
+			// outer elements - always have to be reversed / swapped
+			k_swap_h<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>(Dev_Psi_real, Dev_Psi_real + 4*Grid_psi.N*(i_order-(i_order==lagrange_order_init)), Grid_psi);
+			// inner elements - swapped only for order = 4
+			if (i_order-(i_order==lagrange_order_init) >= 3) {
+				k_swap_h<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>(Dev_Psi_real + 4*Grid_psi.N, Dev_Psi_real + 2*4*Grid_psi.N, Grid_psi);
+			}
+
+			// reset map for next init direction
 			k_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
 		}
 
-		evaluate_stream_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
-				Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
-				Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
-
-		}
-	else {
-		// set previous psi value to first psi value
-		for (int i_lagrange = 1; i_lagrange < SettingsMain.getLagrangeOrder(); i_lagrange++) {
-			cudaMemcpyAsync(Dev_Psi_real + 4*Grid_psi.N*i_lagrange, Dev_Psi_real, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice, streams[i_lagrange]);
-		}
+		// reset everything for normal loop
+		SettingsMain.setTimeIntegration(time_integration_init);
+		SettingsMain.setLagrangeOrder(lagrange_order_init);
+		k_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
 	}
 
 	// save function to save variables, combined so we always save in the same way and location
@@ -631,21 +693,28 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		double diff = std::chrono::duration_cast<std::chrono::microseconds>(step - begin).count()/1e6;
 		time_values[loop_ctr] = diff; // loop_ctr was already increased
 	}
-	if (SettingsMain.getVerbose() >= 2) {
-		message = "Initialization Time = " + format_duration(time_values[loop_ctr]); std::cout<<message+"\n"; logger.push(message);
-	}
 
 	/*******************************************************************
 	*						  Last Cuda Error						   *
 	*******************************************************************/
-
+	// introduce part to console
 	if (SettingsMain.getVerbose() >= 1) {
-		message = cudaGetErrorName(cudaGetLastError()); std::cout<<message+"\n\n"; logger.push(message);
+		message = "Simulation initialization finished"
+				  " \t Last Cuda Error = " + to_str(cudaGetErrorName(cudaGetLastError()))
+				+ " \t C-Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+		std::cout<<"\n"+message+"\n\n"; logger.push(message);
 	}
 
 	/*******************************************************************
 	*							 Main loop							   *
 	*******************************************************************/
+
+	// introduce part to console
+	if (SettingsMain.getVerbose() >= 2) {
+		message = "Starting simulation loop"
+				  " \t C-Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+		std::cout<<"\n"+message+"\n\n"; logger.push(message);
+	}
 
 	while(tf - t_vec[loop_ctr + SettingsMain.getLagrangeOrder()-1] > dt*1e-5 && loop_ctr < iterMax)
 	{
@@ -753,7 +822,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	     *  - afterwards compute the new
 	     *  - done before particles so that particles can benefit from nice timesteppings
 	     */
-        //copy Psi to previous locations, from oldest-1 upwards, take care of needed buffer for fourier_hermite
+        //copy Psi to previous locations, from oldest-1 upwards
 		for (int i_lagrange = 1; i_lagrange < SettingsMain.getLagrangeOrder(); i_lagrange++) {
 			cudaMemcpy(Dev_Psi_real + 4*Grid_psi.N*(SettingsMain.getLagrangeOrder()-i_lagrange),
 					   Dev_Psi_real + 4*Grid_psi.N*(SettingsMain.getLagrangeOrder()-i_lagrange-1), 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice);
@@ -897,7 +966,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			time_values[loop_ctr] = diff; // loop_ctr was already increased but first entry is init time
 		}
 		if (SettingsMain.getVerbose() >= 2) {
-			message = "Step = " + to_str(loop_ctr) + "/" + to_str(iterMax)
+			message = "Step = " + to_str(loop_ctr)
 					+ " \t S-Time = " + to_str(t_vec[loop_ctr_l+1]) + "/" + to_str(tf)
 					+ " \t IncompErr = " + to_str(incomp_error[loop_ctr-1])
 					+ " \t C-Time = " + format_duration(time_values[loop_ctr]);
@@ -906,6 +975,13 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 
 	}
 	
+	// introduce part to console
+	if (SettingsMain.getVerbose() >= 2) {
+		message = "Simulation loop finished"
+				  " \t C-Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+		std::cout<<"\n"+message+"\n\n"; logger.push(message);
+	}
+
 	
 	// hackery: new loop for particles to test convergence without map influence
 	if (SettingsMain.getParticlesSteps() != -1) {
@@ -1113,9 +1189,12 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
     // save timing to file
 	writeAllRealToBinaryFile(loop_ctr+2, time_values, SettingsMain, "/Monitoring_data/Timing_Values");
 
+	// introduce part to console
 	if (SettingsMain.getVerbose() >= 1) {
-		message = "Finished - Last Cuda Error = " + to_str(cudaGetErrorName(cudaGetLastError())) + " , Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
-		std::cout<<message+"\n"; logger.push(message);
+		message = "Finished simulation"
+				  " \t Last Cuda Error = " + to_str(cudaGetErrorName(cudaGetLastError()))
+				+ " \t C-Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+		std::cout<<"\n"+message+"\n\n"; logger.push(message);
 	}
 }
 

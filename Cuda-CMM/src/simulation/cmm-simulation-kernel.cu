@@ -35,6 +35,26 @@ __global__ void k_init_diffeo(double *ChiX, double *ChiY, TCudaGrid2D Grid)
 }
 
 
+// swap two memory positions, neede for changing direction in initialization (just simplifies things)
+// this is only for hermite functions!
+__global__ void k_swap_h(double *Val1, double *Val2, TCudaGrid2D Grid)
+{
+	//index
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+
+	if(iX >= Grid.NX || iY >= Grid.NY)
+		return;
+
+	int In = 4 * (iY*Grid.NX + iX);  // 4-times as we apply on hermites
+
+	double temp[4] = {Val1[In  ], Val1[In+1], Val1[In+2], Val1[In+3]};
+	Val1[In  ] = Val2[In  ]; Val1[In+1] = Val2[In+1]; Val1[In+2] = Val2[In+2]; Val1[In+3] = Val2[In+3];
+	Val2[In  ] = temp[0];    Val2[In+1] = temp[1];    Val2[In+2] = temp[2];    Val2[In+3] = temp[3];
+
+}
+
+
 // sample from hermite of map
 __global__ void k_h_sample_map(double *ChiX, double *ChiY, double *ChiX_s, double *ChiY_s, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
 {
