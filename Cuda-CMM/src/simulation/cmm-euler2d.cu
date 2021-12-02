@@ -9,6 +9,7 @@
 #include "cmm-simulation-kernel.h"
 
 #include "../ui/cmm-io.h"
+#include "../ui/cmm-param.h"
 
 #include <unistd.h>
 #include <chrono>
@@ -392,8 +393,8 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 
 	int count_mesure = 0; int count_mesure_sample = 0;
 	int mes_size = 2*SettingsMain.getConvInitFinal();  // initial and last step if computed
-	if (snapshots_per_second > 0) {
-		mes_size += (int)(tf*snapshots_per_second);  // add all intermediate targets
+	if (SettingsMain.getConvSnapshotsPerSec() > 0) {
+		mes_size += (int)(tf*SettingsMain.getConvSnapshotsPerSec());  // add all intermediate targets
 	}
     double *Mesure, *Mesure_fine, *Mesure_sample;
 	cudaMallocManaged(&Mesure, (3*mes_size+1)*sizeof(double));  // + 1 because i dont know what it does with 0
@@ -464,6 +465,8 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		std::cout<<"\n"+message+"\n\n"; logger.push(message);
 	}
 
+	// we are sure here, that we finished initializing, so the parameterfile can be written
+	save_param_file(SettingsMain);
 
 
 	/*******************************************************************
@@ -484,14 +487,17 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	translate_initial_condition_through_map_stack(Grid_fine, Map_Stack, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real,
 			cufft_plan_fine_D2Z, cufft_plan_fine_Z2D, Dev_W_H_initial, SettingsMain.getInitialConditionNum(), Dev_Temp_C1);
 
-	// compute first psi
-	// compute stream hermite from vorticity, we have two different versions avaiable
+	// compute first psi, stream hermite from vorticity
 	evaluate_stream_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
 			Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
 			Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
 
-	// initialize previous velocity points for lagrange interpolations
-	bool init_higher_order = true;  // switch to initialize in higher order, disabled by default but i already programmed it so why remove it
+
+	/*
+	 * Initialization of previous velocities for lagrange interpolation
+	 * Either:  Compute backwards EulerExp for all needed velocities
+	 * Or:		Increase order by back-and-forth computation until previous velocities are of desired order
+	 */
 	if (SettingsMain.getLagrangeOrder() > 1) {
 		// store settings for now
 		std::string time_integration_init = SettingsMain.getTimeIntegration();
@@ -505,7 +511,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		// loop, where we increase the order each time and change the direction
 		for (int i_order = 1; i_order <= lagrange_order_init; i_order++) {
 			// if we only use first order, we can skip all iterations besides last one
-			if (!init_higher_order and i_order != lagrange_order_init) {
+			if (!SettingsMain.getLagrangeInitHigherOrder() and i_order != lagrange_order_init) {
 				// switch direction to always alternate, done so we dont have to keep track of it
 				for (int i_dt = 0; i_dt < 5; i_dt++) {
 					dt_init[i_dt] = -1 * dt_init[i_dt];
@@ -515,7 +521,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 			}
 
 			// set method, most accurate versions were chosen arbitrarily
-			if (init_higher_order) {
+			if (SettingsMain.getLagrangeInitHigherOrder()) {
 				switch (i_order) {
 					case 1: { SettingsMain.setTimeIntegration("EulerExp"); break; }
 					case 2: { SettingsMain.setTimeIntegration("RK2"); break; }
@@ -593,6 +599,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		k_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
 	}
 
+
 	// save function to save variables, combined so we always save in the same way and location
     // use Dev_Hat_fine for W_fine, this works because just at the end of conservation it is overwritten
 	if (SettingsMain.getSaveFinal() || SettingsMain.getConvInitFinal()) {
@@ -611,7 +618,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 					cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 					Dev_Temp_C1, Mesure, Mesure_fine, count_mesure);
 			if (SettingsMain.getVerbose() >= 3) {
-				message = "Cons : Energ = " + to_str(Mesure[3*count_mesure], 8)
+				message = "Coarse Cons : Energ = " + to_str(Mesure[3*count_mesure], 8)
 						+    " \t Enstr = " + to_str(Mesure[3*count_mesure+1], 8)
 						+ " \t Palinstr = " + to_str(Mesure[3*count_mesure+2], 8);
 				std::cout<<message+"\n"; logger.push(message);
@@ -627,7 +634,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 				Dev_ChiX, Dev_ChiY, bounds, Dev_W_H_initial, SettingsMain, "0",
 				Mesure_sample, count_mesure_sample);
 		if (SettingsMain.getVerbose() >= 3) {
-			message = "Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample], 8)
+			message = "Sample Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample], 8)
 					+    " \t Enstr = " + to_str(Mesure_sample[3*count_mesure_sample+1], 8)
 					+ " \t Palinstr = " + to_str(Mesure_sample[3*count_mesure_sample+2], 8);
 			std::cout<<message+"\n"; logger.push(message);
@@ -667,14 +674,15 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		double w_max = thrust::reduce(w_ptr, w_ptr + Grid_fine.N, 0.0, thrust::maximum<double>());
 		double w_min = thrust::reduce(w_ptr, w_ptr + Grid_fine.N, 0.0, thrust::minimum<double>());
 
-		// velocity minimum - we first have to compute the norm elements
-		thrust::device_ptr<double> psi_ptr = thrust::device_pointer_cast(Dev_W_H_fine_real);
-		thrust::device_ptr<double> temp_ptr = thrust::device_pointer_cast((cufftDoubleReal*)Dev_Temp_C1);
+		// velocity minimum - we first have to compute the norm elements - problems on anthycithere so i disabled it
+//		thrust::device_ptr<double> psi_ptr = thrust::device_pointer_cast(Dev_W_H_fine_real);
+//		thrust::device_ptr<double> temp_ptr = thrust::device_pointer_cast((cufftDoubleReal*)Dev_Temp_C1);
+//
+//		thrust::transform(psi_ptr + 1*Grid_psi.N, psi_ptr + 2*Grid_psi.N, psi_ptr + 2*Grid_psi.N, temp_ptr, norm_fun());
+//		double u_max = thrust::reduce(temp_ptr, temp_ptr + Grid_psi.N, 0.0, thrust::maximum<double>());
 
-		thrust::transform(psi_ptr + 1*Grid_psi.N, psi_ptr + 2*Grid_psi.N, psi_ptr + 2*Grid_psi.N, temp_ptr, norm_fun());
-		double u_max = thrust::reduce(temp_ptr, temp_ptr + Grid_psi.N, 0.0, thrust::maximum<double>());
-
-		message = "W min = " + to_str(w_min) + " - W max = " + to_str(w_max) + " - U max = " + to_str(u_max);
+//		message = "W min = " + to_str(w_min) + " - W max = " + to_str(w_max) + " - U max = " + to_str(u_max);
+		message = "W min = " + to_str(w_min) + " - W max = " + to_str(w_max);
 		std::cout<<message+"\n"; logger.push(message);
 	}
 	
@@ -730,7 +738,8 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 		// avoid overstepping final time
 		if(t_vec[loop_ctr_l] + dt > tf) dt_now = tf - t_vec[loop_ctr_l];
 		// avoid overstepping specific targets
-		double targets[4] = {SettingsMain.getSnapshotsPerSec(),
+		double targets[5] = {SettingsMain.getSnapshotsPerSec(),
+						  SettingsMain.getConvSnapshotsPerSec(),
 						  SettingsMain.getSampleOnGrid()*SettingsMain.getSampleSnapshotsPerSec(),
 						  SettingsMain.getZoom()*SettingsMain.getZoomSnapshotsPerSec(),
 						  SettingsMain.getParticles()*SettingsMain.getParticlesSnapshotsPerSec(),
@@ -871,13 +880,21 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 //						(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
 
 				writeTimeStep(SettingsMain, to_str(t_vec[loop_ctr_l+1]), Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real, Dev_ChiX, Dev_ChiY, Grid_fine, Grid_coarse, Grid_psi);
+			}
+	    }
+
+	    if (SettingsMain.getConvSnapshotsPerSec() > 0) {
+			if( fmod(t_vec[loop_ctr_l+1]+dt*1e-5, 1.0/(double)SettingsMain.getConvSnapshotsPerSec()) < dt_vec[loop_ctr_l+1] ) {
+				// fine vorticity disabled, as this needs another Grid_fine.sizeNReal in temp buffer, need to resolve later
+//				apply_map_stack_to_W_part_All(Grid_fine, Map_Stack, Dev_ChiX, Dev_ChiY,
+//						(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
 
 				// compute conservation
 				compute_conservation_targets(Grid_fine, Grid_coarse, Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
 						cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 						Dev_Temp_C1, Mesure, Mesure_fine, count_mesure);
 				if (SettingsMain.getVerbose() >= 3) {
-					message = "Cons : Energ = " + to_str(Mesure[3*count_mesure], 8)
+					message = "Coarse Cons : Energ = " + to_str(Mesure[3*count_mesure], 8)
 							+    " \t Enstr = " + to_str(Mesure[3*count_mesure+1], 8)
 							+ " \t Palinstr = " + to_str(Mesure[3*count_mesure+2], 8);
 					std::cout<<message+"\n"; logger.push(message);
@@ -896,7 +913,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 						Dev_ChiX, Dev_ChiY, bounds, Dev_W_H_initial, SettingsMain, to_str(t_vec[loop_ctr_l+1]),
 						Mesure_sample, count_mesure_sample);
 				if (SettingsMain.getVerbose() >= 3) {
-					message = "Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample], 8)
+					message = "Sample Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample], 8)
 							+    " \t Enstr = " + to_str(Mesure_sample[3*count_mesure_sample+1], 8)
 							+ " \t Palinstr = " + to_str(Mesure_sample[3*count_mesure_sample+2], 8);
 					std::cout<<message+"\n"; logger.push(message);
@@ -1062,7 +1079,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 					cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 					Dev_Temp_C1, Mesure, Mesure_fine, count_mesure);
 			if (SettingsMain.getVerbose() >= 3) {
-				message = "Cons : Energ = " + to_str(Mesure[3*count_mesure], 8)
+				message = "Coarse Cons : Energ = " + to_str(Mesure[3*count_mesure], 8)
 						+    " \t Enstr = " + to_str(Mesure[3*count_mesure+1], 8)
 						+ " \t Palinstr = " + to_str(Mesure[3*count_mesure+2], 8);
 				std::cout<<message+"\n"; logger.push(message);
@@ -1079,7 +1096,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 				Dev_ChiX, Dev_ChiY, bounds, Dev_W_H_initial, SettingsMain, "final",
 				Mesure_sample, count_mesure_sample);
 		if (SettingsMain.getVerbose() >= 3) {
-			message = "Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample], 8)
+			message = "Sample Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample], 8)
 					+    " \t Enstr = " + to_str(Mesure_sample[3*count_mesure_sample+1], 8)
 					+ " \t Palinstr = " + to_str(Mesure_sample[3*count_mesure_sample+2], 8);
 			std::cout<<message+"\n"; logger.push(message);

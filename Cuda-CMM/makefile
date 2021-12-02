@@ -21,11 +21,11 @@ endif
 
 
 # main targets
-SimulationCuda2d.out: ./bin/settings.o ./bin/cmm-grid2d.o ./bin/cmm-io.o ./bin/cmm-fft.o ./bin/cmm-hermite.o ./bin/cmm-timestep.o ./bin/cmm-particles.o ./bin/cmm-mesure.o ./bin/cmm-simulation-host.o ./bin/cmm-simulation-kernel.o ./bin/cmm-euler2d.o ./bin/main2d.o
+SimulationCuda2d.out: ./bin/settings.o ./bin/cmm-grid2d.o ./bin/cmm-fft.o ./bin/cmm-hermite.o ./bin/cmm-io.o ./bin/cmm-param.o ./bin/cmm-timestep.o ./bin/cmm-particles.o ./bin/cmm-mesure.o ./bin/cmm-simulation-host.o ./bin/cmm-simulation-kernel.o ./bin/cmm-euler2d.o ./bin/main2d.o
 	#
 	# Build main programm
 	#
-	$(NVCC_PATH) -O3 -g -lineinfo -o SimulationCuda2d.out ./bin/settings.o ./bin/cmm-grid2d.o ./bin/cmm-io.o ./bin/cmm-fft.o ./bin/cmm-hermite.o ./bin/cmm-timestep.o ./bin/cmm-particles.o ./bin/cmm-mesure.o ./bin/cmm-simulation-host.o ./bin/cmm-simulation-kernel.o ./bin/cmm-euler2d.o ./bin/main2d.o -arch=$(GPU_ARCH) -lcufft -lcudadevrt -lcurand
+	$(NVCC_PATH) -O3 -g -lineinfo -o SimulationCuda2d.out ./bin/settings.o ./bin/cmm-grid2d.o ./bin/cmm-fft.o ./bin/cmm-hermite.o ./bin/cmm-io.o ./bin/cmm-param.o ./bin/cmm-timestep.o ./bin/cmm-particles.o ./bin/cmm-mesure.o ./bin/cmm-simulation-host.o ./bin/cmm-simulation-kernel.o ./bin/cmm-euler2d.o ./bin/main2d.o -arch=$(GPU_ARCH) -lcufft -lcudadevrt -lcurand
 
 all: SimulationCuda2d.out
 
@@ -36,14 +36,17 @@ all: SimulationCuda2d.out
 ./bin/cmm-grid2d.o: src/grid/cmm-grid2d.cu src/grid/cmm-grid2d.h | bin_dir
 	$(NVCC_PATH) -O3 -c -g -lineinfo src/grid/cmm-grid2d.cu -o ./bin/cmm-grid2d.o -arch=$(GPU_ARCH) --relocatable-device-code true
 
-./bin/cmm-io.o: src/ui/cmm-io.cu src/ui/cmm-io.h | bin_dir
-	$(NVCC_PATH) -O3 $(HDF5_COMMAND) -c -g -lineinfo src/ui/cmm-io.cu -o ./bin/cmm-io.o -arch=$(GPU_ARCH) --relocatable-device-code true 
-
 ./bin/cmm-fft.o: src/numerical/cmm-fft.cu src/numerical/cmm-fft.h | bin_dir
 	$(NVCC_PATH) -O3 -c -g -lineinfo src/numerical/cmm-fft.cu -o ./bin/cmm-fft.o -arch=$(GPU_ARCH) --relocatable-device-code true 
 	
 ./bin/cmm-hermite.o: src/numerical/cmm-hermite.cu src/numerical/cmm-hermite.h | bin_dir
 	$(NVCC_PATH) -O3 -c -g -lineinfo src/numerical/cmm-hermite.cu -o ./bin/cmm-hermite.o -arch=$(GPU_ARCH) --relocatable-device-code true 
+
+./bin/cmm-io.o: src/ui/cmm-io.cu src/ui/cmm-io.h | bin_dir
+	$(NVCC_PATH) -O3 $(HDF5_COMMAND) -c -g -lineinfo src/ui/cmm-io.cu -o ./bin/cmm-io.o -arch=$(GPU_ARCH) --relocatable-device-code true 
+
+./bin/cmm-param.o: src/ui/cmm-param.cu src/ui/cmm-param.h | bin_dir
+	$(NVCC_PATH) -O3 $(HDF5_COMMAND) -c -g -lineinfo src/ui/cmm-param.cu -o ./bin/cmm-param.o -arch=$(GPU_ARCH) --relocatable-device-code true 
 
 
 # sub targets, dependent on other files, but still being main numerical / computational files

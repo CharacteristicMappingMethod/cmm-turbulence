@@ -77,8 +77,34 @@ template<typename Type> string to_str (const Type & t, int prec)
   os << t;
   return os.str ();
 }
+// little function to format array datatype to string
+template<typename Type> string array_to_str (const Type & array, const int length)
+{
+  ostringstream os;
+  if (std::is_same<Type, double>::value) os.precision(3);
+  os << "{";
+  for (int i_length = 0; i_length < length; ++i_length) {
+	  os << array[i_length];
+	  if (i_length != length-1) os << ",";
+  }
+  os << "}";
+  return os.str ();
+}
+// little function to format array datatype to string with specific precision
+template<typename Type> string array_to_str (const Type & array, const int length, int prec)
+{
+  ostringstream os;
+  if (std::is_same<Type, double>::value) os.precision(prec);
+  os << "{";
+  for (int i_length = 0; i_length < length; ++i_length) {
+	  os << array[i_length];
+	  if (i_length != length-1) os << ",";
+  }
+  os << "}";
+  return os.str ();
+}
 
 // little function to format milliseconds to readable format
-string format_duration(double sec);
+std::string format_duration(double sec);
 
 #endif

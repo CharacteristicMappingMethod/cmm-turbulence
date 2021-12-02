@@ -17,7 +17,7 @@ private:
 	std::string initial_condition; int initial_condition_num;
 	int verbose;
 	// time stepping properties
-	double final_time, factor_dt_by_grid, snapshots_per_sec;
+	double final_time, factor_dt_by_grid, snapshots_per_sec, conv_snapshots_per_sec;
 	int steps_per_sec;
 	bool set_dt_by_steps;
 	bool save_initial, save_final;
@@ -29,6 +29,7 @@ private:
 	// specific
 	std::string time_integration; int time_integration_num;
 	int lagrange_order, lagrange_override;
+	bool lagrange_init_higher_order;
 	std::string map_update_order; int map_update_order_num;
 	bool map_update_grid;
 	int molly_stencil;
@@ -119,6 +120,8 @@ public:
 	void setSaveFinal(bool saveFinal) { save_final = saveFinal; }
 	bool getConvInitFinal() const { return conv_init_final; }
 	void setConvInitFinal(bool convInitFinal) { conv_init_final = convInitFinal; }
+	double getConvSnapshotsPerSec() const { return conv_snapshots_per_sec; }
+	void setConvSnapshotsPerSec(double convSnapshotsPerSec) { conv_snapshots_per_sec = convSnapshotsPerSec; }
 
 	// initial conditions setting
 	std::string getInitialCondition() const { return initial_condition; }
@@ -195,6 +198,9 @@ public:
 	// lagrange override to force a specific lagrange order
 	int getLagrangeOverride() const { return lagrange_override; }
 	void setLagrangeOverride(int lagrangeOverride) { lagrange_override = lagrangeOverride; }
+	// lagrange init setting
+	bool getLagrangeInitHigherOrder() const { return lagrange_init_higher_order; }
+	void setLagrangeInitHigherOrder(bool lagrangeInitHigherOrder) { lagrange_init_higher_order = lagrangeInitHigherOrder; }
 
 	// skip remapping
 	bool getSkipRemapping() const { return skip_remapping; }

@@ -1,5 +1,6 @@
 #include "simulation/cmm-euler2d.h"
 #include "ui/settings.h"
+#include "ui/cmm-param.h"
 
 
 
@@ -61,6 +62,21 @@ int main(int argc, char *args[])
 
 	// build settings and apply commands
 	SettingsCMM SettingsMain(argc, args);
+
+	// deal with specific arguments
+	for( int count = 0; count < argc; count++ ) {
+		// construct string for command
+		std::string command_full = args[count];
+
+		int pos_equal = command_full.find("=");
+		if (pos_equal != std::string::npos) {
+			// construct two substrings
+			std::string command = command_full.substr(0, pos_equal);
+			std::string value = command_full.substr(pos_equal+1, command_full.length());
+
+			if (command == "param_file") load_param_file(SettingsMain, value);
+		}
+	}
 
 	// main function
 	cuda_euler_2d(SettingsMain);

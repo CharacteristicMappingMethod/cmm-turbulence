@@ -8,8 +8,8 @@ void SettingsCMM::setPresets() {
 	std::string sim_name = "debug";  // unique identifier to differentiate simulations
 
 	// grid settings for coarse and fine grid
-	// 32		64		128		256		512		1024		2048		4096		8192		16384
-	// max working on V100 : grid_scale = 8192; fine_grid_scale = 16384;
+	// 	8		16		32		64		128		256		512		1024	2048	4096	8192	16384	32768
+	// max working on Anthicythere : grid_scale = 8192; fine_grid_scale = 16384;
 	int grid_coarse = 1024;
 	int grid_fine = 2048;
 	int grid_psi = 1024;  // psi will be (up)sampled on this grid, Restriction: 2*N_fft_psi !> 4*N_coarse
@@ -21,7 +21,7 @@ void SettingsCMM::setPresets() {
 	 *  "quadropole"			-	???
 	 *  "three_vortices"		-	???
 	 *  "single_shear_layer"	-	shear layer problem forming helmholtz-instabilities, merging into two vortices which then merges into one big vortex
-	 *  "two_vortices"			-	???
+	 *  "two_vortices"conv			-	???
 	 *  "turbulence_gaussienne"	-	???
 	 *  "shielded_vortex"		-	vortex core with ring of negative vorticity around it
 	 */
@@ -38,7 +38,7 @@ void SettingsCMM::setPresets() {
 	int verbose = 3;
 
 	// set time properties
-	double final_time = 2;  // end of computation
+	double final_time = 8;  // end of computation
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
 	int steps_per_sec = 32;  // how many steps do we want per seconds?
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
@@ -46,14 +46,16 @@ void SettingsCMM::setPresets() {
 	double snapshots_per_sec = -1;  // how many times do we want to save data per sec, set <= 0 to disable
 	bool save_initial = true;  // consume less data and make it possible to disable saving the initial data
 	bool save_final = true;  // consume less data and make it possible to disable saving the final data
+
 	bool conv_init_final = true;  // compute initial and final convergence details?
+	double conv_snapshots_per_sec = -1;  // how many times do we want to compute conservation details per sec, set <= 0 to disable
 
 	// set minor properties
 	double incomp_threshhold = 1e-4;  // the maximum allowance of map to deviate from grad_chi begin 1
 	double map_epsilon = 1e-3;  // distance used for foot points for GALS map advection
 //	double map_epsilon = 6.283185307179/512.0;  // distance used for foot points for GALS map advection
 	// skip remapping, usefull for convergence tests
-	bool skip_remapping = true;
+	bool skip_remapping = false;
 
 	// set memory properties
 	int mem_RAM_CPU_remaps = 4096;  // mem_RAM_CPU_remaps in MB on the CPU
@@ -76,6 +78,7 @@ void SettingsCMM::setPresets() {
 	 * works in general not with particles
 	 */
 	int lagrange_override = -1;
+	bool lagrange_init_higher_order = true;  // initialization with EulerExp or increasing order?
 
 	// mapupdate order, "2nd", "4th", "6th"
 	std::string map_update_order = "4th";
@@ -132,7 +135,7 @@ void SettingsCMM::setPresets() {
 	int particles_tau_num = 3;  // how many tau_p values do we have? for now maximum is 100
 //	double Tau_p[Nb_Tau_p] = {0.0, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.125, 0.15, 0.25, 0.5, 0.75, 1, 2, 5, 13};
 	// timestep restriction : tau is coupled to dt due to stability reasons
-	std::string particles_tau_s = """0, 0.1, 1""";  // all those "s are needed, to have one pair of "s in the string for the conversion
+	std::string particles_tau_s = "\"0, 0.1, 1\"";  // escape character \ needed for "
 
 	double particles_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save particles per sec, set <= 0 to disable
 	bool particles_save_initial = false;  // consume less data and make it possible to disable saving the initial data
@@ -162,7 +165,7 @@ void SettingsCMM::setPresets() {
 	setFactorDtByGrid(factor_dt_by_grid); setStepsPerSec(steps_per_sec);
 	setSnapshotsPerSec(snapshots_per_sec); setSetDtBySteps(set_dt_by_steps);
 	setSaveInitial(save_initial); setSaveFinal(save_final);
-	setConvInitFinal(conv_init_final);
+	setConvInitFinal(conv_init_final); setConvSnapshotsPerSec(conv_snapshots_per_sec);
 	setInitialCondition(initial_condition);
 
 	setVerbose(verbose);
@@ -174,6 +177,7 @@ void SettingsCMM::setPresets() {
 	setMapEpsilon(map_epsilon);
 	setTimeIntegration(time_integration);
 	setLagrangeOverride(lagrange_override);
+	setLagrangeInitHigherOrder(lagrange_init_higher_order);
 	setMapUpdateOrder(map_update_order);
 	setMapUpdateGrid(map_update_grid);
 	setMollyStencil(molly_stencil);
@@ -245,7 +249,7 @@ void SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 	if (pos_equal != std::string::npos) {
 		// construct two substrings
 		std::string command = command_full.substr(0, pos_equal);
-		std::string value = command_full.substr(pos_equal+1, command_full.length());
+		std::string value = command_full.substr(pos_equal+delimiter.length(), command_full.length());
 
 		// big if else for different commands
 		// this beast is becoming larger and larger, i should convert it to something more automatic
@@ -264,6 +268,7 @@ void SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		else if (command == "save_initial") setSaveInitial(getBoolFromString(value));
 		else if (command == "save_final") setSaveFinal(getBoolFromString(value));
 		else if (command == "conv_init_final") setConvInitFinal(getBoolFromString(value));
+		else if (command == "conv_snapshots_per_sec") setConvSnapshotsPerSec(std::stod(value));
 		else if (command == "snapshots_per_sec") setSnapshotsPerSec(std::stod(value));
 
 		else if (command == "mem_RAM_CPU_remaps") setMemRamCpuRemaps(std::stoi(value));
@@ -276,6 +281,7 @@ void SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		else if (command == "map_epsilon") setMapEpsilon(std::stod(value));
 		else if (command == "time_integration") setTimeIntegration(value);
 		else if (command == "lagrange_override") setLagrangeOverride(std::stoi(value));
+		else if (command == "lagrange_init_higher_order") setLagrangeInitHigherOrder(getBoolFromString(value));
 		else if (command == "map_update_order") setMapUpdateOrder(value);
 		else if (command == "map_update_grid") setMapUpdateGrid(getBoolFromString(value));
 		else if (command == "molly_stencil") setMollyStencil(std::stoi(value));
@@ -366,7 +372,11 @@ bool SettingsCMM::getBoolFromString(std::string value) {
 void SettingsCMM::string_to_double_array(std::string s_array, double *array) {
 	// Attention : no parse check implemented, this is not good habit, but i didn't come up with a nice working unique thing
 	// erase " if surrounded by it
-	if (s_array.substr(0, 1) == """" || s_array.substr(s_array.length()-1, s_array.length()) == """") {
+	if (s_array.substr(0, 1) == "\"" || s_array.substr(s_array.length()-1, s_array.length()) == "\"") {
+		s_array.erase(0, 1); s_array.erase(s_array.length()-1, s_array.length());  // erase brackets
+	}
+	// erase {} if surrounded by it
+	if (s_array.substr(0, 1) == "{" || s_array.substr(s_array.length()-1, s_array.length()) == "}") {
 		s_array.erase(0, 1); s_array.erase(s_array.length()-1, s_array.length());  // erase brackets
 	}
 	// loop over all elements
@@ -386,6 +396,10 @@ void SettingsCMM::string_to_int_array(std::string s_array, int *array) {
 	// Attention : no parse check implemented, this is not good habit, but i didn't come up with a nice working unique thing
 	// erase " if surrounded by it
 	if (s_array.substr(0, 1) == """" || s_array.substr(s_array.length()-1, s_array.length()) == """") {
+		s_array.erase(0, 1); s_array.erase(s_array.length()-1, s_array.length());  // erase brackets
+	}
+	// erase {} if surrounded by it
+	if (s_array.substr(0, 1) == "{" || s_array.substr(s_array.length()-1, s_array.length()) == "}") {
 		s_array.erase(0, 1); s_array.erase(s_array.length()-1, s_array.length());  // erase brackets
 	}
 	// loop over all elements
