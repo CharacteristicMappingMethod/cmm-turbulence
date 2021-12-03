@@ -61,7 +61,7 @@ int main(int argc, char *args[])
 {
 
 	// build settings and apply commands
-	SettingsCMM SettingsMain(argc, args);
+	SettingsCMM SettingsMain;
 
 	// deal with specific arguments
 	for( int count = 0; count < argc; count++ ) {
@@ -74,9 +74,13 @@ int main(int argc, char *args[])
 			std::string command = command_full.substr(0, pos_equal);
 			std::string value = command_full.substr(pos_equal+1, command_full.length());
 
+			// load parameter file
 			if (command == "param_file") load_param_file(SettingsMain, value);
 		}
 	}
+
+	// values from command line are set after loadig parameter files - command line arguments should have highest priority
+	SettingsMain.applyCommands(argc, args);
 
 	// main function
 	cuda_euler_2d(SettingsMain);

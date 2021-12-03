@@ -15,7 +15,7 @@ struct norm_fun
 };
 
 // main function
-void cuda_euler_2d(SettingsCMM SettingsMain);
+void cuda_euler_2d(SettingsCMM& SettingsMain);
 
 
 #endif

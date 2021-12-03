@@ -7,11 +7,11 @@
 #include "string.h"
 
 
-// function to safe parameter file
-void save_param_file(SettingsCMM SettingsMain);
+// function to safe parameter file, pass-by-reference
+void save_param_file(SettingsCMM& SettingsMain, std::string param_name);
 
-// function to load parameter file
-void load_param_file(SettingsCMM SettingsMain, std::string param_name);
+// function to load parameter file, pass-by-reference
+void load_param_file(SettingsCMM& SettingsMain, std::string param_name);
 
 
 

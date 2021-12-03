@@ -23,7 +23,7 @@
 #include "../numerical/cmm-mesure.h"
 
 
-void cuda_euler_2d(SettingsCMM SettingsMain)
+void cuda_euler_2d(SettingsCMM& SettingsMain)
 {
 	
 	// start clock as first thing to measure initializations too
@@ -466,7 +466,7 @@ void cuda_euler_2d(SettingsCMM SettingsMain)
 	}
 
 	// we are sure here, that we finished initializing, so the parameterfile can be written
-	save_param_file(SettingsMain);
+	save_param_file(SettingsMain, SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/params.txt");
 
 
 	/*******************************************************************

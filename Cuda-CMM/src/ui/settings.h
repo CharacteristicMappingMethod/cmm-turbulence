@@ -5,6 +5,7 @@
 
 #include <string>
 #include <stdio.h>
+#include <stdlib.h>
 #include <iostream>
 
 
@@ -56,7 +57,6 @@ private:
 	std::string particles_time_integration; int particles_time_integration_num;
 
 	int particles_steps;
-
 
 public:
 	// arrays are hard to deal with methods in c++, so i make them public

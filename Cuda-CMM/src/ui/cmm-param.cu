@@ -11,6 +11,7 @@
  */
 #define PARAM_VERSION 1
 #define PARAM_HEADER_LINE "CMM Parameter file"
+#define PARAM_COMMAND "param_version"
 
 // because I have to use this many times, this just makes it easier and more readable
 std::string write_line(std::string param_name, std::string param_value) {
@@ -20,12 +21,12 @@ std::string write_line(std::string param_name, std::string param_value) {
 }
 
 
-// function to safe parameter file, saved is within simulation data scope with fixed name
-void save_param_file(SettingsCMM SettingsMain) {
+// function to safe parameter file, saved is within simulation data scope with fixed name, pass-by-reference
+void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 	std::ofstream file;
 
-	std::string file_name = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/params.txt";
-	file.open(file_name.c_str(), ios::out);
+//	std::string file_name = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/params.txt";
+	file.open(param_name.c_str(), ios::out);
 
 	if(!file)
 	{
@@ -35,7 +36,7 @@ void save_param_file(SettingsCMM SettingsMain) {
 	{
 		// first three lines as setting lines for some details
 		file << PARAM_HEADER_LINE << "\n";  // header
-		file << write_line("param_version", to_str(PARAM_VERSION, 16));  // give it a version number
+		file << write_line(PARAM_COMMAND, to_str(PARAM_VERSION, 16));  // give it a version number
 		file << "\n";  // empty dummy line, for now as a separator, but maybe it comes in handy later
 
 		// now come all the parameter!
@@ -119,8 +120,8 @@ void save_param_file(SettingsCMM SettingsMain) {
 	}
 }
 
-// function to load parameter file
-void load_param_file(SettingsCMM SettingsMain, std::string param_name) {
+// function to load parameter file, pass-by-reference
+void load_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 	ifstream file;
 
 	file.open(param_name.c_str(), ios::in);
@@ -146,7 +147,7 @@ void load_param_file(SettingsCMM SettingsMain, std::string param_name) {
 				std::string command = file_line.substr(0, pos_equal);
 				std::string value = file_line.substr(pos_equal+delimiter.length(), file_line.length());
 
-				if (command == "param_version") {
+				if (command == PARAM_COMMAND) {
 					param_version = std::stoi(value);
 
 					// skip third line
