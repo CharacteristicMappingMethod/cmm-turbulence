@@ -403,7 +403,7 @@ __global__ void k_advect_using_stream_hermite(double *ChiX, double *ChiY, double
 
 // apply first map
 // like k_h_sample_map but saves all results in one array next to each other
-__global__ void k_apply_map_stack_to_W_custom_part_1(double *ChiX, double *ChiY, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
+__global__ void k_h_sample_map_compact(double *ChiX, double *ChiY, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -414,12 +414,9 @@ __global__ void k_apply_map_stack_to_W_custom_part_1(double *ChiX, double *ChiY,
 
 	int In = iY*Grid.NX + iX;
 
-	double h_temp_x = (Grid.bounds[1] - Grid.bounds[0])/Grid.NX;
-	double h_temp_y = (Grid.bounds[3] - Grid.bounds[2])/Grid.NY;
-
 	//position
-	double x = Grid.bounds[0] + iX * h_temp_x;
-	double y = Grid.bounds[2] + iY * h_temp_y;
+	double x = Grid.bounds[0] + iX*Grid.hx;
+	double y = Grid.bounds[2] + iY*Grid.hy;
 
 	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, Grid_map);
 
@@ -428,8 +425,8 @@ __global__ void k_apply_map_stack_to_W_custom_part_1(double *ChiX, double *ChiY,
 	x_y[2*In+1] = y;
 
 }
-// apply intermediate maps
-__global__ void k_apply_map_stack_to_W_part_2(double *ChiX_stack, double *ChiY_stack, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
+// apply intermediate maps to compacted map
+__global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -445,7 +442,7 @@ __global__ void k_apply_map_stack_to_W_part_2(double *ChiX_stack, double *ChiY_s
 
 }
 // sample from initial condition
-__global__ void k_apply_map_stack_to_W_part_3(double *ws, double *x_y, TCudaGrid2D Grid, double *W_initial, int simulation_num)
+__global__ void k_h_sample_from_init(double *ws, double *x_y, TCudaGrid2D Grid, TCudaGrid2D Grid_discrete, double *W_initial_discrete, int simulation_num, bool initial_discrete)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -456,13 +453,12 @@ __global__ void k_apply_map_stack_to_W_part_3(double *ws, double *x_y, TCudaGrid
 
 	long int In = iY*Grid.NX + iX;
 
-	#ifndef DISCRET
+	if (!initial_discrete) {
 		ws[In] = d_initial_W(x_y[2*In], x_y[2*In+1], simulation_num);
-	#endif
-
-	#ifdef DISCRET
-		ws[In] = d_hermite_interpolate_2D(W_initial, x_y[2*In], x_y[2*In+1], Grid);
-	#endif
+	}
+	else {
+		ws[In] = device_hermite_interpolate_2D(W_initial_discrete, x_y[2*In], x_y[2*In+1], Grid_discrete);
+	}
 }
 
 

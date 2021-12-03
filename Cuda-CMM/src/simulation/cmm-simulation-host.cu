@@ -109,24 +109,24 @@ void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map,
 /*******************************************************************
 *						 Apply mapstacks						   *
 *******************************************************************/
-void apply_map_stack_to_W_part_All(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double *ChiY,
-		double *W_real, double *Dev_Temp, double *W_initial, int simulation_num)
+void apply_map_stack_to_W(TCudaGrid2D Grid, TCudaGrid2D Grid_discrete, MapStack Map_Stack, double *ChiX, double *ChiY,
+		double *W_real, double *Dev_Temp, double *W_initial_discrete, int simulation_num, bool initial_discrete)
 {
 	// copy bounds to constant device memory
 	cudaMemcpyToSymbol(d_bounds, Grid.bounds, sizeof(double)*4);
 
-	k_apply_map_stack_to_W_custom_part_1<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
+	k_h_sample_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
 
 	// loop over all maps in map stack, where all maps are on host system
 	// this could be parallelized between loading and computing?
 	for (int i_map = Map_Stack.map_stack_ctr-1; i_map >= 0; i_map--) {
 		Map_Stack.copy_map_to_device(i_map);
-		k_apply_map_stack_to_W_part_2<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
+		k_apply_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
 				Dev_Temp, *Map_Stack.Grid, Grid);
 	}
 
 	// initial condition
-	k_apply_map_stack_to_W_part_3<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(W_real, Dev_Temp, Grid, W_initial, simulation_num);
+	k_h_sample_from_init<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(W_real, Dev_Temp, Grid, Grid_discrete, W_initial_discrete, simulation_num, initial_discrete);
 }
 
 
@@ -134,15 +134,15 @@ void apply_map_stack_to_W_part_All(TCudaGrid2D Grid, MapStack Map_Stack, double 
 *				Compute fine vorticity hermite					   *
 *******************************************************************/
 
-void translate_initial_condition_through_map_stack(TCudaGrid2D Grid_fine, MapStack Map_Stack, double *Dev_ChiX, double *Dev_ChiY,
-		double *W_H_real, cufftHandle cufftPlan_fine_D2Z, cufftHandle cufftPlan_fine_Z2D, double *W_initial, int simulation_num_c,
-		cufftDoubleComplex *Dev_Temp_C1)
+void translate_initial_condition_through_map_stack(TCudaGrid2D Grid_fine, TCudaGrid2D Grid_discrete, MapStack Map_Stack, double *Dev_ChiX, double *Dev_ChiY,
+		double *W_H_real, cufftHandle cufftPlan_fine_D2Z, cufftHandle cufftPlan_fine_Z2D, cufftDoubleComplex *Dev_Temp_C1,
+		double *W_initial_discrete, int simulation_num_c, bool initial_discrete)
 {
 
 	// Vorticity on coarse grid to vorticity on fine grid
 	// W_H_real is used as temporary variable and output
-	apply_map_stack_to_W_part_All(Grid_fine, Map_Stack, Dev_ChiX, Dev_ChiY,
-			W_H_real, W_H_real+Grid_fine.N, W_initial, simulation_num_c);
+	apply_map_stack_to_W(Grid_fine, Grid_discrete, Map_Stack, Dev_ChiX, Dev_ChiY,
+			W_H_real, W_H_real+Grid_fine.N, W_initial_discrete, simulation_num_c, initial_discrete);
 
 	// go to comlex space
 	cufftExecD2Z(cufftPlan_fine_D2Z, W_H_real, Dev_Temp_C1);
@@ -288,14 +288,14 @@ void compute_conservation_targets(TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse
 /*******************************************************************
 *		 Sample on a specific grid and save everything	           *
 *******************************************************************/
-void sample_compute_and_write(MapStack Map_Stack, TCudaGrid2D Grid_sample, double *Host_sample, double *Dev_sample,
+void sample_compute_and_write(MapStack Map_Stack, TCudaGrid2D Grid_sample, TCudaGrid2D Grid_discrete, double *Host_sample, double *Dev_sample,
 		cufftHandle cufft_plan_sample_D2Z, cufftHandle cufft_plan_sample_Z2D, cufftDoubleComplex *Dev_Temp_C1,
-		double *Dev_ChiX, double*Dev_ChiY, double *bounds, double *W_initial, SettingsCMM SettingsMain, string i_num,
+		double *Dev_ChiX, double*Dev_ChiY, double *bounds, double *W_initial_discrete, SettingsCMM SettingsMain, string i_num,
 		double *Mesure_sample, int count_mesure) {
 
 	// begin with vorticity
-	apply_map_stack_to_W_part_All(Grid_sample, Map_Stack, Dev_ChiX, Dev_ChiY,
-			Dev_sample, (cufftDoubleReal*)Dev_Temp_C1, W_initial, SettingsMain.getInitialConditionNum());
+	apply_map_stack_to_W(Grid_sample, Grid_discrete, Map_Stack, Dev_ChiX, Dev_ChiY,
+			Dev_sample, (cufftDoubleReal*)Dev_Temp_C1, W_initial_discrete, SettingsMain.getInitialConditionNum(), SettingsMain.getInitialDiscrete());
 	writeTimeVariable(SettingsMain, "Vorticity_W_"+to_str(Grid_sample.NX), i_num, Host_sample, Dev_sample, Grid_sample.sizeNReal, Grid_sample.N);
 
 	// compute enstrophy and palinstrophy
@@ -323,8 +323,8 @@ void sample_compute_and_write(MapStack Map_Stack, TCudaGrid2D Grid_sample, doubl
 *							   Zoom								   *
 *			sample vorticity with mapstack at arbitrary frame
 *******************************************************************/
-void Zoom(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Grid_zoom, TCudaGrid2D Grid_psi,
-		double *Dev_ChiX, double *Dev_ChiY, double *Dev_Temp, double *W_initial, double *psi,
+void Zoom(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Grid_zoom, TCudaGrid2D Grid_psi, TCudaGrid2D Grid_discrete,
+		double *Dev_ChiX, double *Dev_ChiY, double *Dev_Temp, double *W_initial_discrete, double *psi,
 		double *Host_particles_pos, double *Dev_particles_pos, double *Host_debug, string i_num)
 {
 	// create folder
@@ -355,8 +355,9 @@ void Zoom(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Grid_zoom, T
 		TCudaGrid2D Grid_zoom_i(Grid_zoom.NX, Grid_zoom.NY, bounds);
 
 		// compute zoom of vorticity
-		apply_map_stack_to_W_part_All(Grid_zoom_i, Map_Stack, Dev_ChiX, Dev_ChiY,
-				Dev_Temp, Dev_Temp+Grid_zoom_i.N, W_initial, SettingsMain.getInitialConditionNum());
+		apply_map_stack_to_W(Grid_zoom_i, Grid_discrete, Map_Stack, Dev_ChiX, Dev_ChiY,
+				Dev_Temp, Dev_Temp+Grid_zoom_i.N, W_initial_discrete,
+				SettingsMain.getInitialConditionNum(), SettingsMain.getInitialDiscrete());
 
 		// save vorticity zoom
 		cudaMemcpy(Host_debug, Dev_Temp, Grid_zoom.sizeNReal, cudaMemcpyDeviceToHost);

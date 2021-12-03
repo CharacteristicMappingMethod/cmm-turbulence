@@ -141,33 +141,43 @@ void writeAllRealToBinaryFile(int Len, double *var, SettingsCMM SettingsMain, st
 	string fileName = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + data_name + ".data";
 	ofstream file(fileName.c_str(), ios::out | ios::binary);
 
-		if(!file)
-		{
-			cout<<"Error saving file. Unable to open : "<<fileName<<endl;
-			return;
-		}
-
-	for (int l=0; l<Len; l++)
-		file.write( (char*) &var[l], sizeof(double) );
+	if(!file)
+	{
+		cout<<"Error saving file. Unable to open : "<<fileName<<endl;
+		return;
+	}
+	else {
+		file.write( (char*) var, Len*sizeof(double) );
+//		for (int l=0; l<Len; l++) {
+//			file.write( (char*) &var[l], sizeof(double) );
+//		}
+	}
 
 	file.close();
 }
 
 
-void readAllRealFromBinaryFile(int Len, double *var, SettingsCMM SettingsMain, string data_name)
+bool readAllRealFromBinaryFile(int Len, double *var, string data_name)
 {
-	string fileName = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + data_name + ".data";
+	string fileName = data_name;
 	ifstream file(fileName.c_str(), ios::in | ios::binary);
+	bool open_file;
 
-		if(!file)
-		{
-			cout<<"Error reading file. Unable to open : "<<fileName<<endl;
-		}
-
-	for (int l=0; l<Len; l++)
-		file.read( (char*) &var[l], sizeof(double) );
+	if(!file)
+	{
+		cout<<"Error reading file. Unable to open : "<<fileName<<endl;
+		open_file = false;
+	}
+	else {
+		file.read( (char*) var, Len*sizeof(double) );
+//		for (int l=0; l<Len; l++) {
+//			file.read( (char*) &var[l], sizeof(double) );
+//		}
+		open_file = true;
+	}
 
 	file.close();
+	return open_file;
 }
 
 

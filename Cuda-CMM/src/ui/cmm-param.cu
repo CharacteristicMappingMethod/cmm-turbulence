@@ -66,6 +66,10 @@ void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 		file << write_line("verbose", to_str(SettingsMain.getVerbose(), 16));
 
 		file << write_line("initial_condition", to_str(SettingsMain.getInitialCondition(), 16));
+		file << write_line("initial_discrete", to_str(SettingsMain.getInitialDiscrete(), 16));
+		file << write_line("initial_discrete_grid", to_str(SettingsMain.getInitialDiscreteGrid(), 16));
+		file << write_line("initial_discrete_location", to_str(SettingsMain.getInitialDiscreteLocation(), 16));
+
 		file << write_line("incomp_threshold", to_str(SettingsMain.getIncompThreshold(), 16));
 		file << write_line("map_epsilon", to_str(SettingsMain.getMapEpsilon(), 16));
 		file << write_line("time_integration", to_str(SettingsMain.getTimeIntegration(), 16));

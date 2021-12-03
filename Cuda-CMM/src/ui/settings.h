@@ -15,7 +15,8 @@ private:
 	// main properties, needed to be able to run
 	std::string workspace, sim_name, file_name;
 	int grid_coarse, grid_fine, grid_psi, grid_vort;
-	std::string initial_condition; int initial_condition_num;
+	std::string initial_condition, initial_discrete_location;
+	int initial_condition_num, initial_discrete_grid; bool initial_discrete;
 	int verbose;
 	// time stepping properties
 	double final_time, factor_dt_by_grid, snapshots_per_sec, conv_snapshots_per_sec;
@@ -138,6 +139,12 @@ public:
 		else initial_condition_num = -1;
 	}
 	int getInitialConditionNum() const { return initial_condition_num; }
+	bool getInitialDiscrete() const { return initial_discrete; }
+	void setInitialDiscrete(bool initialDiscrete) { initial_discrete = initialDiscrete; }
+	int getInitialDiscreteGrid() const { return initial_discrete_grid; }
+	void setInitialDiscreteGrid(int initialDiscreteGrid) { initial_discrete_grid = initialDiscreteGrid; }
+	std::string getInitialDiscreteLocation() const { return initial_discrete_location; }
+	void setInitialDiscreteLocation(std::string initialDiscreteLocation) { initial_discrete_location = initialDiscreteLocation; }
 
 	int getVerbose() const { return verbose; }
 	void setVerbose(int Verbose) { verbose = Verbose; }

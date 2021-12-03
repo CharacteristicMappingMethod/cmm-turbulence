@@ -28,6 +28,11 @@ void SettingsCMM::setPresets() {
 	std::string initial_condition = "4_nodes";
 //	string initial_condition = "shielded_vortex";
 
+	// possibility to compute from discrete initial condition
+	bool initial_discrete = false;
+	int initial_discrete_grid = 2048;  // variable gridsize for discrete initial grid
+	std::string initial_discrete_location = "src/Initial_W_discret/Vorticity_W_2048.data";  // path to discrete file, relative from workspace
+
 	/*
 	 * Console output verbose intensity
 	 *  0	-	no console outputs besides errors
@@ -55,7 +60,7 @@ void SettingsCMM::setPresets() {
 	double map_epsilon = 1e-3;  // distance used for foot points for GALS map advection
 //	double map_epsilon = 6.283185307179/512.0;  // distance used for foot points for GALS map advection
 	// skip remapping, usefull for convergence tests
-	bool skip_remapping = false;
+	bool skip_remapping = true;
 
 	// set memory properties
 	int mem_RAM_CPU_remaps = 4096;  // mem_RAM_CPU_remaps in MB on the CPU
@@ -166,7 +171,11 @@ void SettingsCMM::setPresets() {
 	setSnapshotsPerSec(snapshots_per_sec); setSetDtBySteps(set_dt_by_steps);
 	setSaveInitial(save_initial); setSaveFinal(save_final);
 	setConvInitFinal(conv_init_final); setConvSnapshotsPerSec(conv_snapshots_per_sec);
+
 	setInitialCondition(initial_condition);
+	setInitialDiscrete(initial_discrete);
+	setInitialDiscreteGrid(initial_discrete_grid);
+	setInitialDiscreteLocation(initial_discrete_location);
 
 	setVerbose(verbose);
 
@@ -277,6 +286,10 @@ void SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		else if (command == "verbose") setVerbose(std::stoi(value));
 
 		else if (command == "initial_condition") setInitialCondition(value);
+		else if (command == "initial_discrete") setInitialDiscrete(getBoolFromString(value));
+		else if (command == "initial_discrete_grid") setInitialDiscreteGrid(stoi(value));
+		else if (command == "initial_discrete_location") setInitialDiscreteLocation(value);
+
 		else if (command == "incomp_threshold") setIncompThreshold(std::stod(value));
 		else if (command == "map_epsilon") setMapEpsilon(std::stod(value));
 		else if (command == "time_integration") setTimeIntegration(value);
