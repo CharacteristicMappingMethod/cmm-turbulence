@@ -22,7 +22,8 @@ private:
 	double final_time, factor_dt_by_grid, snapshots_per_sec, conv_snapshots_per_sec;
 	int steps_per_sec;
 	bool set_dt_by_steps;
-	bool save_initial, save_final;
+	bool save_initial, save_final, conv_init_final;
+	std::string save_var;
 	// minor properties, can be tweaked but mainly remain constant
 	double incomp_threshhold;
 	double map_epsilon;
@@ -41,12 +42,17 @@ private:
 	bool sample_on_grid;
 	int grid_sample;
 	double sample_snapshots_per_sec;
-	bool sample_save_initial, sample_save_final, conv_init_final;
+	bool sample_save_initial, sample_save_final;
+	std::string sample_save_var;
+	// passive scalar
+	std::string scalar_name, scalar_discrete_location;
+	int scalar_num, scalar_discrete_grid; bool scalar_discrete;
 	// zoom
-	bool zoom, zoom_save_psi, zoom_save_particles;
+	bool zoom;
 	double zoom_center_x, zoom_center_y, zoom_width_x, zoom_width_y, zoom_repetitions_factor, zoom_snapshots_per_sec;
 	int grid_zoom, zoom_repetitions;
 	bool zoom_save_initial, zoom_save_final;
+	std::string zoom_save_var;
 	// particles
 	bool particles, save_fine_particles;
 	unsigned long long particles_seed;
@@ -119,6 +125,10 @@ public:
 	void setSaveInitial(bool saveInitial) { save_initial = saveInitial; }
 	bool getSaveFinal() const { return save_final; }
 	void setSaveFinal(bool saveFinal) { save_final = saveFinal; }
+	std::string getSaveVar() const { return save_var; }
+	void setSaveVar(std::string saveVar) { save_var = saveVar; }
+
+
 	bool getConvInitFinal() const { return conv_init_final; }
 	void setConvInitFinal(bool convInitFinal) { conv_init_final = convInitFinal; }
 	double getConvSnapshotsPerSec() const { return conv_snapshots_per_sec; }
@@ -226,6 +236,27 @@ public:
 	void setSampleSaveInitial(bool sampleSaveInitial) { sample_save_initial = sampleSaveInitial; }
 	bool getSampleSaveFinal() const { return sample_save_final; }
 	void setSampleSaveFinal(bool sampleSaveFinal) { sample_save_final = sampleSaveFinal; }
+	std::string getSampleSaveVar() const { return sample_save_var; }
+	void setSampleSaveVar(std::string sampleSaveVar) { sample_save_var = sampleSaveVar; }
+
+
+	// passive scalar
+	std::string getScalarName() const { return scalar_name; }
+	void setScalarName(std::string scalarName) {
+		scalar_name = scalarName;
+		// tied to num, for faster handling
+		if(scalarName == "rectangle") scalar_num = 0;
+//		else if(scalarName == "quadropole") scalar_num = 1;
+		else scalar_num = -1;
+	}
+	int getScalarNum() const { return scalar_num; }
+	bool getScalarDiscrete() const { return scalar_discrete; }
+	void setScalarDiscrete(bool scalarDiscrete) { scalar_discrete = scalarDiscrete; }
+	int getScalarDiscreteGrid() const { return scalar_discrete_grid; }
+	void setScalarDiscreteGrid(int scalarDiscreteGrid) { scalar_discrete_grid = scalarDiscreteGrid; }
+	std::string getScalarDiscreteLocation() const { return scalar_discrete_location; }
+	void setScalarDiscreteLocation(std::string scalarDiscreteLocation) { scalar_discrete_location = scalarDiscreteLocation; }
+
 
 
 	// zoom
@@ -248,11 +279,6 @@ public:
 	double getZoomRepetitionsFactor() const { return zoom_repetitions_factor; }
 	void setZoomRepetitionsFactor(double zoomRepetitionsFactor) { zoom_repetitions_factor = zoomRepetitionsFactor; }
 
-	bool getZoomSavePsi() const { return zoom_save_psi; }
-	void setZoomSavePsi(bool zoomSavePsi) { zoom_save_psi = zoomSavePsi; }
-	bool getZoomSaveParticles() const { return zoom_save_particles; }
-	void setZoomSaveParticles(bool zoomSaveParticles) { zoom_save_particles = zoomSaveParticles; }
-
 	double getZoomSnapshotsPerSec() const { return zoom_snapshots_per_sec; }
 	void setZoomSnapshotsPerSec(double zoomSnapshotsPerSec) { zoom_snapshots_per_sec = zoomSnapshotsPerSec; }
 
@@ -260,6 +286,8 @@ public:
 	void setZoomSaveInitial(bool zoomSaveInitial) { zoom_save_initial = zoomSaveInitial; }
 	bool getZoomSaveFinal() const { return zoom_save_final; }
 	void setZoomSaveFinal(bool zoomSaveFinal) { zoom_save_final = zoomSaveFinal; }
+	std::string getZoomSaveVar() const { return zoom_save_var; }
+	void setZoomSaveVar(std::string zoomSaveVar) { zoom_save_var = zoomSaveVar; }
 
 
 	// particles

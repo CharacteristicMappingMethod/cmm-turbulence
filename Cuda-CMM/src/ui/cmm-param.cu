@@ -54,11 +54,14 @@ void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 		file << write_line("factor_dt_by_grid", to_str(SettingsMain.getFactorDtByGrid(), 16));
 		file << write_line("steps_per_sec", to_str(SettingsMain.getStepsPerSec(), 16));
 		file << write_line("set_dt_by_steps", to_str(SettingsMain.getSetDtBySteps(), 16));
+
+		file << write_line("snapshots_per_sec", to_str(SettingsMain.getSnapshotsPerSec(), 16));
 		file << write_line("save_initial", to_str(SettingsMain.getSaveInitial(), 16));
 		file << write_line("save_final", to_str(SettingsMain.getSaveFinal(), 16));
+		file << write_line("save_var", to_str(SettingsMain.getSaveVar(), 16));
+
 		file << write_line("conv_init_final", to_str(SettingsMain.getConvInitFinal(), 16));
 		file << write_line("conv_snapshots_per_sec", to_str(SettingsMain.getConvSnapshotsPerSec(), 16));
-		file << write_line("snapshots_per_sec", to_str(SettingsMain.getSnapshotsPerSec(), 16));
 
 		file << write_line("mem_RAM_CPU_remaps", to_str(SettingsMain.getMemRamCpuRemaps(), 16));
 		file << write_line("save_map_stack", to_str(SettingsMain.getSaveMapStack(), 16));
@@ -83,9 +86,15 @@ void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 
 		file << write_line("sample_on_grid", to_str(SettingsMain.getSampleOnGrid(), 16));
 		file << write_line("grid_sample", to_str(SettingsMain.getGridSample(), 16));
+		file << write_line("sample_snapshots_per_sec", to_str(SettingsMain.getSampleSnapshotsPerSec(), 16));
 		file << write_line("sample_save_initial", to_str(SettingsMain.getSampleSaveInitial(), 16));
 		file << write_line("sample_save_final", to_str(SettingsMain.getSampleSaveFinal(), 16));
-		file << write_line("sample_snapshots_per_sec", to_str(SettingsMain.getSampleSnapshotsPerSec(), 16));
+		file << write_line("sample_save_var", to_str(SettingsMain.getSampleSaveVar(), 16));
+
+		file << write_line("scalar_name", to_str(SettingsMain.getScalarName(), 16));
+		file << write_line("scalar_discrete", to_str(SettingsMain.getScalarDiscrete(), 16));
+		file << write_line("scalar_discrete_grid", to_str(SettingsMain.getScalarDiscreteGrid(), 16));
+		file << write_line("scalar_discrete_location", to_str(SettingsMain.getScalarDiscreteLocation(), 16));
 
 		file << write_line("zoom", to_str(SettingsMain.getZoom(), 16));
 		file << write_line("grid_zoom", to_str(SettingsMain.getGridZoom(), 16));
@@ -95,11 +104,10 @@ void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 		file << write_line("zoom_width_y", to_str(SettingsMain.getZoomWidthY(), 16));
 		file << write_line("zoom_repetitions", to_str(SettingsMain.getZoomRepetitions(), 16));
 		file << write_line("zoom_repetitions_factor", to_str(SettingsMain.getZoomRepetitionsFactor(), 16));
-		file << write_line("zoom_save_psi", to_str(SettingsMain.getZoomSavePsi(), 16));
-		file << write_line("zoom_save_particles", to_str(SettingsMain.getZoomSaveParticles(), 16));
+		file << write_line("zoom_snapshots_per_sec", to_str(SettingsMain.getZoomSnapshotsPerSec(), 16));
 		file << write_line("zoom_save_initial", to_str(SettingsMain.getZoomSaveInitial(), 16));
 		file << write_line("zoom_save_final", to_str(SettingsMain.getZoomSaveFinal(), 16));
-		file << write_line("zoom_snapshots_per_sec", to_str(SettingsMain.getZoomSnapshotsPerSec(), 16));
+		file << write_line("zoom_save_var", to_str(SettingsMain.getZoomSaveVar(), 16));
 
 		file << write_line("particles", to_str(SettingsMain.getParticles(), 16));
 		file << write_line("particles_seed", to_str(SettingsMain.getParticlesSeed(), 16));

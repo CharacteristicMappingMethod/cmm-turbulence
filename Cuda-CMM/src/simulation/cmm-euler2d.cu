@@ -54,7 +54,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	std::string initial_condition = SettingsMain.getInitialCondition();		// name of the initial condition
 	int snapshots_per_second = SettingsMain.getSnapshotsPerSec();		// saves per second
 
-	double mb_used_RAM_GPU;  // count memory usage by variables in mbyte
+	double mb_used_RAM_GPU, mb_used_RAM_CPU;  // count memory usage by variables in mbyte
 
 	// compute dt, for grid settings we have to use max in case we want to differ NX and NY
 	if (SettingsMain.getSetDtBySteps()) dt = 1.0 / steps_per_sec;  // direct setting of timestep
@@ -63,8 +63,8 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	// reset lagrange order
 	if (SettingsMain.getLagrangeOverride() != -1) SettingsMain.setLagrangeOrder(SettingsMain.getLagrangeOverride());
 	
-	//shared parameters
-	iterMax = 2*ceil(tf / dt);
+	// shared parameters
+	iterMax = (int)(1.05*ceil(tf / dt));  // maximum amount of steps, important for more dynamic steps, however, reduced for now
 
 	double map_size = 8*NX_coarse*NY_coarse*sizeof(double) / 1e6;  // size of one mapping
 	int Nb_array_RAM = 4;  // fixed for four different stacks
@@ -223,9 +223,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	}
 	if (SettingsMain.getZoom()) {
 		size_max_c = std::max(size_max_c, 3*Grid_zoom.sizeNReal);
-		if (SettingsMain.getZoom()) {
-			if (SettingsMain.getZoomSavePsi()) size_max_c = std::max(size_max_c, 4*Grid_zoom.sizeNReal);
-		}
+//		if (SettingsMain.getZoomSavePsi()) size_max_c = std::max(size_max_c, 4*Grid_zoom.sizeNReal);
 	}
 	// for now three thrash variables are needed for cufft with hermites
 	cufftDoubleComplex *Dev_Temp_C1;
@@ -239,6 +237,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	if (SettingsMain.getZoom()) { size_max_r = std::max(size_max_r, 4*Grid_zoom.N); }
 	double *Host_save;
 	Host_save = new double[size_max_r];
+	mb_used_RAM_CPU = size_max_r*sizeof(double) / 1e6;
 
 	
 	/*******************************************************************
@@ -264,6 +263,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	
 	MapStack Map_Stack(&Grid_coarse, cpu_map_num);
 	mb_used_RAM_GPU += 8*Grid_coarse.sizeNReal / 1e6;
+	mb_used_RAM_CPU += SettingsMain.getMemRamCpuRemaps();
 	
 	
 	/*******************************************************************
@@ -356,6 +356,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		particle_block = ceil(Nb_particles / (double)particle_thread);  // fit all particles
 		Host_particles_pos = new double[2*Nb_particles*SettingsMain.getParticlesTauNum()];
 		Host_particles_vel = new double[2*Nb_particles*SettingsMain.getParticlesTauNum()];
+		mb_used_RAM_CPU += 4*Nb_particles*SettingsMain.getParticlesTauNum()*sizeof(double) / 1e6;
 		cudaMalloc((void**) &Dev_particles_pos, 2*Nb_particles*SettingsMain.getParticlesTauNum()*sizeof(double));
 		cudaMalloc((void**) &Dev_particles_vel, 2*Nb_particles*SettingsMain.getParticlesTauNum()*sizeof(double));
 		mb_used_RAM_GPU += 4*Nb_particles*SettingsMain.getParticlesTauNum()*sizeof(double) / 1e6;
@@ -424,10 +425,11 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		cudaMallocManaged(&Mesure_sample, (3*mes_sample_size+1)*sizeof(double));
 	}
 
-    double incomp_error [iterMax];  // save incompressibility error for investigations
-    double map_gap [iterMax];  // save map gaps for investigations
-    double map_ctr [iterMax];  // save map counter for investigations
-    double time_values [iterMax+2];  // save timing for investigations
+    double* incomp_error = new double[iterMax];  // save incompressibility error for investigations
+    double* map_gap = new double[iterMax];  // save map gaps for investigations
+    double* map_ctr = new double[iterMax];  // save map counter for investigations
+    double* time_values = new double[iterMax+2];  // save timing for investigations
+    mb_used_RAM_CPU += 6*iterMax*sizeof(double) / 1e6;  // +2 from t and dt vector
 
     // Laplacian
 	/*
@@ -476,8 +478,9 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	// introduce part to console and print estimated gpu memory usage in mb before initialization
 	if (SettingsMain.getVerbose() >= 1) {
 		message = "Memory initialization finished"
-				  " \t estimated GPU RAM usage in mb = " + to_str(mb_used_RAM_GPU);
-				+ " \t C-Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+				  " \t estimated GPU RAM = " + to_str(mb_used_RAM_GPU/1e3) + " gb"
+		  	  	  " \t estimated CPU RAM = " + to_str(mb_used_RAM_CPU/1e3) + " gb"
+				  " \t C-Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
 		std::cout<<"\n"+message+"\n\n"; logger.push(message);
 	}
 
@@ -619,12 +622,12 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 	// save function to save variables, combined so we always save in the same way and location
     // use Dev_Hat_fine for W_fine, this works because just at the end of conservation it is overwritten
-	if (SettingsMain.getSaveFinal() || SettingsMain.getConvInitFinal()) {
+	if (SettingsMain.getSaveInitial() || SettingsMain.getConvInitFinal()) {
 		// fine vorticity disabled, as this needs another Grid_fine.sizeNReal in temp buffer, need to resolve later
 //		apply_map_stack_to_W_part_All(Grid_fine, Map_Stack, Dev_ChiX, Dev_ChiY,
 //				(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
 
-		if (SettingsMain.getSaveFinal()) {
+		if (SettingsMain.getSaveInitial()) {
 			writeTimeStep(SettingsMain, "0", Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
 					Dev_ChiX, Dev_ChiY, Grid_fine, Grid_coarse, Grid_psi);
 		}
@@ -703,8 +706,10 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		std::cout<<message+"\n"; logger.push(message);
 	}
 	
-	double t_vec[iterMax+SettingsMain.getLagrangeOrder()], dt_vec[iterMax+SettingsMain.getLagrangeOrder()];
-	for (int i_l = 0; i_l < SettingsMain.getLagrangeOrder(); ++i_l) {
+	double* t_vec = new double[iterMax+SettingsMain.getLagrangeOrder()];
+	double* dt_vec = new double[iterMax+SettingsMain.getLagrangeOrder()];
+
+	for (int i_l = 0; i_l < SettingsMain.getLagrangeOrder(); i_l++) {
 		t_vec[i_l] = t0 - (SettingsMain.getLagrangeOrder()-1 - i_l) * dt;
 		dt_vec[i_l] = dt;
 	}
@@ -1214,6 +1219,9 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	if (SettingsMain.getSampleOnGrid()) {
 		cudaFree(Mesure_sample);
 	}
+
+	// delete monitoring values
+	delete []     incomp_error, map_gap, map_ctr, time_values, t_vec, dt_vec;
 
 	// save timing at last part of a step to take everything into account
     {

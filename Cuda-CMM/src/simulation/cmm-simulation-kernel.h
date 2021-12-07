@@ -29,14 +29,10 @@ __global__ void k_advect_using_stream_hermite(double *ChiX, double *ChiY, double
 // apply map stack kernels to sample from initial condition
 __global__ void k_h_sample_map_compact(double *ChiX, double *ChiY, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid);
 __global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid);
-__global__ void k_h_sample_from_init(double *ws, double *x_y, TCudaGrid2D Grid, TCudaGrid2D Grid_discrete, double *W_initial_discrete, int simulation_num, bool initial_discrete);
+__global__ void k_h_sample_from_init(double *ws, double *x_y, TCudaGrid2D Grid, TCudaGrid2D Grid_discrete, int init_var_num, int init_num, double *W_initial_discrete, bool initial_discrete);
 
 __global__ void k_compare_vorticity_with_initial(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *error, int stack_length, TCudaGrid2D Grid_map, TCudaGrid2D Grid_fine, int simulation_num);
 
 __global__ void k_apply_map_and_sample_from_hermite(double *ChiX, double *ChiY, double *fs, double *H, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_vort, TCudaGrid2D Grid_fine, int molly_stencil, bool padd_inline_fft);
-
-// device initial functions
-__device__ double d_initial_W(double x, double y, int simulation_num);
-__device__ double d_initial_W_discret(double x, double y, double *W_initial, int NX, int NY);
 
 #endif

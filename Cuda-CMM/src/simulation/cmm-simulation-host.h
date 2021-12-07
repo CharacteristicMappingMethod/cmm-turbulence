@@ -16,9 +16,8 @@ void advect_using_stream_hermite_grid(SettingsCMM SettingsMain, TCudaGrid2D Grid
 void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi,
 		double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, double *t, double *dt, int loop_ctr);
 
-// sampling from mapstack - Apply mapstacks
-void apply_map_stack_to_W(TCudaGrid2D Grid, TCudaGrid2D Grid_discrete, MapStack Map_Stack, double *ChiX, double *ChiY,
-		double *W_real, double *Dev_Temp, double *W_initial_discrete, int simulation_num, bool initial_discrete);
+// sampling from mapstack - Apply mapstacks and init from initial conditions for different variables
+void apply_map_stack(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double *ChiY, double *Dev_Temp);
 
 // compute hermite with derivatives in fourier space, uniform helper function fitted for all grids to utilize only input temporary variable
 void fourier_hermite(TCudaGrid2D Grid, cufftDoubleComplex *Dev_In, double *Dev_Out, cufftHandle cufft_plan);

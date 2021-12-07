@@ -16,7 +16,7 @@ void SettingsCMM::setPresets() {
 	int grid_vort = grid_fine;  // vorticity will be sampled on this grid for computation of psi, this changes the scales of the vorticity
 
 	/*
-	 *  Initial conditions
+	 *  Initial conditions for vorticity
 	 *  "4_nodes" 				-	flow containing exactly 4 fourier modes with two vortices
 	 *  "quadropole"			-	???
 	 *  "three_vortices"		-	???
@@ -43,7 +43,7 @@ void SettingsCMM::setPresets() {
 	int verbose = 3;
 
 	// set time properties
-	double final_time = 8;  // end of computation
+	double final_time = 2;  // end of computation
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
 	int steps_per_sec = 32;  // how many steps do we want per seconds?
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
@@ -51,6 +51,23 @@ void SettingsCMM::setPresets() {
 	double snapshots_per_sec = -1;  // how many times do we want to save data per sec, set <= 0 to disable
 	bool save_initial = true;  // consume less data and make it possible to disable saving the initial data
 	bool save_final = true;  // consume less data and make it possible to disable saving the final data
+
+	/*
+	 * Which variables do we want to save? Best separated by a "-"
+	 * Vorticity: "Vorticity", "W"
+	 *
+	 * Stream function: "Stream", "Psi"
+	 * Stream function hermite: "Stream_H", "Psi_H" - not for zoom_save_var
+	 * Velocity: "Velocity", "U" - not for zoom_save_var
+	 *
+	 * Grid: "Grid", "Chi"
+	 * Grid Hermite: "Grid_H", "Chi_H" - not for sample_save_var and zoom_save_var
+	 *
+	 * Laplacian of vorticity: "Laplacian" - not for save_var and zoom_save_var
+	 * Passive scalar: "Scalar", "Theta" - not for save_var
+	 * Particles: "Particles", "P" - only for zoom_save_var
+	 */
+	std::string save_var = "W-U";  // string containing all wanted variables, works for W, Psi, U and Chi
 
 	bool conv_init_final = true;  // compute initial and final convergence details?
 	double conv_snapshots_per_sec = -1;  // how many times do we want to compute conservation details per sec, set <= 0 to disable
@@ -96,11 +113,24 @@ void SettingsCMM::setPresets() {
 	double freq_cut_psi = (double)(grid_coarse)/2.0;  // take into account, that frequencies are symmetric around N/2
 
 	// possibility to sample values on a specified grid
-	bool sample_on_grid = false;
+	bool sample_on_grid = true;
 	int grid_sample = 1024;
 	double sample_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save sample data per sec, set <= 0 to disable
 	bool sample_save_initial = true;  // consume less data and make it possible to disable saving the initial data
 	bool sample_save_final = true;  // consume less data and make it possible to disable saving the final data
+	std::string sample_save_var = "W-U-Theta";  // see save_var
+
+
+	/*
+	 * Passive scalar settings
+	 *  Initial conditions for transport of passive scalar
+	 *  "rectangle"					-	simple rectangle with sharp borders
+	 */
+	std::string scalar_name = "rectangle";
+	// NOT IMPLEMENTED YET - possibility to compute from discrete initial scalar condition
+	bool scalar_discrete = false;
+	int scalar_discrete_grid = 2048;  // variable gridsize for discrete initial scalar grid
+	std::string scalar_discrete_location = "I-am-not-implemented-yet!";  // path to discrete file, relative from workspace
 
 
 	/*
@@ -115,12 +145,13 @@ void SettingsCMM::setPresets() {
 	double zoom_width_y = twoPI * 1e-1;  // twoPI taken as LY, width of the zoom window
 	int zoom_repetitions = 4;  // how many repetitive zooms with decreasing windows?
 	double zoom_repetitions_factor = 0.5;  // how much do we want to decrease the window each time
-	bool zoom_save_psi = true;  // stream function is not a zoom property, but its interesting for fine scale particle behavior
-	bool zoom_save_particles = true;  // if particles are enabled, safe particles in the range too
 	// saving settings
 	double zoom_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save zoom per sec, set <= 0 to disable
 	bool zoom_save_initial = true;  // consume less data and make it possible to disable saving the initial zoom
 	bool zoom_save_final = true;  // consume less data and make it possible to disable saving the final zoom
+	std::string zoom_save_var = "W-P";
+
+
 
 	/*
 	 * Particle settings
@@ -129,7 +160,7 @@ void SettingsCMM::setPresets() {
 	 *  - save some particles at every position for detailed analysis
 	 */
 	bool particles = false;  // en- or disable particles
-	int particles_num = (int)1e6;  // number of particles
+	int particles_num = (int)1e5;  // number of particles
 
 	unsigned long long particles_seed = 0ULL;
 	double particles_center_x = PI;  // frame center position, middle of computational domain
@@ -169,7 +200,10 @@ void SettingsCMM::setPresets() {
 	setFinalTime(final_time);
 	setFactorDtByGrid(factor_dt_by_grid); setStepsPerSec(steps_per_sec);
 	setSnapshotsPerSec(snapshots_per_sec); setSetDtBySteps(set_dt_by_steps);
+
 	setSaveInitial(save_initial); setSaveFinal(save_final);
+	setSaveVar(save_var);
+
 	setConvInitFinal(conv_init_final); setConvSnapshotsPerSec(conv_snapshots_per_sec);
 
 	setInitialCondition(initial_condition);
@@ -197,6 +231,12 @@ void SettingsCMM::setPresets() {
 	setGridSample(grid_sample);
 	setSampleSnapshotsPerSec(sample_snapshots_per_sec);
 	setSampleSaveInitial(sample_save_initial); setSampleSaveFinal(sample_save_final);
+	setSampleSaveVar(sample_save_var);
+
+	setScalarName(scalar_name);
+	setScalarDiscrete(scalar_discrete);
+	setScalarDiscreteGrid(scalar_discrete_grid);
+	setScalarDiscreteLocation(scalar_discrete_location);
 
 	setZoom(zoom);
 	setGridZoom(grid_zoom);
@@ -206,11 +246,10 @@ void SettingsCMM::setPresets() {
 	setZoomWidthY(zoom_width_y);
 	setZoomRepetitions(zoom_repetitions);
 	setZoomRepetitionsFactor(zoom_repetitions_factor);
-	setZoomSavePsi(zoom_save_psi);
 
-	setZoomSaveParticles(zoom_save_particles);
 	setZoomSnapshotsPerSec(zoom_snapshots_per_sec);
 	setZoomSaveInitial(zoom_save_initial); setZoomSaveFinal(zoom_save_final);
+	setZoomSaveVar(zoom_save_var);
 
 
 	setParticles(particles);
@@ -274,11 +313,14 @@ void SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		else if (command == "factor_dt_by_grid") setFactorDtByGrid(std::stod(value));
 		else if (command == "steps_per_sec") setStepsPerSec(std::stoi(value));
 		else if (command == "set_dt_by_steps") setSetDtBySteps(getBoolFromString(value));
+
+		else if (command == "snapshots_per_sec") setSnapshotsPerSec(std::stod(value));
 		else if (command == "save_initial") setSaveInitial(getBoolFromString(value));
 		else if (command == "save_final") setSaveFinal(getBoolFromString(value));
+		else if (command == "save_var") setSaveVar(value);
+
 		else if (command == "conv_init_final") setConvInitFinal(getBoolFromString(value));
 		else if (command == "conv_snapshots_per_sec") setConvSnapshotsPerSec(std::stod(value));
-		else if (command == "snapshots_per_sec") setSnapshotsPerSec(std::stod(value));
 
 		else if (command == "mem_RAM_CPU_remaps") setMemRamCpuRemaps(std::stoi(value));
 		else if (command == "save_map_stack") setSaveMapStack(getBoolFromString(value));
@@ -303,9 +345,15 @@ void SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 
 		else if (command == "sample_on_grid") setSampleOnGrid(getBoolFromString(value));
 		else if (command == "grid_sample") setGridSample(std::stoi(value));
+		else if (command == "sample_snapshots_per_sec") setSampleSnapshotsPerSec(std::stod(value));
 		else if (command == "sample_save_initial") setSampleSaveInitial(getBoolFromString(value));
 		else if (command == "sample_save_final") setSampleSaveFinal(getBoolFromString(value));
-		else if (command == "sample_snapshots_per_sec") setSampleSnapshotsPerSec(std::stod(value));
+		else if (command == "sample_save_var") setSampleSaveVar(value);
+
+		else if (command == "scalar_name") setScalarName(value);
+		else if (command == "scalar_discrete") setScalarDiscrete(getBoolFromString(value));
+		else if (command == "scalar_discrete_grid") setScalarDiscreteGrid(stoi(value));
+		else if (command == "scalar_discrete_location") setScalarDiscreteLocation(value);
 
 		else if (command == "zoom") setZoom(getBoolFromString(value));
 		else if (command == "grid_zoom") setGridZoom(std::stoi(value));
@@ -315,11 +363,10 @@ void SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		else if (command == "zoom_width_y") setZoomWidthY(std::stod(value));
 		else if (command == "zoom_repetitions") setZoomRepetitions(std::stoi(value));
 		else if (command == "zoom_repetitions_factor") setZoomRepetitionsFactor(std::stod(value));
-		else if (command == "zoom_save_psi") setZoomSavePsi(getBoolFromString(value));
-		else if (command == "zoom_save_particles") setZoomSaveParticles(getBoolFromString(value));
+		else if (command == "zoom_snapshots_per_sec") setZoomSnapshotsPerSec(std::stod(value));
 		else if (command == "zoom_save_initial") setZoomSaveInitial(getBoolFromString(value));
 		else if (command == "zoom_save_final") setZoomSaveFinal(getBoolFromString(value));
-		else if (command == "zoom_snapshots_per_sec") setZoomSnapshotsPerSec(std::stod(value));
+		else if (command == "zoom_save_var") setZoomSaveVar(value);
 
 		else if (command == "particles") setParticles(getBoolFromString(value));
 		else if (command == "particles_seed") setParticlesSeed(std::stoull(value));
