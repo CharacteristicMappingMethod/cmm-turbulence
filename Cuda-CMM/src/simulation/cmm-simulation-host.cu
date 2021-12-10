@@ -288,7 +288,7 @@ void compute_conservation_targets(TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse
 *******************************************************************/
 void sample_compute_and_write(MapStack Map_Stack, TCudaGrid2D Grid_sample, TCudaGrid2D Grid_discrete, double *Host_sample, double *Dev_sample,
 		cufftHandle cufft_plan_sample_D2Z, cufftHandle cufft_plan_sample_Z2D, cufftDoubleComplex *Dev_Temp_C1,
-		double *Dev_ChiX, double*Dev_ChiY, double *bounds, double *W_initial_discrete, SettingsCMM SettingsMain, string i_num,
+		double *Dev_ChiX, double*Dev_ChiY, double *bounds, double *W_initial_discrete, SettingsCMM SettingsMain, std::string i_num,
 		double *Mesure_sample, int count_mesure) {
 
 	// string containing the variables which should be saved
@@ -370,9 +370,9 @@ void Zoom(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Grid_zoom, T
 		double *Host_particles_pos, double *Dev_particles_pos, double *Host_debug, string i_num)
 {
 	// create folder
-	string sub_folder_name = "/Zoom_data/Time_" + i_num;
-	string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
-	mkdir(folder_name_now.c_str(), 0700);
+	std::string sub_folder_name = "/Zoom_data/Time_" + i_num;
+	std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
+	mkdir(folder_name_now.c_str(), 0777);
 
 	std::string save_var = SettingsMain.getZoomSaveVar();
 
@@ -386,7 +386,7 @@ void Zoom(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Grid_zoom, T
 		// create new subfolder for current zoom
 		sub_folder_name = "/Zoom_data/Time_" + i_num + "/Zoom_" + to_str(zoom_ctr);
 		folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
-		mkdir(folder_name_now.c_str(), 0700);
+		mkdir(folder_name_now.c_str(), 0777);
 
 		// construct frame bounds for this zoom
 		x_min = SettingsMain.getZoomCenterX() - x_width;

@@ -21,7 +21,7 @@ void SettingsCMM::setPresets() {
 	 *  "quadropole"			-	???
 	 *  "three_vortices"		-	???
 	 *  "single_shear_layer"	-	shear layer problem forming helmholtz-instabilities, merging into two vortices which then merges into one big vortex
-	 *  "two_vortices"conv			-	???
+	 *  "two_vortices"			-	???
 	 *  "turbulence_gaussienne"	-	???
 	 *  "shielded_vortex"		-	vortex core with ring of negative vorticity around it
 	 */
@@ -118,7 +118,7 @@ void SettingsCMM::setPresets() {
 	double sample_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save sample data per sec, set <= 0 to disable
 	bool sample_save_initial = true;  // consume less data and make it possible to disable saving the initial data
 	bool sample_save_final = true;  // consume less data and make it possible to disable saving the final data
-	std::string sample_save_var = "W-U-Theta";  // see save_var
+	std::string sample_save_var = "W-U";  // see save_var
 
 
 	/*

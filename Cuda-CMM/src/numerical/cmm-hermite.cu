@@ -6,7 +6,7 @@
 *						  Hermite interpolation					   *
 *******************************************************************/
 // this computation is used very often, using it as a function greatly reduces code-redundancy
-// however, here we have 8 scattered memory accesses I[0] - I[1] and I[2] - I[3] are paired (in theory)
+// however, here we have 8 scattered memory accesses where I[0] - I[1] and I[2] - I[3] are paired (in theory)
 __device__ double device_hermite_mult_2D(double *H, double b[][4], int I[], long int N, double h)
 {
 	return b[0][0]* H[    I[0]] + b[0][1]* H[    I[1]] + b[1][0]* H[    I[2]] + b[1][1]* H[    I[3]] // Point interpolation
@@ -44,7 +44,7 @@ __device__ void device_init_ind(int *I, double *dxy, double x, double y, TCudaGr
 }
 
 
-// combine the build of the cubic vectors to reduce redundant code, build from later matrixes due to less computations
+// combine the build of the cubic vectors to reduce redundant code, build from later matrices due to less computations
 __device__ void device_build_b(double *bX, double *bY, double dx, double dy) {
 	bX[0] = H_f3_3(1-dx); bX[1] = H_f3_3(dx); bX[2] = -H_f4_3(1-dx); bX[3] = H_f4_3(dx);
 	bY[0] = H_f3_3(1-dy); bY[1] = H_f3_3(dy); bY[2] = -H_f4_3(1-dy); bY[3] = H_f4_3(dy);
@@ -63,7 +63,7 @@ __device__ void device_build_by(double *bX, double *bY, double dx, double dy) {
 //	bX[0] = H_f1_3(dx);  bX[1] =  H_f1_3(1-dx);  bX[2] = H_f2_3(dx);  bX[3] = -H_f2_3(1-dx);
 //	bY[0] = H_f1x_3(dy); bY[1] = -H_f1x_3(1-dy); bY[2] = H_f2x_3(dy); bY[3] =  H_f2x_3(1-dy);
 }
-// combine the build of the quintic vectors to reduce redundant code, build from later matrixes due to less computations
+// combine the build of the quintic vectors to reduce redundant code, build from later matrices due to less computations
 __device__ void device_build_b_5(double *bX, double *bY, double dx, double dy) {
 	bX[0] = H_f4_5(1-dx); bX[1] = H_f4_5(dx); bX[2] = -H_f5_5(1-dx); bX[3] = H_f5_5(dx); bX[4] = H_f6_5(1-dx); bX[5] = H_f6_5(dx);
 	bY[0] = H_f4_5(1-dy); bY[1] = H_f4_5(dy); bY[2] = -H_f5_5(1-dy); bY[3] = H_f5_5(dy); bY[4] = H_f6_5(1-dy); bY[5] = H_f6_5(dy);

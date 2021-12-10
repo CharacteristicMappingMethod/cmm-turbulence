@@ -9,24 +9,24 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax
 {
 	string folder_data = SettingsMain.getWorkspace() + "data";
 	struct stat st = {0};
-	if (stat(folder_data.c_str(), &st) == -1) mkdir(folder_data.c_str(), 0700);
+	if (stat(folder_data.c_str(), &st) == -1) mkdir(folder_data.c_str(), 0777);
 
 	//creating main folder
 	string folder_name = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName();
-	mkdir(folder_name.c_str(), 0700);
+	mkdir(folder_name.c_str(), 0777);
 
 	// create general subfolder for other data
 	string folder_name_tdata = folder_name + "/Monitoring_data";
-	mkdir(folder_name_tdata.c_str(), 0700);
+	mkdir(folder_name_tdata.c_str(), 0777);
 
 	// create general subfolder for timesteps
 	folder_name_tdata = folder_name + "/Time_data";
-	mkdir(folder_name_tdata.c_str(), 0700);
+	mkdir(folder_name_tdata.c_str(), 0777);
 
 	// create general subfolder for zoom
 	if (SettingsMain.getZoom()) {
 		folder_name_tdata = folder_name + "/Zoom_data";
-		mkdir(folder_name_tdata.c_str(), 0700);
+		mkdir(folder_name_tdata.c_str(), 0777);
 	}
 
 	string fileName = folder_name + "/readme.txt";
@@ -107,25 +107,25 @@ void create_particle_directory_structure(SettingsCMM SettingsMain) {
 
     	// main folder
         string fi = folder_name + "/Particle_data";
-        mkdir(fi.c_str(), 0700);
+        mkdir(fi.c_str(), 0777);
 
         // folder for fluid particle data
         string fi_1 = fi + "/Fluid";
-        mkdir(fi_1.c_str(), 0700);
+        mkdir(fi_1.c_str(), 0777);
         // folder for fine particle data
         if (SettingsMain.getSaveFineParticles()) {
 			fi_1 = fi + "/Fluid_fine";
-			mkdir(fi_1.c_str(), 0700);
+			mkdir(fi_1.c_str(), 0777);
         }
 
         // folder for tau_p particles together with fine folder
         for(int i = 1; i<SettingsMain.getParticlesTauNum(); i+=1){
             fi_1 = fi + "/Tau=" + to_str(SettingsMain.particles_tau[i]);
-            mkdir(fi_1.c_str(), 0700);
+            mkdir(fi_1.c_str(), 0777);
 
             if (SettingsMain.getSaveFineParticles()) {
 				fi_1 = fi + "/Tau=" + to_str(SettingsMain.particles_tau[i]) + "_fine";
-				mkdir(fi_1.c_str(), 0700);
+				mkdir(fi_1.c_str(), 0777);
             }
         }
 	}
@@ -206,7 +206,7 @@ bool readAllRealFromBinaryFile(int Len, double *var, string data_name)
 		std::string sub_folder_name = "/Time_data/Time_" + i_num;
 		std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
 		struct stat st = {0};
-		if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0700);
+		if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
 
 		// execute binary save for all wanted variables
 		std::string save_var = SettingsMain.getSaveVar();
@@ -267,8 +267,8 @@ void writeTimeVariable(SettingsCMM SettingsMain, string data_name, string i_num,
 	string sub_folder_name = "/Time_data/Time_" + i_num;
 	string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
 	struct stat st = {0};
-	if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0700);
-//	mkdir(folder_name_now.c_str(), 0700);
+	if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
+//	mkdir(folder_name_now.c_str(), 0777);
 
 	// copy and save
 	cudaMemcpy(Host_save, Dev_save, size_N, cudaMemcpyDeviceToHost);
@@ -281,8 +281,8 @@ void writeTimeVariable(SettingsCMM SettingsMain, string data_name, string i_num,
 	string sub_folder_name = "/Time_data/Time_" + i_num;
 	string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
 	struct stat st = {0};
-	if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0700);
-//	mkdir(folder_name_now.c_str(), 0700);
+	if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
+//	mkdir(folder_name_now.c_str(), 0777);
 
 	// copy and save
 	cudaMemcpy2D(Host_save, sizeof(double), Dev_save, sizeof(double)*2,
@@ -320,7 +320,7 @@ void writeMapStack(SettingsCMM SettingsMain, MapStack Map_Stack) {
 	string sub_folder_name = "/MapStack";
 	string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
 	struct stat st = {0};
-	if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0700);
+	if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
 
 	// check if we have to save a stack for every stack
 	int save_ctr;
