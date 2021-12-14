@@ -5,8 +5,9 @@
 
 #include "../numerical/cmm-particles.h"
 
-#include "cmm-simulation-host.h"
-#include "cmm-simulation-kernel.h"
+#include "../simulation/cmm-simulation-host.h"
+#include "../simulation/cmm-simulation-kernel.h"
+#include "../simulation/cmm-init.h"
 
 #include "../ui/cmm-io.h"
 #include "../ui/cmm-param.h"
@@ -353,30 +354,21 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		// initialize all memory
 		Nb_particles = SettingsMain.getParticlesNum();
 		particle_thread =  256;  // threads for particles, seems good like that
-		particle_block = ceil(Nb_particles / (double)particle_thread);  // fit all particles
-		Host_particles_pos = new double[2*Nb_particles*SettingsMain.getParticlesTauNum()];
-		Host_particles_vel = new double[2*Nb_particles*SettingsMain.getParticlesTauNum()];
-		mb_used_RAM_CPU += 4*Nb_particles*SettingsMain.getParticlesTauNum()*sizeof(double) / 1e6;
-		cudaMalloc((void**) &Dev_particles_pos, 2*Nb_particles*SettingsMain.getParticlesTauNum()*sizeof(double));
-		cudaMalloc((void**) &Dev_particles_vel, 2*Nb_particles*SettingsMain.getParticlesTauNum()*sizeof(double));
-		mb_used_RAM_GPU += 4*Nb_particles*SettingsMain.getParticlesTauNum()*sizeof(double) / 1e6;
+		particle_block = ceil(SettingsMain.getParticlesNum() / (double)particle_thread);  // fit all particles
+		Host_particles_pos = new double[2*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()];
+		Host_particles_vel = new double[2*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()];
+		mb_used_RAM_CPU += 4*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()*sizeof(double) / 1e6;
+		cudaMalloc((void**) &Dev_particles_pos, 2*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()*sizeof(double));
+		cudaMalloc((void**) &Dev_particles_vel, 2*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()*sizeof(double));
+		mb_used_RAM_GPU += 4*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()*sizeof(double) / 1e6;
 
-		// initialize randomizer
-		curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_DEFAULT);
-		// set seed
-		curandSetPseudoRandomGeneratorSeed(prng, SettingsMain.getParticlesSeed());
-		// create initial positions from random distribution
-		curandGenerateUniformDouble(prng, Dev_particles_pos, 2*Nb_particles);
-
-		// Particles position initialization, make here to be absolutely sure to have the same positions
-		// project 0-1 onto particle frame
-		k_rescale<<<particle_block, particle_thread>>>(SettingsMain.getParticlesNum(),
-				SettingsMain.getParticlesCenterX(), SettingsMain.getParticlesCenterY(), SettingsMain.getParticlesWidthX(), SettingsMain.getParticlesWidthY(),
-				Dev_particles_pos, LX, LY);
+		// initialize particle position
+		init_particles(Dev_particles_pos, SettingsMain, particle_thread, particle_block, bounds);
 
 		// copy all starting positions onto the other tau values
 		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p+=1)
-			cudaMemcpy(Dev_particles_pos + 2*Nb_particles*index_tau_p, Dev_particles_pos, 2*Nb_particles*sizeof(double), cudaMemcpyDeviceToDevice);
+			cudaMemcpy(Dev_particles_pos + 2*SettingsMain.getParticlesNum()*index_tau_p, Dev_particles_pos,
+					2*SettingsMain.getParticlesNum()*sizeof(double), cudaMemcpyDeviceToDevice);
 
 		// particles where every time step the position will be saved
 		if (SettingsMain.getParticlesSnapshotsPerSec() > 0) {
@@ -394,7 +386,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		create_particle_directory_structure(SettingsMain);
 
 		if (SettingsMain.getVerbose() >= 1) {
-			message = "Number of particles = " + to_str(Nb_particles);
+			message = "Number of particles = " + to_str(SettingsMain.getParticlesNum());
 			std::cout<<message+"\n"; logger.push(message);
 			if (SettingsMain.getParticlesSnapshotsPerSec() > 0 && SettingsMain.getSaveFineParticles()) {
 				message = "Number of fine particles = " + to_str(SettingsMain.getParticlesFineNum());
@@ -878,7 +870,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			if (SettingsMain.getParticlesSnapshotsPerSec() > 0 && SettingsMain.getSaveFineParticles()) {
 				for(int i_tau_p = 1; i_tau_p < SettingsMain.getParticlesTauNum(); i_tau_p++){
 					cudaMemcpy(Host_particles_fine_pos + 2*((loop_ctr-particles_fine_old)*SettingsMain.getParticlesTauNum()+i_tau_p)*SettingsMain.getParticlesFineNum(),
-							Dev_particles_pos + 2*SettingsMain.getParticles()*i_tau_p, 2*SettingsMain.getParticlesTauNum()*SettingsMain.getParticlesFineNum()*sizeof(double), cudaMemcpyDeviceToHost);
+							Dev_particles_pos + 2*SettingsMain.getParticlesNum()*i_tau_p, 2*SettingsMain.getParticlesTauNum()*SettingsMain.getParticlesFineNum()*sizeof(double), cudaMemcpyDeviceToHost);
 				}
 			}
 	    }
@@ -1030,14 +1022,9 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		for (int i_lagrange = 1; i_lagrange < SettingsMain.getLagrangeOrder(); i_lagrange++) {
 			cudaMemcpyAsync(Dev_Psi_real + 4*Grid_psi.N*i_lagrange, Dev_Psi_real, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice, streams[i_lagrange]);
 		}
-		// initialize particles again
-		curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_DEFAULT);
-		curandGenerateUniformDouble(prng, Dev_particles_pos, 2*Nb_particles);
 
-		// project 0-1 onto particle frame
-		k_rescale<<<particle_block, particle_thread>>>(SettingsMain.getParticlesNum(),
-				SettingsMain.getParticlesCenterX(), SettingsMain.getParticlesCenterY(), SettingsMain.getParticlesWidthX(), SettingsMain.getParticlesWidthY(),
-				Dev_particles_pos, LX, LY);
+		// initialize particle position
+		init_particles(Dev_particles_pos, SettingsMain, particle_thread, particle_block, bounds);
 
 		// copy all starting positions onto the other tau values
 		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p+=1)

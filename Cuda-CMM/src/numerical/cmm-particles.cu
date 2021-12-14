@@ -55,12 +55,12 @@ void particles_advect(SettingsCMM SettingsMain, TCudaGrid2D Grid_psi, double *pa
 	// copy to constant memory
 	cudaMemcpyToSymbol(d_Lp12, h_L12, sizeof(double)*4);
 
-	Particle_advect<<<particles_block, particles_thread>>>(SettingsMain.getParticles(), dt[loop_ctr_l + 1], particles_pos, psi,
+	Particle_advect<<<particles_block, particles_thread>>>(SettingsMain.getParticlesNum(), dt[loop_ctr_l + 1], particles_pos, psi,
 			Grid_psi, SettingsMain.getParticlesTimeIntegrationNum(), SettingsMain.getLagrangeOrder());
 	// loop for all tau p
 	for(int i_tau_p = 1; i_tau_p < SettingsMain.getParticlesTauNum(); i_tau_p++){
-		Particle_advect_inertia<<<particles_block, particles_thread>>>(SettingsMain.getParticles(), dt[loop_ctr_l + 1],
-				particles_pos + 2*SettingsMain.getParticles()*i_tau_p, particles_vel + 2*SettingsMain.getParticles()*i_tau_p, psi,
+		Particle_advect_inertia<<<particles_block, particles_thread>>>(SettingsMain.getParticlesNum(), dt[loop_ctr_l + 1],
+				particles_pos + 2*SettingsMain.getParticlesNum()*i_tau_p, particles_vel + 2*SettingsMain.getParticlesNum()*i_tau_p, psi,
 				Grid_psi, SettingsMain.particles_tau[i_tau_p], SettingsMain.getParticlesTimeIntegrationNum(), SettingsMain.getLagrangeOrder());
 	}
 }
@@ -226,7 +226,7 @@ __global__ void Particle_advect(int Nb_particle, double dt, double *particles_po
 	particles_pos[2*i+1] = part_pos_old[1] - floor(part_pos_old[1]/LY)*LX;
 
 	// debugging of particle position
-//	if (i == 0) printf("Particle number : %d - Position X : %f - Position Y : %f\n", i, particles_pos[2*i], particles_pos[2*i+1]);
+//	if (i < 5) printf("Particle number : %d - Position X : %f - Position Y : %f\n", i, particles_pos[2*i], particles_pos[2*i+1]);
 }
 
 

@@ -19,14 +19,14 @@ void SettingsCMM::setPresets() {
 	 *  Initial conditions for vorticity
 	 *  "4_nodes" 				-	flow containing exactly 4 fourier modes with two vortices
 	 *  "quadropole"			-	???
+	 *  "two_vortices"			-	???
 	 *  "three_vortices"		-	???
 	 *  "single_shear_layer"	-	shear layer problem forming helmholtz-instabilities, merging into two vortices which then merges into one big vortex
-	 *  "two_vortices"			-	???
-	 *  "turbulence_gaussienne"	-	???
+	 *  "turbulence_gaussienne"	-	gaussian blobs - version made by thibault
+	 *  "gaussian_blobs"		-	gaussian blobs in order - version made by julius
 	 *  "shielded_vortex"		-	vortex core with ring of negative vorticity around it
 	 */
-	std::string initial_condition = "4_nodes";
-//	string initial_condition = "shielded_vortex";
+	std::string initial_condition = "gaussian_blobs";
 
 	// possibility to compute from discrete initial condition
 	bool initial_discrete = false;
@@ -45,7 +45,7 @@ void SettingsCMM::setPresets() {
 	// set time properties
 	double final_time = 2;  // end of computation
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
-	int steps_per_sec = 32;  // how many steps do we want per seconds?
+	int steps_per_sec = 64;  // how many steps do we want per seconds?
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
 	// dt will be set in cudaeuler, so that all changes can be applied there
 	double snapshots_per_sec = -1;  // how many times do we want to save data per sec, set <= 0 to disable
@@ -77,7 +77,7 @@ void SettingsCMM::setPresets() {
 	double map_epsilon = 1e-3;  // distance used for foot points for GALS map advection
 //	double map_epsilon = 6.283185307179/512.0;  // distance used for foot points for GALS map advection
 	// skip remapping, usefull for convergence tests
-	bool skip_remapping = true;
+	bool skip_remapping = false;
 
 	// set memory properties
 	int mem_RAM_CPU_remaps = 4096;  // mem_RAM_CPU_remaps in MB on the CPU
@@ -118,15 +118,16 @@ void SettingsCMM::setPresets() {
 	double sample_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save sample data per sec, set <= 0 to disable
 	bool sample_save_initial = true;  // consume less data and make it possible to disable saving the initial data
 	bool sample_save_final = true;  // consume less data and make it possible to disable saving the final data
-	std::string sample_save_var = "W-U";  // see save_var
+	std::string sample_save_var = "W-U-Theta";  // see save_var
 
 
 	/*
 	 * Passive scalar settings
 	 *  Initial conditions for transport of passive scalar
 	 *  "rectangle"					-	simple rectangle with sharp borders
+	 *  "gaussian"					-	normal distribution / gaussian blob
 	 */
-	std::string scalar_name = "rectangle";
+	std::string scalar_name = "gaussian";
 	// NOT IMPLEMENTED YET - possibility to compute from discrete initial scalar condition
 	bool scalar_discrete = false;
 	int scalar_discrete_grid = 2048;  // variable gridsize for discrete initial scalar grid
@@ -159,23 +160,30 @@ void SettingsCMM::setPresets() {
 	 *  - control saving intervals of particle positions
 	 *  - save some particles at every position for detailed analysis
 	 */
-	bool particles = false;  // en- or disable particles
-	int particles_num = (int)1e5;  // number of particles
+	bool particles = true;  // en- or disable particles
+	int particles_num = (int)1e4;  // number of particles
+
+	/*
+	 *  Initial conditions for particle position
+	 *  "uniform"					-	uniformly distributed in particular frame
+	 *  "normal", "gaussian"		-	normal / gaussian distributed around center with specific variance
+	 */
+	std::string particles_init_name = "gaussian";
 
 	unsigned long long particles_seed = 0ULL;
-	double particles_center_x = PI;  // frame center position, middle of computational domain
-	double particles_center_y = PI;  // frame center position, middle of computational domain
-	double particles_width_x = twoPI;  // frame width, full window
-	double particles_width_y = twoPI;  // frame width, full window
+	double particles_center_x = PI;  // frame center position, middle of particle domain
+	double particles_center_y = PI;  // frame center position, middle of particle domain
+	double particles_width_x = PI/4.0;  // frame width, variance for normal distribution
+	double particles_width_y = PI/4.0;  // frame width, variance for normal distribution
 
-	int particles_tau_num = 3;  // how many tau_p values do we have? for now maximum is 100
+	int particles_tau_num = 1;  // how many tau_p values do we have? for now maximum is 100
 //	double Tau_p[Nb_Tau_p] = {0.0, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.125, 0.15, 0.25, 0.5, 0.75, 1, 2, 5, 13};
 	// timestep restriction : tau is coupled to dt due to stability reasons
 	std::string particles_tau_s = "\"0, 0.1, 1\"";  // escape character \ needed for "
 
 	double particles_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save particles per sec, set <= 0 to disable
-	bool particles_save_initial = false;  // consume less data and make it possible to disable saving the initial data
-	bool particles_save_final = false;  // consume less data and make it possible to disable saving the final data
+	bool particles_save_initial = true;  // consume less data and make it possible to disable saving the initial data
+	bool particles_save_final = true;  // consume less data and make it possible to disable saving the final data
 	int particles_steps = -1;  // hackery for particle convergence
 
 	bool save_fine_particles = false;  // wether or not we want to save fine particles
@@ -253,6 +261,7 @@ void SettingsCMM::setPresets() {
 
 
 	setParticles(particles);
+	setParticlesInitName(particles_init_name);
 	setParticlesSeed(particles_seed);
 	setParticlesCenterX(particles_center_x);
 	setParticlesCenterY(particles_center_y);
@@ -369,6 +378,7 @@ void SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		else if (command == "zoom_save_var") setZoomSaveVar(value);
 
 		else if (command == "particles") setParticles(getBoolFromString(value));
+		else if (command == "particles_init_name") setParticlesInitName(value);
 		else if (command == "particles_seed") setParticlesSeed(std::stoull(value));
 		else if (command == "particles_center_x") setParticlesCenterX(std::stod(value));
 		else if (command == "particles_center_y") setParticlesCenterY(std::stod(value));

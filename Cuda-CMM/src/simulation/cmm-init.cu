@@ -5,6 +5,7 @@
 #include <curand.h>
 #include <curand_kernel.h>
 
+#include "../numerical/cmm-particles.h"
 
 
 /*******************************************************************
@@ -84,7 +85,6 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 		}
 		case 4:  // single_shear_layer
 		{
-			//single shear layer
 			double delta = 50;
 			double delta2 = 0.01;
 			double ret = 0;
@@ -105,6 +105,8 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 			const int NB_gaus = 8;		//NB_gaus = 6;sigma = 0.24;
 			double sigma = 0.2;
 			double ret = 0;
+
+			// add positive blobs without random offset, as they sit on the corners too
 			#pragma unroll
 			for(int mu_x = 0; mu_x < NB_gaus; mu_x++){
 				#pragma unroll
@@ -113,10 +115,12 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 													 + (y-mu_y*twoPI/(NB_gaus-1))*(y-mu_y*twoPI/(NB_gaus-1))/(2*sigma*sigma)));
 				}
 			}
+			// add negative blobs with random offset
 			#pragma unroll
 			for(int mu_x = 0; mu_x < NB_gaus-1; mu_x++){
 				#pragma unroll
 				for(int mu_y = 0; mu_y < NB_gaus-1; mu_y++){
+					// initialize random offset, could be changed but its working now
 					curandState_t state_x;
 					curand_init((mu_x+1)*mu_y*mu_y, 0, 0, &state_x);
 					double RAND_gaus_x = ((double)(curand(&state_x)%1000)-500)/100000;
@@ -135,9 +139,47 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 			return ret - 0.008857380480028442;
 			break;
 		}
+		case 6:  // ordered gaussienne blobs by julius
+		{
+			x -= floor(x/twoPI)*twoPI;
+			y -= floor(y/twoPI)*twoPI;
+
+			const int NB_gaus = 7;  // number of negative and positive blobs in each row
+			double sigma = 0.2;  // scaling
+			double ret = 0;  // initialize value
+			double rand_offset = 1e-2;  // maximum random offset of blobs
+			int border = 2;  // increase parallel domain to include values of blobs from neighbouring domains
+
+			int dir = 1;  // a bit hackery, but it works
+			#pragma unroll
+			for (int mu_x = -border; mu_x <= NB_gaus*2 + border; mu_x++) {
+				#pragma unroll
+				for (int mu_y = -border; mu_y <= NB_gaus*2 + border; mu_y++) {
+					// initialize random offset
+					curandState_t state_x, state_y;
+					// comput unique number of blob, take warping into account, to have unique offset
+					int blob_num = (mu_x-floor(mu_x/(double)(NB_gaus*2))*mu_x)
+							     + (mu_y-floor(mu_y/(double)(NB_gaus*2))*mu_y)*NB_gaus*2;
+					curand_init(blob_num, 0, 0, &state_x);
+					curand_init(blob_num + NB_gaus*NB_gaus*4, 0, 0, &state_y);
+					double RAND_gaus_x = (curand_uniform(&state_x)-0.5)*rand_offset;
+					double RAND_gaus_y = (curand_uniform(&state_y)-0.5)*rand_offset;
+
+					ret += dir / (twoPI*sigma*sigma)
+						 * exp(-((x-mu_x*twoPI/(2*NB_gaus)+RAND_gaus_x)
+								*(x-mu_x*twoPI/(2*NB_gaus)+RAND_gaus_x)/(2*sigma*sigma)
+								+(y-mu_y*twoPI/(2*NB_gaus)+RAND_gaus_y)
+								*(y-mu_y*twoPI/(2*NB_gaus)+RAND_gaus_y)/(2*sigma*sigma)));
+					dir *= -1;
+				}
+			}
+			return ret;
+			break;
+		}
+
 		// u(x,y)= - y 1/(nu^2 t^2) exp(-(x^2+y^2)/(4 nu t))
 		// v(x,y)= + x 1/(nu^2 t^2) exp(-(x^2+y^2)/(4 nu t))
-		case 6:  // shielded vortex
+		case 7:  // shielded vortex
 		{
 			double nu = 2e-1;
 			double nu_fac = 1 / (2*nu*nu);  // 1 / (2*nu*nu*nu)
@@ -175,12 +217,12 @@ __device__ double d_init_scalar(double x, double y, int scalar_num) {
 	 *  "rectangle"					-	simple rectangle with sharp borders
 	 */
 	switch (scalar_num) {
-		case 0:  //
+		case 0:  // rectangle
 		{
 			double center_x = PI;  // frame center position
 			double center_y = PI;  // frame center position
-			double width_x = PI;  // frame width
-			double width_y = PI;  // frame width
+			double width_x = PI/2.0;  // frame width
+			double width_y = PI/2.0;  // frame width
 
 			// check if position is inside of rectangle
 			if (    x > center_x - width_x/2.0 and x < center_x + width_x/2.0
@@ -190,10 +232,68 @@ __device__ double d_init_scalar(double x, double y, int scalar_num) {
 			else return 0.0;
 			break;
 		}
+		case 1:  // normal distribution / gaussian blob
+		{
+			double mu_x = PI;  // frame center position
+			double mu_y = PI;  // frame center position
+			double var_x = PI/4.0;  // variance
+			double var_y = PI/4.0;  // variance
+
+			// compute value of gaussian blob
+			return 1.0/(twoPI*var_x*var_y)*exp(-((x-mu_x)*(x-mu_x)/(2*var_x*var_x)
+											   + (y-mu_y)*(y-mu_y)/(2*var_y*var_y)));
+
+			break;
+		}
 		default:  // default - all zero
 		{
 			return 0.0;
 			break;
 		}
+	}
+}
+
+
+
+/*******************************************************************
+*			Initial conditions for particles					   *
+*******************************************************************/
+
+__host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain, int particle_thread, int particle_block, double* domain_bounds) {
+
+	curandGenerator_t prng;
+	// initialize randomizer
+	curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_DEFAULT);
+	// set seed
+	curandSetPseudoRandomGeneratorSeed(prng, SettingsMain.getParticlesSeed());
+
+	switch (SettingsMain.getParticlesInitNum()) {
+		case 0:  // uniformly distributed in rectangle
+		{
+			// create initial positions from random distribution
+			curandGenerateUniformDouble(prng, Dev_particles_pos, 2*SettingsMain.getParticlesNum());
+
+			// project 0-1 onto particle frame
+			k_rescale<<<particle_block, particle_thread>>>(SettingsMain.getParticlesNum(),
+					SettingsMain.getParticlesCenterX(), SettingsMain.getParticlesCenterY(), SettingsMain.getParticlesWidthX(), SettingsMain.getParticlesWidthY(),
+					Dev_particles_pos, domain_bounds[1], domain_bounds[3]);
+
+			break;
+		}
+		case 1:  // normally distributed with given mean and standard deviation
+		{
+			// create all values with standard variance around 0.5, 0.5 is subtracted later in k_rescale
+			curandGenerateNormalDouble( prng, Dev_particles_pos, 2*SettingsMain.getParticlesNum(), 0.5, 1.0);
+
+			// shift and scale all values to fit the desired quantities, width represents the variance
+			k_rescale<<<particle_block, particle_thread>>>(SettingsMain.getParticlesNum(),
+					SettingsMain.getParticlesCenterX(), SettingsMain.getParticlesCenterY(), SettingsMain.getParticlesWidthX(), SettingsMain.getParticlesWidthY(),
+					Dev_particles_pos, domain_bounds[1], domain_bounds[3]);
+
+			break;
+		}
+
+		default:
+			break;
 	}
 }

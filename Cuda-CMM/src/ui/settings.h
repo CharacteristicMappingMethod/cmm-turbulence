@@ -55,6 +55,7 @@ private:
 	std::string zoom_save_var;
 	// particles
 	bool particles, save_fine_particles;
+	std::string particles_init_name; int particles_init_num;
 	unsigned long long particles_seed;
 	double particles_center_x, particles_center_y, particles_width_x, particles_width_y;
 	int particles_tau_num;
@@ -145,7 +146,8 @@ public:
 		else if(initialCondition == "three_vortices") initial_condition_num = 3;
 		else if(initialCondition == "single_shear_layer") initial_condition_num = 4;
 		else if(initialCondition == "turbulence_gaussienne") initial_condition_num = 5;
-		else if(initialCondition == "shielded_vortex") initial_condition_num = 6;
+		else if(initialCondition == "gaussian_blobs") initial_condition_num = 6;
+		else if(initialCondition == "shielded_vortex") initial_condition_num = 7;
 		else initial_condition_num = -1;
 	}
 	int getInitialConditionNum() const { return initial_condition_num; }
@@ -246,7 +248,7 @@ public:
 		scalar_name = scalarName;
 		// tied to num, for faster handling
 		if(scalarName == "rectangle") scalar_num = 0;
-//		else if(scalarName == "quadropole") scalar_num = 1;
+		else if(scalarName == "gaussian") scalar_num = 1;
 		else scalar_num = -1;
 	}
 	int getScalarNum() const { return scalar_num; }
@@ -295,6 +297,16 @@ public:
 	void setParticles(bool Particles) { particles = Particles; }
 	int getParticlesNum() const { return particles_num; }
 	void setParticlesNum(int particlesNum) { particles_num = particlesNum; }
+
+	std::string getParticlesInitName() const { return particles_init_name; }
+	void setParticlesInitName(std::string particlesInitName) {
+		particles_init_name = particlesInitName;
+		// tied to num, for faster handling
+		if(particlesInitName == "uniform") particles_init_num = 0;
+		else if(particlesInitName == "normal" or particlesInitName == "gaussian") particles_init_num = 1;
+		else particles_init_num = -1;
+	}
+	int getParticlesInitNum() const { return particles_init_num; }
 
 	unsigned long long getParticlesSeed() const { return particles_seed; }
 	void setParticlesSeed(unsigned long long particlesSeed) { particles_seed = particlesSeed; }
