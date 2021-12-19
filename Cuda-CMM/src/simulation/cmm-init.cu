@@ -7,6 +7,7 @@
 
 #include "../numerical/cmm-particles.h"
 
+__constant__ double d_rand[1000];  // array for random numbers being used for random initial conditions
 
 /*******************************************************************
 *			Initial condition for vorticity						   *
@@ -18,10 +19,11 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 	 *  Initial conditions for vorticity
 	 *  "4_nodes" 				-	flow containing exactly 4 fourier modes with two vortices
 	 *  "quadropole"			-	???
+	 *  "two_vortices"			-	???
 	 *  "three_vortices"		-	???
 	 *  "single_shear_layer"	-	shear layer problem forming helmholtz-instabilities, merging into two vortices which then merges into one big vortex
-	 *  "two_vortices"conv			-	???
-	 *  "turbulence_gaussienne"	-	???
+	 *  "turbulence_gaussienne"	-	gaussian blobs - version made by thibault
+	 *  "gaussian_blobs"		-	gaussian blobs in order - version made by julius
 	 *  "shielded_vortex"		-	vortex core with ring of negative vorticity around it
 	 */
 
@@ -85,19 +87,24 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 		}
 		case 4:  // single_shear_layer
 		{
-			double delta = 50;
-			double delta2 = 0.01;
-			double ret = 0;
-			for(int iy = -1; iy <= 1; iy++)
-				for(int iy = -1; iy <= 1; iy++)
-					{
-						ret +=    (1 + delta2 * cos(2*x))  *    exp( - delta * (y - PI) * (y - PI) );
-					}
-			ret /= 9;
-			return ret;
+			double delta = 50;  // thickness of shear layer
+			double delta2 = 0.01;  // strength of instability
+
+			return (1 + delta2*cos(2*x)) * exp(-delta*(y-PI)*(y-PI));
 			break;
 		}
-		case 5:  // turbulence_gaussienne
+		case 5:  // tanh_shear_layer with more advanced properties by julius and assuming a tanh velocity profile
+		{
+			double shear_delta = 20;  // thickness of shear layer
+			double inst_strength = 0.01;  // strength of instability
+			double inst_freq = 4;  // frequency of instability
+
+			// (1 + sin-perturbation) * sech^2(thickness*x)
+			return (1 + inst_strength * cos(inst_freq*x))  * 4 / (exp(-shear_delta*(y-PI))+exp(shear_delta*(y-PI)))
+															   / (exp(-shear_delta*(y-PI))+exp(shear_delta*(y-PI)));
+			break;
+		}
+		case 6:  // turbulence_gaussienne
 		{
 			x -= floor(x/twoPI)*twoPI;
 			y -= floor(y/twoPI)*twoPI;
@@ -139,39 +146,34 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 			return ret - 0.008857380480028442;
 			break;
 		}
-		case 6:  // ordered gaussienne blobs by julius
+		case 7:  // ordered gaussienne blobs by julius
 		{
 			x -= floor(x/twoPI)*twoPI;
 			y -= floor(y/twoPI)*twoPI;
 
-			const int NB_gaus = 7;  // number of negative and positive blobs in each row
-			double sigma = 0.2;  // scaling
-			double ret = 0;  // initialize value
-			double rand_offset = 1e-2;  // maximum random offset of blobs
-			int border = 2;  // increase parallel domain to include values of blobs from neighbouring domains
+			const int NB_gaus = 4;  // number of negative and positive blobs in each row
+			double sigma = 0.4;  // scaling in width
+			double fac = 1e1;  // strength scaling
+			double rand_offset = 1e-1;  // maximum random offset of blobs
+			int border = 5;  // increase parallel domain to include values of blobs from neighbouring domains
 
 			int dir = 1;  // a bit hackery, but it works
+			double ret = 0;  // initialize value
 			#pragma unroll
-			for (int mu_x = -border; mu_x <= NB_gaus*2 + border; mu_x++) {
+			for (int mu_x = -border; mu_x < 2*NB_gaus + border; mu_x++) {
 				#pragma unroll
-				for (int mu_y = -border; mu_y <= NB_gaus*2 + border; mu_y++) {
-					// initialize random offset
-					curandState_t state_x, state_y;
+				for (int mu_y = -border; mu_y < 2*NB_gaus + border; mu_y++) {
 					// comput unique number of blob, take warping into account, to have unique offset
-					int blob_num = (mu_x-floor(mu_x/(double)(NB_gaus*2))*mu_x)
-							     + (mu_y-floor(mu_y/(double)(NB_gaus*2))*mu_y)*NB_gaus*2;
-					curand_init(blob_num, 0, 0, &state_x);
-					curand_init(blob_num + NB_gaus*NB_gaus*4, 0, 0, &state_y);
-					double RAND_gaus_x = (curand_uniform(&state_x)-0.5)*rand_offset;
-					double RAND_gaus_y = (curand_uniform(&state_y)-0.5)*rand_offset;
+					int blob_num = (mu_x-floor(mu_x/(double)(NB_gaus*2))*NB_gaus*2)
+							     + (mu_y-floor(mu_y/(double)(NB_gaus*2))*NB_gaus*2)*NB_gaus*2;
+					double exp_x = x - (mu_x+0.5)*twoPI/(2*NB_gaus) + d_rand[blob_num]*rand_offset;
+					double exp_y = y - (mu_y+0.5)*twoPI/(2*NB_gaus) + d_rand[blob_num + NB_gaus*NB_gaus*4]*rand_offset;
 
-					ret += dir / (twoPI*sigma*sigma)
-						 * exp(-((x-mu_x*twoPI/(2*NB_gaus)+RAND_gaus_x)
-								*(x-mu_x*twoPI/(2*NB_gaus)+RAND_gaus_x)/(2*sigma*sigma)
-								+(y-mu_y*twoPI/(2*NB_gaus)+RAND_gaus_y)
-								*(y-mu_y*twoPI/(2*NB_gaus)+RAND_gaus_y)/(2*sigma*sigma)));
+					ret += fac * dir / (twoPI*sigma*sigma)
+						 * exp(-(exp_x*exp_x + exp_y*exp_y)/(2*sigma*sigma));
 					dir *= -1;
 				}
+				dir *= -1;  // don't alternate on line change
 			}
 			return ret;
 			break;
@@ -179,7 +181,7 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 
 		// u(x,y)= - y 1/(nu^2 t^2) exp(-(x^2+y^2)/(4 nu t))
 		// v(x,y)= + x 1/(nu^2 t^2) exp(-(x^2+y^2)/(4 nu t))
-		case 7:  // shielded vortex
+		case 8:  // shielded vortex
 		{
 			double nu = 2e-1;
 			double nu_fac = 1 / (2*nu*nu);  // 1 / (2*nu*nu*nu)
@@ -195,8 +197,8 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 		}
 		default:  //default case goes to stationary
 		{
-			x = x - (x>0)*((int)(x/twoPI))*twoPI - (x<0)*((int)(x/twoPI)-1)*twoPI;
-			y = y - (y>0)*((int)(y/twoPI))*twoPI - (y<0)*((int)(y/twoPI)-1)*twoPI;
+			x -= floor(x/twoPI)*twoPI;
+			y -= floor(y/twoPI)*twoPI;
 
 			return cos(x)*cos(y);
 			break;
@@ -215,6 +217,8 @@ __device__ double d_init_scalar(double x, double y, int scalar_num) {
 	/*
 	 *  Initial conditions for transport of passive scalar
 	 *  "rectangle"					-	simple rectangle with sharp borders
+	 *  "gaussian"					-   gaussian blob
+	 *  "circular_ring"				-   circular ring
 	 */
 	switch (scalar_num) {
 		case 0:  // rectangle
@@ -245,6 +249,17 @@ __device__ double d_init_scalar(double x, double y, int scalar_num) {
 
 			break;
 		}
+		case 2:  // circular ring by two tanh functions
+		{
+			double r = PI/2.0;  // radius of the circle
+			double r_width = r/8.0;  // frame center position
+			double str_1 = 10.0;  // strength of outer tanh function
+			double str_2 = 10.0;  // strength of inner tanh function
+
+			return (tanh(str_1*((x-PI)*(x-PI) + (y-PI)*(y-PI) - (r+r_width)*(r+r_width)))
+				  - tanh(str_2*((x-PI)*(x-PI) + (y-PI)*(y-PI) - (r-r_width)*(r-r_width)))) / 2.0;
+			break;
+		}
 		default:  // default - all zero
 		{
 			return 0.0;
@@ -252,7 +267,6 @@ __device__ double d_init_scalar(double x, double y, int scalar_num) {
 		}
 	}
 }
-
 
 
 /*******************************************************************
@@ -292,8 +306,27 @@ __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain
 
 			break;
 		}
+		case 2:  // distributed in a circle
+		{
+			k_part_init_circle<<<particle_block, particle_thread>>>(Dev_particles_pos, SettingsMain.getParticlesNum(),
+					SettingsMain.getParticlesCenterX(), SettingsMain.getParticlesCenterY(), SettingsMain.getParticlesWidthX(), SettingsMain.getParticlesWidthY());
+			break;
+		}
 
 		default:
 			break;
 	}
+}
+
+
+__global__ void k_part_init_circle(double* Dev_particles_pos, int particle_num,
+		double circle_center_x, double circle_center_y, double circle_radius_x, double circle_radius_y) {
+	int i = (blockDim.x * blockIdx.x + threadIdx.x);  // (thread_num_max * block_num + thread_num) - gives position
+
+	// return if position is larger than particle size
+	if (i >= particle_num)
+		return;
+
+	Dev_particles_pos[2*i]   = circle_center_x + circle_radius_x * cos(i/(double)particle_num*twoPI);
+	Dev_particles_pos[2*i+1] = circle_center_y + circle_radius_y * sin(i/(double)particle_num*twoPI);
 }

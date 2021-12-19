@@ -35,10 +35,13 @@ void create_particle_directory_structure(SettingsCMM SettingsMain);
 
 // fundamental save functions
 void writeAllRealToBinaryFile(int Len, double *var, SettingsCMM SettingsMain, string data_name);
+void writeAppendToBinaryFile(int Len, double *var, SettingsCMM SettingsMain, string data_name);
 bool readAllRealFromBinaryFile(int Len, double *var, string data_name);
 
 // function to save all data from one timestep into hdf5 or other file structure
-void writeTimeStep(SettingsCMM SettingsMain, string i_num, double *Host_save, double *Dev_W_coarse, double *Dev_W_fine, double *Dev_Psi_real, double *Dev_ChiX, double *Dev_ChiY, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi);
+void writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
+		double *Host_save, double *Dev_W_coarse, double *Dev_W_fine, double *Dev_Psi_real,
+		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f);
 void writeTimeVariable(SettingsCMM SettingsMain, string data_name, string i_num, double *Host_save, double *Dev_save, long int size_N, long int N);
 void writeTimeVariable(SettingsCMM SettingsMain, string data_name, string i_num, double *Host_save, double *Dev_save, long int size_N, long int N, int offset);
 

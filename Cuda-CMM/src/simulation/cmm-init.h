@@ -13,5 +13,7 @@ __device__ double d_init_scalar(double x, double y, int scalar_num);
 
 // initial condition for particles
 __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain, int particle_thread, int particle_block, double* domain_bounds);
+__global__ void k_part_init_circle(double* Dev_particles_pos, int particle_num,
+		double circle_center_x, double circle_center_y, double circle_radius_x, double circle_radius_y);
 
 #endif

@@ -109,6 +109,8 @@ void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 		file << write_line("zoom_save_final", to_str(SettingsMain.getZoomSaveFinal(), 16));
 		file << write_line("zoom_save_var", to_str(SettingsMain.getZoomSaveVar(), 16));
 
+		file << write_line("forward_map", to_str(SettingsMain.getForwardMap(), 16));
+
 		file << write_line("particles", to_str(SettingsMain.getParticles(), 16));
 		file << write_line("particles_init_name", to_str(SettingsMain.getParticlesInitName(), 16));
 		file << write_line("particles_seed", to_str(SettingsMain.getParticlesSeed(), 16));

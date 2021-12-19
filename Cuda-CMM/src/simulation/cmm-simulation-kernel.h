@@ -17,14 +17,19 @@ __global__ void k_swap_h(double *Val1, double *Val2, TCudaGrid2D Grid);
 __global__ void k_h_sample_map(double *ChiX, double *ChiY, double *ChiX_s, double *ChiY_s, TCudaGrid2D Grid_map, TCudaGrid2D Grid);
 __global__ void k_h_sample(double *val, double *val_s, TCudaGrid2D Grid, TCudaGrid2D Grid_s);
 
-__global__ void k_incompressibility_check(double *ChiX, double *ChiY, double *gradChi, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse);
+// checking kernels
+__global__ void k_incompressibility_check(TCudaGrid2D Grid_fine, TCudaGrid2D Grid_map,
+		double *ChiX, double *ChiY, double *grad_Chi);
+__global__ void k_invertibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_backward, TCudaGrid2D Grid_forward,
+		double *ChiX_b, double *ChiY_b, double *ChiX_f, double *ChiY_f, double *abs_invert);
 
 // map update kernels
-__global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double t, double dt, int time_integration_num, int l_order);
+__global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi,
+		TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double t, double dt, int time_integration_num, int l_order, int direction);
 __global__ void k_map_update(double *Chi, double *Chi_new, TCudaGrid2D Grid_map, int map_ord_1, int warp_direc);
 
 __global__ void k_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi,
-		TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num, int l_order);
+		TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num, int l_order, int direction);
 
 // apply map stack kernels to sample from initial condition
 __global__ void k_h_sample_map_compact(double *ChiX, double *ChiY, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid);

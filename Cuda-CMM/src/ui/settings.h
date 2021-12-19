@@ -53,6 +53,8 @@ private:
 	int grid_zoom, zoom_repetitions;
 	bool zoom_save_initial, zoom_save_final;
 	std::string zoom_save_var;
+	// forward map
+	bool forward_map;
 	// particles
 	bool particles, save_fine_particles;
 	std::string particles_init_name; int particles_init_num;
@@ -145,9 +147,10 @@ public:
 		else if(initialCondition == "two_votices") initial_condition_num = 2;
 		else if(initialCondition == "three_vortices") initial_condition_num = 3;
 		else if(initialCondition == "single_shear_layer") initial_condition_num = 4;
-		else if(initialCondition == "turbulence_gaussienne") initial_condition_num = 5;
-		else if(initialCondition == "gaussian_blobs") initial_condition_num = 6;
-		else if(initialCondition == "shielded_vortex") initial_condition_num = 7;
+		else if(initialCondition == "tanh_shear_layer") initial_condition_num = 5;
+		else if(initialCondition == "turbulence_gaussienne") initial_condition_num = 6;
+		else if(initialCondition == "gaussian_blobs") initial_condition_num = 7;
+		else if(initialCondition == "shielded_vortex") initial_condition_num = 8;
 		else initial_condition_num = -1;
 	}
 	int getInitialConditionNum() const { return initial_condition_num; }
@@ -201,6 +204,7 @@ public:
 	void setTimeIntegration(std::string timeIntegration) {
 		time_integration = timeIntegration;
 		if (timeIntegration == "EulerExp") { time_integration_num = 10; if (getLagrangeOrder() < 1) lagrange_order = 1; }
+		else if (timeIntegration == "EulerImp") { time_integration_num = 11; if (getLagrangeOrder() < 1) lagrange_order = 1; }
 		else if (timeIntegration == "RK2") { time_integration_num = 21; if (getLagrangeOrder() < 2) lagrange_order = 2; }
 		else if (timeIntegration == "AB2") { time_integration_num = 20; if (getLagrangeOrder() < 2) lagrange_order = 2; }
 		else if (timeIntegration == "RK3") { time_integration_num = 30; if (getLagrangeOrder() < 3) lagrange_order = 3; }
@@ -249,6 +253,7 @@ public:
 		// tied to num, for faster handling
 		if(scalarName == "rectangle") scalar_num = 0;
 		else if(scalarName == "gaussian") scalar_num = 1;
+		else if(scalarName == "circular_ring") scalar_num = 2;
 		else scalar_num = -1;
 	}
 	int getScalarNum() const { return scalar_num; }
@@ -292,6 +297,11 @@ public:
 	void setZoomSaveVar(std::string zoomSaveVar) { zoom_save_var = zoomSaveVar; }
 
 
+	// forward map
+	bool getForwardMap() const { return forward_map; }
+	void setForwardMap(bool forwardMap) { forward_map = forwardMap; }
+
+
 	// particles
 	bool getParticles() const { return particles; }
 	void setParticles(bool Particles) { particles = Particles; }
@@ -304,6 +314,7 @@ public:
 		// tied to num, for faster handling
 		if(particlesInitName == "uniform") particles_init_num = 0;
 		else if(particlesInitName == "normal" or particlesInitName == "gaussian") particles_init_num = 1;
+		else if(particlesInitName == "circular_ring") particles_init_num = 2;
 		else particles_init_num = -1;
 	}
 	int getParticlesInitNum() const { return particles_init_num; }
@@ -341,7 +352,7 @@ public:
 	std::string getParticlesTimeIntegration() const { return particles_time_integration; }
 	void setParticlesTimeIntegration(std::string pTimeIntegration) {
 		particles_time_integration = pTimeIntegration;
-		if (pTimeIntegration == "EulerExp") { particles_time_integration_num = 10; if (getLagrangeOrder() < 1) lagrange_order = 1; }
+		if (pTimeIntegration == "EulerExp") { particles_time_integration_num = 10; if (getLagrangeOrder() < 2) lagrange_order = 2; }
 		else if (pTimeIntegration == "Heun") { particles_time_integration_num = 20; if (getLagrangeOrder() < 2) lagrange_order = 2; }
 		else if (pTimeIntegration == "RK3") { particles_time_integration_num = 30; if (getLagrangeOrder() < 3) lagrange_order = 3; }
 		else if (pTimeIntegration == "RK4") { particles_time_integration_num = 40; if (getLagrangeOrder() < 4) lagrange_order = 4; }

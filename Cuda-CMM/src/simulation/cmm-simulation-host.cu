@@ -28,18 +28,31 @@ struct absto1
             return fabs(1-x);
         }
 };
-double incompressibility_check(double *ChiX, double *ChiY, double *gradChi, TCudaGrid2D Grid_check, TCudaGrid2D Grid_map) {
+double incompressibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_map, double *ChiX, double *ChiY, double *grad_Chi) {
 	// compute determinant of gradient and save in gradchi
-	k_incompressibility_check<<<Grid_check.blocksPerGrid, Grid_check.threadsPerBlock>>>(ChiX, ChiY, gradChi, Grid_check, Grid_map);
+	k_incompressibility_check<<<Grid_check.blocksPerGrid, Grid_check.threadsPerBlock>>>(Grid_check, Grid_map, ChiX, ChiY, grad_Chi);
 
 	// compute maximum using thrust parallel reduction
-	thrust::device_ptr<double> gradChi_ptr = thrust::device_pointer_cast(gradChi);
-	return thrust::transform_reduce(gradChi_ptr, gradChi_ptr + Grid_check.N, absto1(), 0.0, thrust::maximum<double>());
+	thrust::device_ptr<double> grad_Chi_ptr = thrust::device_pointer_cast(grad_Chi);
+	return thrust::transform_reduce(grad_Chi_ptr, grad_Chi_ptr + Grid_check.N, absto1(), 0.0, thrust::maximum<double>());
+}
+
+double invertibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_backward, TCudaGrid2D Grid_forward,
+		double *ChiX_b, double *ChiY_b, double *ChiX_f, double *ChiY_f, double *abs_invert) {
+	// compute determinant of gradient and save in gradchi
+	k_invertibility_check<<<Grid_check.blocksPerGrid, Grid_check.threadsPerBlock>>>(Grid_check, Grid_backward, Grid_forward,
+			ChiX_b, ChiY_b, ChiX_f, ChiY_f, abs_invert);
+
+	// compute maximum using thrust parallel reduction
+	thrust::device_ptr<double> abs_invert_ptr = thrust::device_pointer_cast(abs_invert);
+	return thrust::reduce(abs_invert_ptr, abs_invert_ptr + Grid_check.N, 0.0, thrust::maximum<double>());
 }
 
 
 // advect stream where footpoints are just neighbouring points
-void advect_using_stream_hermite_grid(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, double *t, double *dt, int loop_ctr) {
+void advect_using_stream_hermite_grid(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi,
+		double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y,
+		double *psi, double *t, double *dt, int loop_ctr, int direction) {
 	// compute lagrange coefficients from dt vector for timesteps n+dt and n+dt/2, this makes them dynamic
 	double h_L1[4], h_L12[4];  // constant memory for lagrange coefficient to be computed only once
 	int loop_ctr_l = loop_ctr + SettingsMain.getLagrangeOrder()-1;  // dt and t are shifted because of initial previous steps
@@ -54,7 +67,7 @@ void advect_using_stream_hermite_grid(SettingsCMM SettingsMain, TCudaGrid2D Grid
 	// first of all: compute footpoints at gridpoints, here we could speedup the first sampling of u by directly using the values, as we start at exact grid point locations
 	k_compute_footpoints<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock>>>(ChiX, ChiY, Chi_new_X, Chi_new_Y, psi,
 			Grid_map, Grid_psi, t[loop_ctr_l+1], dt[loop_ctr_l+1],
-			SettingsMain.getTimeIntegrationNum(), SettingsMain.getLagrangeOrder());
+			SettingsMain.getTimeIntegrationNum(), SettingsMain.getLagrangeOrder(), direction);
 
 	// update map, x and y can be done seperately
 	int shared_size = (18+2*SettingsMain.getMapUpdateOrderNum())*(18+2*SettingsMain.getMapUpdateOrderNum());  // how many points do we want to load?
@@ -64,8 +77,9 @@ void advect_using_stream_hermite_grid(SettingsCMM SettingsMain, TCudaGrid2D Grid
 
 
 // wrapper function for map advection
-void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double *ChiX, double *ChiY,
-		double *Chi_new_X, double *Chi_new_Y, double *psi, double *t, double *dt, int loop_ctr) {
+void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi,
+		double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y,
+		double *psi, double *t, double *dt, int loop_ctr, int direction) {
 	// compute lagrange coefficients from dt vector for timesteps n+dt and n+dt/2, this makes them dynamic
 	double h_L1[4], h_L12[4];  // constant memory for lagrange coefficient to be computed only once
 	int loop_ctr_l = loop_ctr + SettingsMain.getLagrangeOrder()-1;  // dt and t are shifted because of initial previous steps
@@ -101,7 +115,7 @@ void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map,
 	k_advect_using_stream_hermite<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock>>>(ChiX, ChiY, Chi_new_X, Chi_new_Y,
 			psi, Grid_map, Grid_psi, t[loop_ctr_l+1], dt[loop_ctr_l+1],
 			SettingsMain.getMapEpsilon(), SettingsMain.getTimeIntegrationNum(),
-			SettingsMain.getMapUpdateOrderNum(), SettingsMain.getLagrangeOrder());
+			SettingsMain.getMapUpdateOrderNum(), SettingsMain.getLagrangeOrder(), direction);
 }
 
 
@@ -109,7 +123,7 @@ void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map,
 /*******************************************************************
 *		 Apply mapstacks to get map to initial condition		   *
 *******************************************************************/
-void apply_map_stack(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double *ChiY, double *Dev_Temp)
+void apply_map_stack(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double *ChiY, double *Dev_Temp, int direction)
 {
 	// copy bounds to constant device memory
 	cudaMemcpyToSymbol(d_bounds, Grid.bounds, sizeof(double)*4);
@@ -118,7 +132,8 @@ void apply_map_stack(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double 
 
 	// loop over all maps in map stack, where all maps are on host system
 	// this could be parallelized between loading and computing?
-	for (int i_map = Map_Stack.map_stack_ctr-1; i_map >= 0; i_map--) {
+	// direction is important to get, wether maps are applied forwards or backwards
+	for (int i_map = (direction+1)/2*(Map_Stack.map_stack_ctr-1); i_map >= (direction-1)/2*(Map_Stack.map_stack_ctr-1); i_map--) {
 		Map_Stack.copy_map_to_device(i_map);
 		k_apply_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
 				Dev_Temp, *Map_Stack.Grid, Grid);
@@ -137,7 +152,7 @@ void translate_initial_condition_through_map_stack(TCudaGrid2D Grid_fine, TCudaG
 
 	// Sample vorticity on fine grid
 	// W_H_real is used as temporary variable and output
-	apply_map_stack(Grid_fine, Map_Stack, Dev_ChiX, Dev_ChiY, W_H_real+Grid_fine.N);
+	apply_map_stack(Grid_fine, Map_Stack, Dev_ChiX, Dev_ChiY, W_H_real+Grid_fine.N, -1);
 	// initial condition - 0 to switch for vorticity
 	k_h_sample_from_init<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(W_H_real, W_H_real+Grid_fine.N, Grid_fine, Grid_discrete,
 			0, simulation_num_c, W_initial_discrete, initial_discrete);
@@ -286,19 +301,42 @@ void compute_conservation_targets(TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse
 /*******************************************************************
 *		 Sample on a specific grid and save everything	           *
 *******************************************************************/
-void sample_compute_and_write(MapStack Map_Stack, TCudaGrid2D Grid_sample, TCudaGrid2D Grid_discrete, double *Host_sample, double *Dev_sample,
+void sample_compute_and_write(MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D Grid_sample, TCudaGrid2D Grid_discrete,
+		double *Host_sample, double *Dev_sample,
 		cufftHandle cufft_plan_sample_D2Z, cufftHandle cufft_plan_sample_Z2D, cufftDoubleComplex *Dev_Temp_C1,
-		double *Dev_ChiX, double*Dev_ChiY, double *bounds, double *W_initial_discrete, SettingsCMM SettingsMain, std::string i_num,
+		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f,
+		double *bounds, double *W_initial_discrete, SettingsCMM SettingsMain, std::string i_num,
 		double *Mesure_sample, int count_mesure) {
 
 	// string containing the variables which should be saved
 	std::string save_var = SettingsMain.getSampleSaveVar();
 
+	// forwards map to get it done
+	if (SettingsMain.getForwardMap()) {
+		// compute only if we actually want to save, elsewhise its a lot of computations for nothing
+		if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos
+				or save_var.find("Particles_f") != std::string::npos or save_var.find("P_f") != std::string::npos) {
+			apply_map_stack(Grid_sample, Map_Stack_f, Dev_ChiX_f, Dev_ChiY_f, (cufftDoubleReal*)Dev_Temp_C1, 1);
+
+			// save map by copying and saving offsetted data
+			if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos) {
+				writeTimeVariable(SettingsMain, "Map_ChiX_f_"+to_str(Grid_sample.NX),
+						i_num, Host_sample, (cufftDoubleReal*)Dev_Temp_C1, Grid_sample.sizeNReal, Grid_sample.N, 2);
+				writeTimeVariable(SettingsMain, "Map_ChiY_f_"+to_str(Grid_sample.NX),
+						i_num, Host_sample, (cufftDoubleReal*)Dev_Temp_C1 + 1, Grid_sample.sizeNReal, Grid_sample.N, 2);
+			}
+
+			// TODO : save particles translated by forwards map
+		}
+
+	}
+
 	// compute map to initial condition through map stack
-	apply_map_stack(Grid_sample, Map_Stack, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1);
+	apply_map_stack(Grid_sample, Map_Stack, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, -1);
 
 	// save map by copying and saving offsetted data
-	if (save_var.find("Map") != std::string::npos or save_var.find("Chi") != std::string::npos) {
+	if (save_var.find("Map") != std::string::npos or save_var.find("Chi") != std::string::npos
+			or save_var.find("Map_b") != std::string::npos or save_var.find("Chi_b") != std::string::npos) {
 		writeTimeVariable(SettingsMain, "Map_ChiX_"+to_str(Grid_sample.NX),
 				i_num, Host_sample, (cufftDoubleReal*)Dev_Temp_C1, Grid_sample.sizeNReal, Grid_sample.N, 2);
 		writeTimeVariable(SettingsMain, "Map_ChiY_"+to_str(Grid_sample.NX),
@@ -365,8 +403,9 @@ void sample_compute_and_write(MapStack Map_Stack, TCudaGrid2D Grid_sample, TCuda
 *							   Zoom								   *
 *			sample vorticity with mapstack at arbitrary frame
 *******************************************************************/
-void Zoom(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Grid_zoom, TCudaGrid2D Grid_psi, TCudaGrid2D Grid_discrete,
-		double *Dev_ChiX, double *Dev_ChiY, double *Dev_Temp, double *W_initial_discrete, double *psi,
+void Zoom(SettingsCMM SettingsMain, MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D Grid_zoom, TCudaGrid2D Grid_psi, TCudaGrid2D Grid_discrete,
+		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f,
+		double *Dev_Temp, double *W_initial_discrete, double *psi,
 		double *Host_particles_pos, double *Dev_particles_pos, double *Host_debug, string i_num)
 {
 	// create folder
@@ -398,8 +437,31 @@ void Zoom(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Grid_zoom, T
 
 		TCudaGrid2D Grid_zoom_i(Grid_zoom.NX, Grid_zoom.NY, bounds);
 
-		// compute zoom of vorticity - 0 to switch for vorticity
-		apply_map_stack(Grid_zoom_i, Map_Stack, Dev_ChiX, Dev_ChiY, Dev_Temp+Grid_zoom_i.N);
+		// compute forwards map for map stack of zoom window first, as it can be discarded afterwards
+		if (SettingsMain.getForwardMap()) {
+			// compute only if we actually want to save, elsewhise its a lot of computations for nothing
+			if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos
+					or save_var.find("Particles_f") != std::string::npos or save_var.find("P_f") != std::string::npos) {
+				apply_map_stack(Grid_zoom_i, Map_Stack_f, Dev_ChiX_f, Dev_ChiY_f, Dev_Temp+Grid_zoom_i.N, -1);
+
+				// save map by copying and saving offsetted data
+				if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos) {
+					cudaMemcpy2D(Host_debug, sizeof(double), Dev_Temp+Grid_zoom_i.N, sizeof(double)*2,
+							sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToHost);
+					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiX");
+					cudaMemcpy2D(Host_debug, sizeof(double), Dev_Temp+Grid_zoom_i.N+1, sizeof(double)*2,
+							sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToHost);
+					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiY");
+				}
+			}
+
+			// TODO : save particles translated by forwards map, maybe its not too important for zooms
+		}
+
+
+
+		// compute backwards map for map stack of zoom window
+		apply_map_stack(Grid_zoom_i, Map_Stack, Dev_ChiX, Dev_ChiY, Dev_Temp+Grid_zoom_i.N, -1);
 
 		// save map by copying and saving offsetted data
 		if (save_var.find("Map") != std::string::npos or save_var.find("Chi") != std::string::npos) {

@@ -8,16 +8,20 @@
 
 
 
-double incompressibility_check(double *ChiX, double *ChiY, double *gradChi, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse);
+double incompressibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_map, double *ChiX, double *ChiY, double *gradChi);
+double invertibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_backward, TCudaGrid2D Grid_forward,
+		double *ChiX_b, double *ChiY_b, double *ChiX_f, double *ChiY_f, double *abs_invert);
 
 // map advection
 void advect_using_stream_hermite_grid(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi,
-		double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, double *t, double *dt, int loop_ctr);
+		double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y,
+		double *psi, double *t, double *dt, int loop_ctr, int direction);
 void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi,
-		double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, double *t, double *dt, int loop_ctr);
+		double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y,
+		double *psi, double *t, double *dt, int loop_ctr, int direction);
 
 // sampling from mapstack - Apply mapstacks and init from initial conditions for different variables
-void apply_map_stack(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double *ChiY, double *Dev_Temp);
+void apply_map_stack(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double *ChiY, double *Dev_Temp, int direction);
 
 // compute hermite with derivatives in fourier space, uniform helper function fitted for all grids to utilize only input temporary variable
 void fourier_hermite(TCudaGrid2D Grid, cufftDoubleComplex *Dev_In, double *Dev_Out, cufftHandle cufft_plan);
@@ -48,14 +52,17 @@ void compute_conservation_targets(TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse
 		cufftDoubleComplex *Dev_Temp_C1, double *Mesure, double *Mesure_fine, int count_mesure);
 
 // Sample on a specific grid and save everything
-void sample_compute_and_write(MapStack Map_Stack, TCudaGrid2D Grid_sample, TCudaGrid2D Grid_discrete, double *Host_sample, double *Dev_sample,
+void sample_compute_and_write(MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D Grid_sample, TCudaGrid2D Grid_discrete,
+		double *Host_sample, double *Dev_sample,
 		cufftHandle cufft_plan_sample_D2Z, cufftHandle cufft_plan_sample_Z2D, cufftDoubleComplex *Dev_Temp_C1,
-		double *Dev_ChiX, double*Dev_ChiY, double *bounds, double *W_initial, SettingsCMM SettingsMain, std::string i_num,
+		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f,
+		double *bounds, double *W_initial_discrete, SettingsCMM SettingsMain, std::string i_num,
 		double *Mesure_sample, int count_mesure);
 
 // sample vorticity with mapstack at arbitrary frame
-void Zoom(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Grid_zoom, TCudaGrid2D Grid_psi, TCudaGrid2D Grid_discrete,
-		double *Dev_ChiX, double *Dev_ChiY, double *Dev_Temp, double *W_initial, double *psi,
+void Zoom(SettingsCMM SettingsMain, MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D Grid_zoom, TCudaGrid2D Grid_psi, TCudaGrid2D Grid_discrete,
+		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f,
+		double *Dev_Temp, double *W_initial_discrete, double *psi,
 		double *Host_particles_pos, double *Dev_particles_pos, double *Host_debug, std::string i_num);
 
 //void Zoom_load_frame(string File, int grid_scale, int fine_grid_scale, string t_nb);

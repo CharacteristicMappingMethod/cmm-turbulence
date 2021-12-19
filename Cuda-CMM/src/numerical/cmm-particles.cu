@@ -85,8 +85,8 @@ __global__ void Particle_advect(int Nb_particle, double dt, double *particles_po
 
 	// compute new position, important: psi is set at t_n+1, psi_previous at t_n and pri_previous_p at t_n-1
 	switch (particles_time_integration_num) {
-		// euler exp
-		case 10: {
+		case 10:  // euler explicit
+		{
 			double u[2];
 			// k1 = f_x(x_n, t_n ) = u_n ( x_n )
 			device_hermite_interpolate_grad_2D(psi + 4*Grid.N, part_pos_old, u, Grid, 1);
@@ -96,8 +96,19 @@ __global__ void Particle_advect(int Nb_particle, double dt, double *particles_po
 			part_pos_old[1] += dt * u[1];
 			break;
 		}
-		// heun / modified euler / trapezoidal method
-		case 20: {
+		case 11:  // euler implicit
+		{
+			double u[2];
+			// k1 = f_x(x_n, t_n+1 ) = u_n+1 ( x_n )
+			device_hermite_interpolate_grad_2D(psi, part_pos_old, u, Grid, 1);
+
+			// x_n+1 = x_n + dt*u_n+1
+			part_pos_old[0] += dt * u[0];
+			part_pos_old[1] += dt * u[1];
+			break;
+		}
+		case 20:  // heun / modified euler / trapezoidal method
+		{
 			double k[4];
 			// k1 = f_x(x_n, t_n ) = u_n ( x_n )
 			device_hermite_interpolate_grad_2D(psi + 4*Grid.N, part_pos_old, k, Grid, 1);
@@ -111,8 +122,8 @@ __global__ void Particle_advect(int Nb_particle, double dt, double *particles_po
 			part_pos_old[1] += dt * (k[1] + k[3])/2;
 			break;
 		}
-		// runge kutta 3 for fluid particles, the nicolas version is identical
-		case 30: {
+		case 30:  // runge kutta 3 for fluid particles, the nicolas version is identical
+		{
 			double u[8], k[6];
 			// k1 = f_x(x_n, t_n ) = u_n ( x_n )
 			device_hermite_interpolate_grad_2D(psi + 4*Grid.N, part_pos_old, k, Grid, 1);
@@ -136,8 +147,8 @@ __global__ void Particle_advect(int Nb_particle, double dt, double *particles_po
 
 			break;
 		}
-		// runge kutta 4 for fluid particles
-		case 40: {
+		case 40:  // runge kutta 4 for fluid particles
+		{
 			double u[8], k[8];
 			// k1 = f_x(x_n, t_n ) = u_n ( x_n )
 			device_hermite_interpolate_grad_2D(psi + 4*Grid.N, part_pos_old, k, Grid, 1);
@@ -170,8 +181,8 @@ __global__ void Particle_advect(int Nb_particle, double dt, double *particles_po
 
 			break;
 		}
-		// modified rkthree with optimal timesteps chosen to result in no lagrange interpolation
-		case 31: {
+		case 31:  // modified rkthree with optimal timesteps chosen to result in no lagrange interpolation
+		{
 			double k[6];
 			// k1 = f_x(x_n, t_n ) = u_n ( x_n )
 			device_hermite_interpolate_grad_2D(psi + 4*Grid.N, part_pos_old, k, Grid, 1);
@@ -189,8 +200,8 @@ __global__ void Particle_advect(int Nb_particle, double dt, double *particles_po
 			part_pos_old[1] += dt * (8*k[1] + 5*k[3] - k[5])/12.0;
 			break;
 		}
-		// modified runge kutta 4 for fluid particles with optimal timesteps chosen to result in only ine lagrange interpolation
-		case 41: {
+		case 41:  // modified runge kutta 4 for fluid particles with optimal timesteps chosen to result in only ine lagrange interpolation
+		{
 			double u[8], k[8];
 			// k1 = f_x(x_n, t_n ) = u_n ( x_n )
 			device_hermite_interpolate_grad_2D(psi + 4*Grid.N, part_pos_old, k, Grid, 1);
@@ -226,7 +237,7 @@ __global__ void Particle_advect(int Nb_particle, double dt, double *particles_po
 	particles_pos[2*i+1] = part_pos_old[1] - floor(part_pos_old[1]/LY)*LX;
 
 	// debugging of particle position
-//	if (i < 5) printf("Particle number : %d - Position X : %f - Position Y : %f\n", i, particles_pos[2*i], particles_pos[2*i+1]);
+//	if (i < 1) printf("Particle number : %d - Position X : %f - Position Y : %f - \n", i, particles_pos[2*i], particles_pos[2*i+1]);
 }
 
 
@@ -247,8 +258,8 @@ __global__ void Particle_advect_inertia(int Nb_particle, double dt, double *part
 
 	// compute new velocity, important: psi is set at t_n+1, psi_previous at t_n ...
 	switch (particles_time_integration_num) {
-		// euler exp
-		case 10: {
+		case 10:  // euler exp
+		{
 			double u[2];
 			// kx_1 = F_x(x_n, v_n, t_n) = v_n
 			double kx_1[2] = { particles_vel[2*i  ], particles_vel[2*i+1] };
@@ -265,8 +276,8 @@ __global__ void Particle_advect_inertia(int Nb_particle, double dt, double *part
 			particles_vel[2*i+1] -= dt * (kx_1[1] - u[1])/tau_p;
 			break;
 		}
-		// heun / modified euler / trapezoidal method
-		case 20: {
+		case 20:  // heun / modified euler / trapezoidal method
+		{
 			double u[4];
 			// kx_1 = F_x(x_n, v_n, t_n) = v_n
 			double kx_1[2] = {particles_vel[2*i  ], particles_vel[2*i+1]};
@@ -294,8 +305,8 @@ __global__ void Particle_advect_inertia(int Nb_particle, double dt, double *part
 			particles_vel[2*i+1] += dt/2.0 * (k1[1] + k2[1]);
 			break;
 		}
-		// classical runge kutta 3
-		case 30: {
+		case 30:  // classical runge kutta 3
+		{
 			double u[8];
 			// kx_1 = F_x(x_n, v_n, t_n) = v_n
 			double kx_1[2] = {particles_vel[2*i  ], particles_vel[2*i+1]};
@@ -339,8 +350,8 @@ __global__ void Particle_advect_inertia(int Nb_particle, double dt, double *part
 
 			break;
 		}
-		// classical runge kutta 4
-		case 40: {
+		case 40:  // classical runge kutta 4
+		{
 			double u[8];
 			// kx_1 = F_x(x_n, v_n, t_n) = v_n
 			double kx_1[2] = {particles_vel[2*i  ], particles_vel[2*i+1]};
@@ -402,8 +413,8 @@ __global__ void Particle_advect_inertia(int Nb_particle, double dt, double *part
 
 			break;
 		}
-		// optimal runge kutta 3
-		case 31: {
+		case 31:  // optimal runge kutta 3
+		{
 			double kx[6], kv[6];
 			// kx_1 = F_x(x_n, v_n, t_n) = v_n
 			kx[0] = particles_vel[2*i  ]; kx[1] = particles_vel[2*i+1];
@@ -438,8 +449,8 @@ __global__ void Particle_advect_inertia(int Nb_particle, double dt, double *part
 
 			break;
 		}
-		// optimized runge kutta 4 with only one lagrange interpolation
-		case 41: {
+		case 41:  // optimized runge kutta 4 with only one lagrange interpolation
+		{
 			double u[8], kx[8], kv[8];
 			// kx_1 = F_x(x_n, v_n, t_n) = v_n
 			kx[0] = particles_vel[2*i  ]; kx[1] = particles_vel[2*i+1];

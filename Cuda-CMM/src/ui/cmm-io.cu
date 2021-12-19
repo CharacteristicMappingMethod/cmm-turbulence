@@ -29,71 +29,27 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax
 		mkdir(folder_name_tdata.c_str(), 0777);
 	}
 
-	string fileName = folder_name + "/readme.txt";
-	ofstream file(fileName.c_str(), ios::out);
-
-	if (!file)
-	{
-		cout<<"Error writting files"<<fileName<<endl;
-		exit(0);
+	// empty all monitoring data so that we can later flush every value
+	std::string monitoring_names[7] = {"/Error_incompressibility", "/Map_counter", "/Map_gaps",
+			"/Timesteps", "/Timing_Values", "/Mesure", "/Mesure_fine",
+	};
+	for ( const auto &i_mon_names : monitoring_names) {
+		std::string fileName = folder_name + "/Monitoring_data" + i_mon_names + ".data";
+		ofstream file(fileName.c_str(), std::ios::out | std::ios::trunc);
+		file.close();
 	}
-	else
-	{
-        file<<"Simulation name \t\t\t: "<<SettingsMain.getSimName()<<endl;
-        switch (SettingsMain.getTimeIntegrationNum()) {
-			case 10: { file<<"Time integration \t\t\t: Euler explicit"<<endl; break; }
-			case 20: { file<<"Time integration \t\t\t: Adam Bashfords 2"<<endl; break; }
-			case 21: { file<<"Time integration \t\t\t: Runge Kutta 2"<<endl; break; }
-			case 30: { file<<"Time integration \t\t\t: Runge Kutta 3"<<endl; break; }
-			case 40: { file<<"Time integration \t\t\t: Runge Kutta 4"<<endl; break; }
-			case 31: { file<<"Time integration \t\t\t: Runge Kutta 3 (modified)"<<endl; break; }
-			case 41: { file<<"Time integration \t\t\t: Runge Kutta 4 (modified)"<<endl; break; }
-			default: { file<<"Time integration \t\t\t: Default (zero)"<<endl; break; }
-		}
-        file<<"Lagrange order \t: "<<SettingsMain.getLagrangeOrder()<<endl;
-
-        file<<"N_coarse(resolution coarse grid) \t: "<<SettingsMain.getGridCoarse()<<endl;
-		file<<"N_fine(resolution fine grid) \t\t: "<<SettingsMain.getGridFine()<<endl;
-		file<<"N_psi(resolution psi grid) \t\t: "<<SettingsMain.getGridPsi()<<endl;
-		file<<"N_vort(resolution vort for psi grid) \t: "<<SettingsMain.getGridVort()<<endl;
-		file<<"time step dt \t\t: "<<dt<<endl;
-		file<<"Final time \t\t: "<<SettingsMain.getFinalTime()<<endl;
-		file<<"iter max \t\t: "<<iterMax<<endl;
-		file<<"Incomppressibility Threshold \t: "<<SettingsMain.getIncompThreshold()<<endl;
-		file<<"Map advection epsilon \t: "<<SettingsMain.getMapEpsilon()<<endl;
-		file<<"Map update order \t: "<<SettingsMain.getMapUpdateOrder()<<endl;
-		file<<"Cut Psi Frequencies at \t: "<<SettingsMain.getFreqCutPsi()<<endl;
-		file<<"Molly stencil version \t: "<<SettingsMain.getMollyStencil()<<endl;
-
-		if (SettingsMain.getZoom()) {
-			file<<"Zoom enabled"<<endl;
-			file<<"Zoom center x : "<<SettingsMain.getZoomCenterX()<<endl;
-			file<<"Zoom center y : "<<SettingsMain.getZoomCenterY()<<endl;
-			file<<"Zoom width x : "<<SettingsMain.getZoomWidthX()<<endl;
-			file<<"Zoom width y : "<<SettingsMain.getZoomWidthY()<<endl;
-			file<<"Zoom repetitions : "<<SettingsMain.getZoomRepetitions()<<endl;
-			file<<"Zoom repetition factor : "<<SettingsMain.getZoomRepetitionsFactor()<<endl;
-		}
-
-        if (SettingsMain.getParticles()) {
-        	file<<"Particles enabled"<<endl;
-        	file<<"Amount of particles : "<<SettingsMain.getParticlesNum()<<endl;
-            switch (SettingsMain.getParticlesTimeIntegrationNum()) {
-    			case 10: { file<<"Particles Time integration : Euler explicit"<<endl; break; }
-    			case 20: { file<<"Particles Time integration : Euler midpoint"<<endl; break; }
-    			case 30: { file<<"Particles Time integration : Runge Kutta 3"<<endl; break; }
-    			case 40: { file<<"Particles Time integration : Runge Kutta 4"<<endl; break; }
-    			case 25: { file<<"Particles Time integration : Nicolas Euler midpoint"<<endl; break; }
-    			case 35: { file<<"Particles Time integration : Nicolas Runge Kutta 3"<<endl; break; }
-    			default: { file<<"Particles Time integration : Default (zero)"<<endl; break; }
-    		}
-            if (SettingsMain.getSaveFineParticles()) {
-                file<<"Safe fine Particles enabled"<<endl;
-                file<<"Amount of fine particles : "<<SettingsMain.getParticlesFineNum()<<endl;
-            }
-        }
-        else file<<"Particles disabled"<<endl;
-
+	// empty out mesure file for sample
+	if (SettingsMain.getSampleOnGrid()) {
+		std::string fileName = folder_name + "/Monitoring_data/Mesure_" + to_str(SettingsMain.getGridSample()) + ".data";
+		ofstream file(fileName.c_str(), std::ios::out | std::ios::trunc);
+		file.close();
+	}
+	if (SettingsMain.getForwardMap()) {
+		std::string fileName = folder_name + "/Monitoring_data/Error_incompressibility_forward.data";
+		ofstream file(fileName.c_str(), std::ios::out | std::ios::trunc);
+		file.close();
+		std::string fileName2 = folder_name + "/Monitoring_data/Error_invertibility.data";
+		ofstream file2(fileName2.c_str(), std::ios::out | std::ios::trunc);
 		file.close();
 	}
 }
@@ -148,9 +104,24 @@ void writeAllRealToBinaryFile(int Len, double *var, SettingsCMM SettingsMain, st
 	}
 	else {
 		file.write( (char*) var, Len*sizeof(double) );
-//		for (int l=0; l<Len; l++) {
-//			file.write( (char*) &var[l], sizeof(double) );
-//		}
+	}
+
+	file.close();
+}
+
+
+void writeAppendToBinaryFile(int Len, double *var, SettingsCMM SettingsMain, string data_name)
+{
+	string fileName = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + data_name + ".data";
+	ofstream file(fileName.c_str(), ios::out | ios::app | ios::binary);
+
+	if(!file)
+	{
+		cout<<"Error saving file. Unable to open : "<<fileName<<endl;
+		return;
+	}
+	else {
+		file.write( (char*) var, Len*sizeof(double) );
 	}
 
 	file.close();
@@ -170,9 +141,6 @@ bool readAllRealFromBinaryFile(int Len, double *var, string data_name)
 	}
 	else {
 		file.read( (char*) var, Len*sizeof(double) );
-//		for (int l=0; l<Len; l++) {
-//			file.read( (char*) &var[l], sizeof(double) );
-//		}
 		open_file = true;
 	}
 
@@ -193,14 +161,16 @@ bool readAllRealFromBinaryFile(int Len, double *var, string data_name)
 
 // hdf5 version
 #ifdef HDF5_INCLUDE
-	void writeTimeStep(string workspace, string file_name, string i_num, double *Host_save, double *Dev_W_coarse, double *Dev_W_fine, double *Dev_Psi_real, double *Dev_ChiX, double *Dev_ChiY, TCudaGrid2D *Grid_fine, TCudaGrid2D *Grid_coarse, TCudaGrid2D *Grid_psi) {
-
+void writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
+		double *Host_save, double *Dev_W_coarse, double *Dev_W_fine, double *Dev_Psi_real,
+		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f) {
 	}
 
 // binary version
 #else
-	void writeTimeStep(SettingsCMM SettingsMain, std::string i_num, double *Host_save, double *Dev_W_coarse, double *Dev_W_fine,
-			double *Dev_Psi_real, double *Dev_ChiX, double *Dev_ChiY, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi) {
+	void writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
+			double *Host_save, double *Dev_W_coarse, double *Dev_W_fine, double *Dev_Psi_real,
+			double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f) {
 
 		// create new subfolder for current timestep
 		std::string sub_folder_name = "/Time_data/Time_" + i_num;
@@ -240,7 +210,7 @@ bool readAllRealFromBinaryFile(int Len, double *var, string data_name)
 			writeAllRealToBinaryFile(Grid_psi.N, Host_save, SettingsMain, sub_folder_name + "/Velocity_UY_psi");
 		}
 
-		// Map on coarse grid in Hermite or single version : Chi_coarse
+		// Backwards map on coarse grid in Hermite or single version : Chi_coarse
 		if (save_var.find("Map") != std::string::npos or save_var.find("Chi") != std::string::npos) {
 			// Map in x direction on coarse grid : ChiX
 			cudaMemcpy(Host_save, Dev_ChiX, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
@@ -256,6 +226,24 @@ bool readAllRealFromBinaryFile(int Len, double *var, string data_name)
 			// Map in y direction on coarse grid : ChiY
 			cudaMemcpy(Host_save, Dev_ChiY, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
 			writeAllRealToBinaryFile(4*Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiY_H_coarse");
+		}
+
+		// Forwards map on coarse grid in Hermite or single version : Chi_f_coarse
+		if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos) {
+			// Map in x direction on coarse grid : ChiX
+			cudaMemcpy(Host_save, Dev_ChiX_f, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+			writeAllRealToBinaryFile(Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiX_f_coarse");
+			// Map in y direction on coarse grid : ChiY
+			cudaMemcpy(Host_save, Dev_ChiY_f, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+			writeAllRealToBinaryFile(Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiY_f_coarse");
+		}
+		if (save_var.find("Map_f_H") != std::string::npos or save_var.find("Chi_f_H") != std::string::npos) {
+			// Map in x direction on coarse grid : ChiX
+			cudaMemcpy(Host_save, Dev_ChiX_f, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+			writeAllRealToBinaryFile(4*Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiX_f_H_coarse");
+			// Map in y direction on coarse grid : ChiY
+			cudaMemcpy(Host_save, Dev_ChiY_f, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+			writeAllRealToBinaryFile(4*Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiY_f_H_coarse");
 		}
 	}
 #endif

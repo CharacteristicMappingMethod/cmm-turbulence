@@ -22,11 +22,12 @@ void SettingsCMM::setPresets() {
 	 *  "two_vortices"			-	???
 	 *  "three_vortices"		-	???
 	 *  "single_shear_layer"	-	shear layer problem forming helmholtz-instabilities, merging into two vortices which then merges into one big vortex
+	 *  "tanh_shear_layer"		-	shear layer with tanh boundary
 	 *  "turbulence_gaussienne"	-	gaussian blobs - version made by thibault
 	 *  "gaussian_blobs"		-	gaussian blobs in order - version made by julius
 	 *  "shielded_vortex"		-	vortex core with ring of negative vorticity around it
 	 */
-	std::string initial_condition = "gaussian_blobs";
+	std::string initial_condition = "4_nodes";
 
 	// possibility to compute from discrete initial condition
 	bool initial_discrete = false;
@@ -43,7 +44,7 @@ void SettingsCMM::setPresets() {
 	int verbose = 3;
 
 	// set time properties
-	double final_time = 2;  // end of computation
+	double final_time = 4;  // end of computation
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
 	int steps_per_sec = 64;  // how many steps do we want per seconds?
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
@@ -60,12 +61,16 @@ void SettingsCMM::setPresets() {
 	 * Stream function hermite: "Stream_H", "Psi_H" - not for zoom_save_var
 	 * Velocity: "Velocity", "U" - not for zoom_save_var
 	 *
-	 * Grid: "Grid", "Chi"
-	 * Grid Hermite: "Grid_H", "Chi_H" - not for sample_save_var and zoom_save_var
+	 * Backwards map: "Map", "Map_b", "Chi", "Chi_b"
+	 * Backwards map Hermite: "Map_H", "Chi_H" - only for save_var
 	 *
-	 * Laplacian of vorticity: "Laplacian" - not for save_var and zoom_save_var
+	 * Laplacian of vorticity: "Laplacian" - only for sample_save_var
 	 * Passive scalar: "Scalar", "Theta" - not for save_var
-	 * Particles: "Particles", "P" - only for zoom_save_var
+	 * Particles: "Particles", "P" - only for zoom_save_var and with particles
+	 *
+	 * Forward map: "Map_f", "Chi_f"
+	 * Forwards map Hermite: "Map_f_H", "Chi_f_H" - only for save_var
+	 * Forward particles: "Particles_f", "P_f" - not for save_var and with scalar
 	 */
 	std::string save_var = "W-U";  // string containing all wanted variables, works for W, Psi, U and Chi
 
@@ -86,7 +91,7 @@ void SettingsCMM::setPresets() {
 	// set specific settings
 	/*
 	 * Time integration
-	 * First order: "EulerExp"
+	 * First order: "EulerExp", "EulerImp"
 	 * Second order: "AB2", "RK2"
 	 * Third order: "RK3", "RK3Mod"
 	 * Fourth order: "RK4", "RK4Mod"
@@ -126,8 +131,9 @@ void SettingsCMM::setPresets() {
 	 *  Initial conditions for transport of passive scalar
 	 *  "rectangle"					-	simple rectangle with sharp borders
 	 *  "gaussian"					-	normal distribution / gaussian blob
+	 *  "circular_ring"				-   circular ring around center
 	 */
-	std::string scalar_name = "gaussian";
+	std::string scalar_name = "circular_ring";
 	// NOT IMPLEMENTED YET - possibility to compute from discrete initial scalar condition
 	bool scalar_discrete = false;
 	int scalar_discrete_grid = 2048;  // variable gridsize for discrete initial scalar grid
@@ -155,6 +161,13 @@ void SettingsCMM::setPresets() {
 
 
 	/*
+	 * Forward map settings to compute forward map for scalar particles,
+	 */
+	bool forward_map = true;  // en- or disable computing of forward map
+
+
+
+	/*
 	 * Particle settings
 	 *  - enable or disable particles, introduce inertial particles
 	 *  - control saving intervals of particle positions
@@ -167,14 +180,15 @@ void SettingsCMM::setPresets() {
 	 *  Initial conditions for particle position
 	 *  "uniform"					-	uniformly distributed in particular frame
 	 *  "normal", "gaussian"		-	normal / gaussian distributed around center with specific variance
+	 *  "circular_ring"				-   circular ring around specific center with particles_width as radius
 	 */
-	std::string particles_init_name = "gaussian";
+	std::string particles_init_name = "circular_ring";
 
 	unsigned long long particles_seed = 0ULL;
 	double particles_center_x = PI;  // frame center position, middle of particle domain
 	double particles_center_y = PI;  // frame center position, middle of particle domain
-	double particles_width_x = PI/4.0;  // frame width, variance for normal distribution
-	double particles_width_y = PI/4.0;  // frame width, variance for normal distribution
+	double particles_width_x = PI/2.0;  // frame width, variance for normal distribution
+	double particles_width_y = PI/2.0;  // frame width, variance for normal distribution
 
 	int particles_tau_num = 1;  // how many tau_p values do we have? for now maximum is 100
 //	double Tau_p[Nb_Tau_p] = {0.0, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.125, 0.15, 0.25, 0.5, 0.75, 1, 2, 5, 13};
@@ -196,7 +210,7 @@ void SettingsCMM::setPresets() {
 	 * Fourth order: "RK4", "RK4Mod"
 	 */
 	std::string particles_time_integration = "RK3Mod";
-	if (!particles) particles_time_integration = "EulerExp";  // check to disable for lagrange settings
+	if (!particles) particles_time_integration = "Disabled";  // check to disable for lagrange settings
 
 
 	// make sure that not initialized values are set
@@ -259,6 +273,7 @@ void SettingsCMM::setPresets() {
 	setZoomSaveInitial(zoom_save_initial); setZoomSaveFinal(zoom_save_final);
 	setZoomSaveVar(zoom_save_var);
 
+	setForwardMap(forward_map);
 
 	setParticles(particles);
 	setParticlesInitName(particles_init_name);
@@ -376,6 +391,8 @@ void SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		else if (command == "zoom_save_initial") setZoomSaveInitial(getBoolFromString(value));
 		else if (command == "zoom_save_final") setZoomSaveFinal(getBoolFromString(value));
 		else if (command == "zoom_save_var") setZoomSaveVar(value);
+
+		else if (command == "forward_map") setForwardMap(getBoolFromString(value));
 
 		else if (command == "particles") setParticles(getBoolFromString(value));
 		else if (command == "particles_init_name") setParticlesInitName(value);

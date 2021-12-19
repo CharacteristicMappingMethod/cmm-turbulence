@@ -97,28 +97,58 @@ __global__ void k_h_sample(double *val, double *val_s, TCudaGrid2D Grid, TCudaGr
 
 
 // incompressibility check by computing determinant of jacobi of map
-__global__ void k_incompressibility_check(double *ChiX, double *ChiY, double *gradChi, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse)
+__global__ void k_incompressibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_map,
+		double *ChiX, double *ChiY, double *grad_Chi)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 
-	if(iX >= Grid_fine.NX || iY >= Grid_fine.NY)
+	if(iX >= Grid_check.NX || iY >= Grid_check.NY)
 		return;
 
-	int In = iY*Grid_fine.NX + iX;
+	int In = iY*Grid_check.NX + iX;
 
-	//position shifted by half a point to compute at off-grid
-	double x = iX*Grid_fine.hx + 0.5*Grid_fine.hx;
-	double y = iY*Grid_fine.hy + 0.5*Grid_fine.hy;
+	//position shifted by half a point to compute at off-grid, i'm not tooo sure if its important though
+	double x = iX*Grid_check.hx + 0.5*Grid_check.hx;
+	double y = iY*Grid_check.hy + 0.5*Grid_check.hy;
 //	double x = iX*Grid_fine.hx;
 //	double y = iY*Grid_fine.hy;
-	gradChi[In] = device_diffeo_grad_2D(ChiX, ChiY, x, y, Grid_coarse);
+	grad_Chi[In] = device_diffeo_grad_2D(ChiX, ChiY, x, y, Grid_map);
+}
+
+
+// invertibility check by computing distance from forth-and-back mapping to original point, starting with forward to backward map
+__global__ void k_invertibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_backward, TCudaGrid2D Grid_forward,
+		double *ChiX_b, double *ChiY_b, double *ChiX_f, double *ChiY_f, double *abs_invert)
+{
+	//index
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+
+	if(iX >= Grid_check.NX || iY >= Grid_check.NY)
+		return;
+
+	int In = iY*Grid_check.NX + iX;
+
+	//position shifted by half a point to compute at off-grid, i'm not tooo sure if its important though
+	double x = iX*Grid_check.hx + 0.5*Grid_check.hx;
+	double y = iY*Grid_check.hy + 0.5*Grid_check.hy;
+//	double x = iX*Grid_fine.hx;
+//	double y = iY*Grid_fine.hy;
+
+	double x_inv, y_inv;  // initialize mapped points
+	device_diffeo_interpolate_2D(ChiX_f, ChiY_f, x, y, &x_inv, &y_inv, Grid_forward);
+	device_diffeo_interpolate_2D(ChiX_b, ChiY_b, x_inv, y_inv, &x_inv, &y_inv, Grid_backward);
+
+	// I am actually not yet sure how to compute the error, but I believe that describing it by the euclidean distance could be the best way
+	abs_invert[In] = hypot(x-x_inv, y-y_inv);
 }
 
 
 // compute footpoints at exact grid locations
-__global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double t, double dt, int time_integration_num, int l_order) {
+__global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi,
+		TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double t, double dt, int time_integration_num, int l_order, int direction) {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
@@ -135,27 +165,53 @@ __global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new
 
 	x_ep[0] = iX*Grid_map.hx; x_ep[1] = iY*Grid_map.hy;
 
-	// time integration - note, we go backwards in time!
-	switch (time_integration_num) {
-		case 10: { euler_exp         (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
-		// ABTwo
-		case 20: { adam_bashford_2_pc(psi,              x_ep, x_f, Grid_psi, dt         ); break; }
-		// ABTwo
-		case 21: { RK2_heun          (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
-		// RKThree
-		case 30: { RK3_classical     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
-		// RKFour
-		case 40: { RK4_classical     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
-		// custom RKThree
-		case 31: { RK3_optimized     (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
-		// custom RKFour case IV
-		case 41: { RK4_optimized     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
-		// zero on default
-		default: { x_f[0] = x_f[1] = 0; }
+	if (direction == -1)  // time integration backwards in time for backwards map
+	{
+		switch (time_integration_num) {
+			case 10: { euler_exp_b         (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
+			case 11: { euler_imp_b         (psi,              x_ep, x_f, Grid_psi, dt         ); break; }
+			// ABTwo
+			case 20: { adam_bashford_2_pc_b(psi,              x_ep, x_f, Grid_psi, dt         ); break; }
+			// ABTwo
+			case 21: { RK2_heun_b          (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
+			// RKThree
+			case 30: { RK3_classical_b     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
+			// RKFour
+			case 40: { RK4_classical_b     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
+			// custom RKThree
+			case 31: { RK3_optimized_b     (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
+			// custom RKFour case IV
+			case 41: { RK4_optimized_b     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
+			// zero on default
+			default: { x_f[0] = x_f[1] = 0; }
+		}
+		// apply map deformation to go back to inital point
+		device_diffeo_interpolate_2D(ChiX, ChiY, x_f[0], x_f[1], &x_f[0], &x_f[1], Grid_map);
 	}
+	else if (direction == 1)  // time integration forwards in time for forwards map
+	{
+		// apply map deformation to go to current time step
+		device_diffeo_interpolate_2D(ChiX, ChiY, x_f[0], x_f[1], &x_f[0], &x_f[1], Grid_map);
 
-	// apply map deformation
-	device_diffeo_interpolate_2D(ChiX, ChiY, x_f[0], x_f[1], &x_f[0], &x_f[1], Grid_map);
+		switch (time_integration_num) {
+			case 10: { euler_exp         (psi,              x_ep, x_f, Grid_psi, dt         ); break; }
+			case 11: { euler_imp         (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
+			// ABTwo
+			case 20: { adam_bashford_2_pc(psi,              x_ep, x_f, Grid_psi, dt         ); break; }
+			// ABTwo
+			case 21: { RK2_heun          (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
+			// RKThree
+			case 30: { RK3_classical     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
+			// RKFour
+			case 40: { RK4_classical     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
+			// custom RKThree
+			case 31: { RK3_optimized     (psi,              x_ep, x_f, Grid_psi, dt         ); break; }
+			// custom RKFour case IV
+			case 41: { RK4_optimized     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
+			// zero on default
+			default: { x_f[0] = x_f[1] = 0; }
+		}
+	}
 
 	// transcribe
 	Chi_new_X[In] = x_f[0];	Chi_new_Y[In] = x_f[1];
@@ -324,7 +380,7 @@ __global__ void k_map_update(double *Chi, double *Chi_new, TCudaGrid2D Grid_map,
  * At the end: combine results of all footpoints using specific map update scheme
  */
 __global__ void k_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi,
-		TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num, int l_order)
+		TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num, int l_order, int direction)
 {
 //	if ((blockIdx.x == 0) && (blockIdx.y == 0)) { debug = true; }
 
@@ -354,27 +410,53 @@ __global__ void k_advect_using_stream_hermite(double *ChiX, double *ChiY, double
 		x_ep[0] = Grid_map.bounds[0] + iX*Grid_map.hx + i_dist_now * ep*(1 - 2*((k_foot/2)%2));
 		x_ep[1] = Grid_map.bounds[2] + iY*Grid_map.hy + i_dist_now * ep*(1 - 2*(((k_foot+1)/2)%2));
 
-		// time integration - note, we go backwards in time!
-		switch (time_integration_num) {
-			case 10: { euler_exp         (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
-			// ABTwo
-			case 20: { adam_bashford_2_pc(psi,              x_ep, x_f, Grid_psi, dt         ); break; }
-			// ABTwo
-			case 21: { RK2_heun          (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
-			// RKThree
-			case 30: { RK3_classical     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
-			// RKFour
-			case 40: { RK4_classical     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
-			// custom RKThree
-			case 31: { RK3_optimized     (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
-			// custom RKFour case IV
-			case 41: { RK4_optimized     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
-			// zero on default
-			default: { x_f[0] = x_f[1] = 0; }
+		if (direction == -1)  // time integration backwards in time for backwards map
+		{
+			switch (time_integration_num) {
+				case 10: { euler_exp_b         (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
+				case 11: { euler_imp_b         (psi,              x_ep, x_f, Grid_psi, dt         ); break; }
+				// ABTwo
+				case 20: { adam_bashford_2_pc_b(psi,              x_ep, x_f, Grid_psi, dt         ); break; }
+				// ABTwo
+				case 21: { RK2_heun_b          (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
+				// RKThree
+				case 30: { RK3_classical_b     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
+				// RKFour
+				case 40: { RK4_classical_b     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
+				// custom RKThree
+				case 31: { RK3_optimized_b     (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
+				// custom RKFour case IV
+				case 41: { RK4_optimized_b     (psi, d_L1, d_L12, x_ep, x_f, Grid_psi, dt, l_order); break; }
+				// zero on default
+				default: { x_f[0] = x_f[1] = 0; }
+			}
+			// apply map deformation to go back to inital point
+			device_diffeo_interpolate_2D(ChiX, ChiY, x_f[0], x_f[1], &x_f[0], &x_f[1], Grid_map);
 		}
+		else if (direction == 1)  // time integration forwards in time for forwards map
+		{
+			// apply map deformation to go to current time step
+			device_diffeo_interpolate_2D(ChiX, ChiY, x_ep[0], x_ep[1], &x_f[0], &x_f[1], Grid_map);
 
-		// apply map deformation
-		device_diffeo_interpolate_2D(ChiX, ChiY, x_f[0], x_f[1], &x_f[0], &x_f[1], Grid_map);
+			switch (time_integration_num) {
+				case 10: { euler_exp         (psi,              x_f, x_f, Grid_psi, dt         ); break; }
+				case 11: { euler_imp         (psi, d_L1,        x_f, x_f, Grid_psi, dt, l_order); break; }
+				// ABTwo
+				case 20: { adam_bashford_2_pc(psi,              x_f, x_f, Grid_psi, dt         ); break; }
+				// ABTwo
+				case 21: { RK2_heun          (psi, d_L1,        x_f, x_f, Grid_psi, dt, l_order); break; }
+				// RKThree
+				case 30: { RK3_classical     (psi, d_L1, d_L12, x_f, x_f, Grid_psi, dt, l_order); break; }
+				// RKFour
+				case 40: { RK4_classical     (psi, d_L1, d_L12, x_f, x_f, Grid_psi, dt, l_order); break; }
+				// custom RKThree
+				case 31: { RK3_optimized     (psi,              x_f, x_f, Grid_psi, dt         ); break; }
+				// custom RKFour case IV
+				case 41: { RK4_optimized     (psi, d_L1, d_L12, x_f, x_f, Grid_psi, dt, l_order); break; }
+				// zero on default
+				default: { x_f[0] = x_f[1] = 0; }
+			}
+		}
 
 		// directly apply map update
 		// chi values - central average with stencil +NE +SE +SW +NW
