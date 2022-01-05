@@ -36,7 +36,7 @@ void translate_initial_condition_through_map_stack(TCudaGrid2D Grid_fine, TCudaG
 
 // computation of psi - sampling vorticity from fine vorticity hermite as initial condition
 void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_psi, TCudaGrid2D Grid_vort,
-		double *Dev_ChiX, double *Dev_ChiY, double *Dev_W_H_fine_real, double *W_real, double *Psi_real,
+		double *Dev_ChiX, double *Dev_ChiY, double *Dev_W_H_fine_real, double *Psi_real,
 		cufftHandle cufftPlan_coarse_Z2D, cufftHandle cufftPlan_psi, cufftHandle cufftPlan_vort,
 		cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_psi);
 

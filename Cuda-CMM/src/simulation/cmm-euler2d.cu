@@ -578,8 +578,12 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 	// compute first psi, stream hermite from vorticity
 	evaluate_stream_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
-			Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
+			Dev_W_H_fine_real, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
 			Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
+
+	// compute coarse vorticity as a simulation variable, is needed for entrophy and palinstrophy
+	k_apply_map_and_sample_from_hermite<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
+			Dev_W_coarse, Dev_W_H_fine_real, Grid_coarse, Grid_coarse, Grid_fine, 0, false);
 
 
 	/*
@@ -653,7 +657,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 				}
 				// compute stream hermite from vorticity for computed time step
 				evaluate_stream_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
-						Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
+						Dev_W_H_fine_real, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
 						Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
 
 				// output step details to console
@@ -979,8 +983,12 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 		// compute stream hermite from vorticity for next time step so that particles can benefit from it
 		evaluate_stream_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
-				Dev_W_H_fine_real, Dev_W_coarse, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
+				Dev_W_H_fine_real, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
 				Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
+
+		// compute coarse vorticity as a simulation variable, is needed for entrophy and palinstrophy
+		k_apply_map_and_sample_from_hermite<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
+				Dev_W_coarse, Dev_W_H_fine_real, Grid_coarse, Grid_coarse, Grid_fine, 0, false);
 
 		/*
 		 * Particles advection after velocity update to profit from nice avaiable accelerated schemes

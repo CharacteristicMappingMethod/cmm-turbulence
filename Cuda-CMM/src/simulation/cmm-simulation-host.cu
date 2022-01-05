@@ -206,7 +206,7 @@ void translate_initial_condition_through_map_stack(TCudaGrid2D Grid_fine, TCudaG
 *						 Computation of Psi						   *
 *******************************************************************/
 void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_psi, TCudaGrid2D Grid_vort,
-		double *Dev_ChiX, double *Dev_ChiY, double *Dev_W_H_fine_real, double *W_real, double *Psi_real,
+		double *Dev_ChiX, double *Dev_ChiY, double *Dev_W_H_fine_real, double *Psi_real,
 		cufftHandle cufft_plan_coarse_Z2D, cufftHandle cufft_plan_psi, cufftHandle cufft_plan_vort,
 		cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_psi)
 {
@@ -222,10 +222,6 @@ void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCu
 	// cut_off frequencies at N_psi/3 for turbulence (effectively 2/3) and compute smooth W
 	// use Psi grid here for intermediate storage
 //	k_fft_cut_off_scale<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_Temp_C1, Grid_coarse.NX, (double)(Grid_psi.NX)/3.0);
-
-	// save vorticity on coarse grid, here Psi_real is used as buffer, assumption : Grid_psi > Grid_coarse
-	k_fft_grid_move<<<Grid_coarse.fft_blocks, Grid_coarse.threadsPerBlock>>>(Dev_Temp_C1, (cufftDoubleComplex*) Psi_real, Grid_coarse, Grid_vort);
-	cufftExecZ2D(cufft_plan_coarse_Z2D, (cufftDoubleComplex*) Psi_real, W_real);
 
 	// transition to stream function grid with three cases : grid_vort < grid_psi, grid_vort > grid_psi (a bit dumb) and grid_vort == grid_psi
 	// grid change because inline data movement is nasty, we can use psi_real as buffer anyways
