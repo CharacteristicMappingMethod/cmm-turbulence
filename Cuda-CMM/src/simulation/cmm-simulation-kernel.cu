@@ -31,6 +31,27 @@ __global__ void k_init_diffeo(double *ChiX, double *ChiY, TCudaGrid2D Grid)
 	// x dy = y dx = dxdy = 0
 	ChiX[2*Grid.N+In] = ChiY[1*Grid.N+In] = ChiX[3*Grid.N+In] = ChiY[3*Grid.N+In] = 0;
 }
+// double2 variant
+__global__ void k_init_diffeo(double2 *Chi, TCudaGrid2D Grid)
+{
+	//index
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+
+	if(iX >= Grid.NX || iY >= Grid.NY)
+		return;
+
+	int In = iY*Grid.NX + iX;
+
+	Chi[In].x = iX*Grid.hx;
+	Chi[In].y = iY*Grid.hy;
+
+	// x dx = y dy = 1
+	Chi[1*Grid.N+In].x = Chi[2*Grid.N+In].y = 1;
+
+	// x dy = y dx = dxdy = 0
+	Chi[2*Grid.N+In].x = Chi[1*Grid.N+In].y = Chi[3*Grid.N+In].x = Chi[3*Grid.N+In].y = 0;
+}
 
 
 // swap two memory positions, neede for changing direction in initialization (just simplifies things)
@@ -53,7 +74,7 @@ __global__ void k_swap_h(double *Val1, double *Val2, TCudaGrid2D Grid)
 }
 
 
-// sample from hermite of map
+// sample from hermite of map on uniform grid
 __global__ void k_h_sample_map(double *ChiX, double *ChiY, double *ChiX_s, double *ChiY_s, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
 {
 	//index
@@ -73,6 +94,31 @@ __global__ void k_h_sample_map(double *ChiX, double *ChiY, double *ChiX_s, doubl
 
 	ChiX_s[In] = x;
 	ChiY_s[In] = y;
+}
+
+// sample from set of input points
+__global__ void k_h_sample_points_map(TCudaGrid2D Grid_map, double *ChiX, double *ChiY, double* Dev_particles_pos_in, double* Dev_particles_pos_out, int particle_num)
+{
+	//index
+	int i = (blockDim.x * blockIdx.x + threadIdx.x);  // (thread_num_max * block_num + thread_num) - gives position
+
+	// return if position is larger than particle size
+	if (i >= particle_num)
+		return;
+
+	double in_x = Dev_particles_pos_in[2*i], in_y = Dev_particles_pos_in[2*i+1];
+	double out_x, out_y;
+	// sample from hermite if position is inside map bounds
+	if (in_x > Grid_map.bounds[0] and in_x < Grid_map.bounds[1] and in_y > Grid_map.bounds[2] and in_y < Grid_map.bounds[3]) {
+		device_diffeo_interpolate_2D(ChiX, ChiY, in_x, in_y, &out_x, &out_y, Grid_map);
+
+		Dev_particles_pos_out[2*i  ] = out_x;
+		Dev_particles_pos_out[2*i+1] = out_y;
+	}
+	else  // in case not in bounds, we cannot translate the maps and set the values to NaN
+	{
+		Dev_particles_pos_out[2*i  ] = Dev_particles_pos_out[2*i+1] = 0.0/0.0;
+	}
 }
 
 
@@ -112,8 +158,8 @@ __global__ void k_incompressibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Gr
 	//position shifted by half a point to compute at off-grid, i'm not tooo sure if its important though
 	double x = iX*Grid_check.hx + 0.5*Grid_check.hx;
 	double y = iY*Grid_check.hy + 0.5*Grid_check.hy;
-//	double x = iX*Grid_fine.hx;
-//	double y = iY*Grid_fine.hy;
+//	double x = iX*Grid_check.hx;
+//	double y = iY*Grid_check.hy;
 	grad_Chi[In] = device_diffeo_grad_2D(ChiX, ChiY, x, y, Grid_map);
 }
 
@@ -134,8 +180,8 @@ __global__ void k_invertibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_b
 	//position shifted by half a point to compute at off-grid, i'm not tooo sure if its important though
 	double x = iX*Grid_check.hx + 0.5*Grid_check.hx;
 	double y = iY*Grid_check.hy + 0.5*Grid_check.hy;
-//	double x = iX*Grid_fine.hx;
-//	double y = iY*Grid_fine.hy;
+//	double x = iX*Grid_check.hx;
+//	double y = iY*Grid_check.hy;
 
 	double x_inv, y_inv;  // initialize mapped points
 	device_diffeo_interpolate_2D(ChiX_f, ChiY_f, x, y, &x_inv, &y_inv, Grid_forward);
@@ -505,7 +551,7 @@ __global__ void k_h_sample_map_compact(double *ChiX, double *ChiY, double *x_y, 
 	x_y[2*In+1] = y;
 
 }
-// apply intermediate maps to compacted map
+// apply intermediate maps to compacted map, basically only samples in stacked form
 __global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
 {
 	//index

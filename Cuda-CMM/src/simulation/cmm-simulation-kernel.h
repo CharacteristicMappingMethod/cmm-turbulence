@@ -9,12 +9,14 @@ extern __constant__ double d_L1[4], d_L12[4], d_c1[12], d_cx[12], d_cy[12], d_cx
 
 // init map kernel
 __global__ void k_init_diffeo(double *ChiX, double *ChiY, TCudaGrid2D Grid);
+__global__ void k_init_diffeo(double2 *Chi, TCudaGrid2D Grid);
 
 __global__ void k_swap_h(double *Val1, double *Val2, TCudaGrid2D Grid);
 
 
 // sampling kernels
 __global__ void k_h_sample_map(double *ChiX, double *ChiY, double *ChiX_s, double *ChiY_s, TCudaGrid2D Grid_map, TCudaGrid2D Grid);
+__global__ void k_h_sample_points_map(TCudaGrid2D Grid_map, double *ChiX, double *ChiY, double* Dev_particles_pos_in, double* Dev_particles_pos_out, int particles_num);
 __global__ void k_h_sample(double *val, double *val_s, TCudaGrid2D Grid, TCudaGrid2D Grid_s);
 
 // checking kernels

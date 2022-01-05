@@ -54,7 +54,10 @@ private:
 	bool zoom_save_initial, zoom_save_final;
 	std::string zoom_save_var;
 	// forward map
-	bool forward_map;
+	bool forward_map, forward_particles; int forward_particles_num;
+	std::string forward_particles_init_name; int forward_particles_init_num;
+	unsigned long long forward_particles_seed;
+	double forward_particles_center_x, forward_particles_center_y, forward_particles_width_x, forward_particles_width_y;
 	// particles
 	bool particles, save_fine_particles;
 	std::string particles_init_name; int particles_init_num;
@@ -301,6 +304,35 @@ public:
 	bool getForwardMap() const { return forward_map; }
 	void setForwardMap(bool forwardMap) { forward_map = forwardMap; }
 
+	bool getForwardParticles() const { return particles; }
+	void setForwardParticles(bool forwardParticles) { forward_particles = forwardParticles; }
+	int getForwardParticlesNum() const { return forward_particles_num; }
+	void setForwardParticlesNum(int forwardParticlesNum) { forward_particles_num = forwardParticlesNum; }
+
+	std::string getForwardParticlesInitName() const { return forward_particles_init_name; }
+	void setForwardParticlesInitName(std::string forwardParticlesInitName) {
+		forward_particles_init_name = forwardParticlesInitName;
+		// tied to num, for faster handling
+		if(forwardParticlesInitName == "uniform") forward_particles_init_num = 0;
+		else if(forwardParticlesInitName == "normal" or forwardParticlesInitName == "gaussian") forward_particles_init_num = 1;
+		else if(forwardParticlesInitName == "circular_ring") forward_particles_init_num = 2;
+		else if(forwardParticlesInitName == "uniform_grid") forward_particles_init_num = 3;
+		else forward_particles_init_num = -1;
+	}
+	int getForwardParticlesInitNum() const { return forward_particles_init_num; }
+
+	unsigned long long getForwardParticlesSeed() const { return forward_particles_seed; }
+	void setForwardParticlesSeed(unsigned long long forwardParticlesSeed) { forward_particles_seed = forwardParticlesSeed; }
+
+	double getForwardParticlesCenterX() const { return forward_particles_center_x; }
+	void setForwardParticlesCenterX(double forwardParticlesCenterX) { forward_particles_center_x = forwardParticlesCenterX; }
+	double getForwardParticlesCenterY() const { return forward_particles_center_y; }
+	void setForwardParticlesCenterY(double forwardParticlesCenterY) { forward_particles_center_y = forwardParticlesCenterY; }
+	double getForwardParticlesWidthX() const { return forward_particles_width_x; }
+	void setForwardParticlesWidthX(double forwardParticlesWidthX) { forward_particles_width_x = forwardParticlesWidthX; }
+	double getForwardParticlesWidthY() const { return forward_particles_width_y; }
+	void setForwardParticlesWidthY(double forwardParticlesWidthY) { forward_particles_width_y = forwardParticlesWidthY; }
+
 
 	// particles
 	bool getParticles() const { return particles; }
@@ -315,6 +347,7 @@ public:
 		if(particlesInitName == "uniform") particles_init_num = 0;
 		else if(particlesInitName == "normal" or particlesInitName == "gaussian") particles_init_num = 1;
 		else if(particlesInitName == "circular_ring") particles_init_num = 2;
+		else if(particlesInitName == "uniform_grid") particles_init_num = 3;
 		else particles_init_num = -1;
 	}
 	int getParticlesInitNum() const { return particles_init_num; }

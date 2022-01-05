@@ -54,11 +54,11 @@ __device__ void RK2_heun(double *psi, double *d_L1, double *x_in, double *x_out,
 	double u[8];  // velocity placeholders
 	double k[4];  // step placeholders
 
-	device_hermite_interpolate_grad_2D(psi, x_in, k, Grid, l_order);
+	device_hermite_interpolate_grad_2D(psi, x_in, k, Grid, 1);
 
 	// k2 = u_tilde(x + dt k1, t_n+1)
 	k[2] = x_in[0] + dt*k[0]; k[3] = x_in[1] + dt*k[1];
-	device_hermite_interpolate_grad_2D(psi, k+2, u, Grid, 1);
+	device_hermite_interpolate_grad_2D(psi, k+2, u, Grid, l_order);
 	k[2] = d_L1[0] * u[0]; k[3] = d_L1[0] * u[1];
 	for (int i_l = 1; i_l < l_order; i_l++) {
 		k[2] += d_L1[i_l] * u[i_l*2  ];

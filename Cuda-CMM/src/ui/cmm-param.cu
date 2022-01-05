@@ -110,6 +110,14 @@ void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 		file << write_line("zoom_save_var", to_str(SettingsMain.getZoomSaveVar(), 16));
 
 		file << write_line("forward_map", to_str(SettingsMain.getForwardMap(), 16));
+		file << write_line("forward_particles", to_str(SettingsMain.getForwardParticles(), 16));
+		file << write_line("forward_particles_init_name", to_str(SettingsMain.getForwardParticlesInitName(), 16));
+		file << write_line("forward_particles_seed", to_str(SettingsMain.getForwardParticlesSeed(), 16));
+		file << write_line("forward_particles_center_x", to_str(SettingsMain.getForwardParticlesCenterX(), 16));
+		file << write_line("forward_particles_center_y", to_str(SettingsMain.getForwardParticlesCenterY(), 16));
+		file << write_line("forward_particles_width_x", to_str(SettingsMain.getForwardParticlesWidthX(), 16));
+		file << write_line("forward_particles_width_y", to_str(SettingsMain.getForwardParticlesWidthY(), 16));
+		file << write_line("forward_particles_num", to_str(SettingsMain.getForwardParticlesNum(), 16));
 
 		file << write_line("particles", to_str(SettingsMain.getParticles(), 16));
 		file << write_line("particles_init_name", to_str(SettingsMain.getParticlesInitName(), 16));

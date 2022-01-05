@@ -273,23 +273,48 @@ __device__ double d_init_scalar(double x, double y, int scalar_num) {
 *			Initial conditions for particles					   *
 *******************************************************************/
 
-__host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain, int particle_thread, int particle_block, double* domain_bounds) {
+__host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain, int particle_thread, int particle_block, double* domain_bounds, int particle_type) {
+
+	// unpack all parameters according to type
+	long long int seed;
+	int init_num; int num; int center_x, center_y, width_x, width_y;
+
+	switch (particle_type) {
+		case 0:  // advected particles
+		{
+			seed = SettingsMain.getParticlesSeed();
+			init_num = SettingsMain.getParticlesInitNum();
+			num = SettingsMain.getParticlesNum();
+			center_x = SettingsMain.getParticlesCenterX(); center_y = SettingsMain.getParticlesCenterY();
+			width_x = SettingsMain.getParticlesWidthX(); width_y = SettingsMain.getParticlesWidthY();
+			break;
+		}
+		case 1:  // forward particles
+		{
+			seed = SettingsMain.getForwardParticlesSeed();
+			init_num = SettingsMain.getForwardParticlesInitNum();
+			num = SettingsMain.getForwardParticlesNum();
+			center_x = SettingsMain.getForwardParticlesCenterX(); center_y = SettingsMain.getForwardParticlesCenterY();
+			width_x = SettingsMain.getForwardParticlesWidthX(); width_y = SettingsMain.getForwardParticlesWidthY();
+			break;
+		}
+	}
 
 	curandGenerator_t prng;
 	// initialize randomizer
 	curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_DEFAULT);
 	// set seed
-	curandSetPseudoRandomGeneratorSeed(prng, SettingsMain.getParticlesSeed());
+	curandSetPseudoRandomGeneratorSeed(prng, seed);
 
 	switch (SettingsMain.getParticlesInitNum()) {
 		case 0:  // uniformly distributed in rectangle
 		{
 			// create initial positions from random distribution
-			curandGenerateUniformDouble(prng, Dev_particles_pos, 2*SettingsMain.getParticlesNum());
+			curandGenerateUniformDouble(prng, Dev_particles_pos, 2*num);
 
 			// project 0-1 onto particle frame
-			k_rescale<<<particle_block, particle_thread>>>(SettingsMain.getParticlesNum(),
-					SettingsMain.getParticlesCenterX(), SettingsMain.getParticlesCenterY(), SettingsMain.getParticlesWidthX(), SettingsMain.getParticlesWidthY(),
+			k_rescale<<<particle_block, particle_thread>>>(num,
+					center_x, center_y, width_x, width_y,
 					Dev_particles_pos, domain_bounds[1], domain_bounds[3]);
 
 			break;
@@ -297,19 +322,25 @@ __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain
 		case 1:  // normally distributed with given mean and standard deviation
 		{
 			// create all values with standard variance around 0.5, 0.5 is subtracted later in k_rescale
-			curandGenerateNormalDouble( prng, Dev_particles_pos, 2*SettingsMain.getParticlesNum(), 0.5, 1.0);
+			curandGenerateNormalDouble( prng, Dev_particles_pos, 2*num, 0.5, 1.0);
 
 			// shift and scale all values to fit the desired quantities, width represents the variance
-			k_rescale<<<particle_block, particle_thread>>>(SettingsMain.getParticlesNum(),
-					SettingsMain.getParticlesCenterX(), SettingsMain.getParticlesCenterY(), SettingsMain.getParticlesWidthX(), SettingsMain.getParticlesWidthY(),
+			k_rescale<<<particle_block, particle_thread>>>(num,
+					center_x, center_y, width_x, width_y,
 					Dev_particles_pos, domain_bounds[1], domain_bounds[3]);
 
 			break;
 		}
 		case 2:  // distributed in a circle
 		{
-			k_part_init_circle<<<particle_block, particle_thread>>>(Dev_particles_pos, SettingsMain.getParticlesNum(),
-					SettingsMain.getParticlesCenterX(), SettingsMain.getParticlesCenterY(), SettingsMain.getParticlesWidthX(), SettingsMain.getParticlesWidthY());
+			k_part_init_circle<<<particle_block, particle_thread>>>(Dev_particles_pos, num,
+					center_x, center_y, width_x, width_y);
+			break;
+		}
+		case 3:  // uniform grid
+		{
+			k_part_init_uniform_grid<<<particle_block, particle_thread>>>(Dev_particles_pos, num,
+					center_x, center_y, width_x, width_y);
 			break;
 		}
 
@@ -319,6 +350,7 @@ __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain
 }
 
 
+// kernel to compute initial positions in a circle
 __global__ void k_part_init_circle(double* Dev_particles_pos, int particle_num,
 		double circle_center_x, double circle_center_y, double circle_radius_x, double circle_radius_y) {
 	int i = (blockDim.x * blockIdx.x + threadIdx.x);  // (thread_num_max * block_num + thread_num) - gives position
@@ -329,4 +361,20 @@ __global__ void k_part_init_circle(double* Dev_particles_pos, int particle_num,
 
 	Dev_particles_pos[2*i]   = circle_center_x + circle_radius_x * cos(i/(double)particle_num*twoPI);
 	Dev_particles_pos[2*i+1] = circle_center_y + circle_radius_y * sin(i/(double)particle_num*twoPI);
+}
+
+
+// kernel to compute initial positions in a uniform grid, points are distributed as a square for now
+__global__ void k_part_init_uniform_grid(double* Dev_particles_pos, int particle_num,
+		double square_center_x, double square_center_y, double square_radius_x, double square_radius_y) {
+	int i = (blockDim.x * blockIdx.x + threadIdx.x);  // (thread_num_max * block_num + thread_num) - gives position
+
+	// return if position is larger than particle size
+	if (i >= particle_num)
+		return;
+
+	int length = ceil(sqrt((double)particle_num));  // distribute all points with equal points in x- and y-direction
+
+	Dev_particles_pos[2*i]   = square_center_x + square_radius_x * (-1 + 2*(i % length)/(double)length);
+	Dev_particles_pos[2*i+1] = square_center_y + square_radius_y * (-1 + 2*(i / length)/(double)length);
 }

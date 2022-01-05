@@ -167,7 +167,7 @@ __device__ void device_hermite_interpolate_grad_2D(double *H, double *x, double 
 
 
 //diffeomorphisms provide warped interpolations with a jump at the boundaries
-__device__ void  device_diffeo_interpolate_2D(double *Hx, double *Hy, double x, double y, double *x2,  double *y2, TCudaGrid2D Grid)
+__device__ void device_diffeo_interpolate_2D(double *Hx, double *Hy, double x, double y, double *x2,  double *y2, TCudaGrid2D Grid)
 {
 	// build up all needed positioning
 	// cell index of footpoints
@@ -179,14 +179,14 @@ __device__ void  device_diffeo_interpolate_2D(double *Hx, double *Hy, double x, 
 	double dy = y/Grid.hy - Iy0;
 
 	//warping, compute projection needed to map onto LX/LY domain, add 1 for negative values to accommodate sign
-	int Ix0W = Ix0/Grid.NX - (Ix0 < 0); int Ix1W = Ix1/Grid.NX - (Ix1 < 0);
-	int Iy0W = Iy0/Grid.NY - (Iy0 < 0); int Iy1W = Iy1/Grid.NY - (Iy1 < 0);
+	int I_w[4] = {Ix0/Grid.NX - (Ix0 < 0), Iy0/Grid.NY - (Iy0 < 0), Ix1/Grid.NX - (Ix1 < 0), Iy1/Grid.NY - (Iy1 < 0)};
 
 	//jump on warping
-	double LX = Grid.NX*Grid.hx; double LY = Grid.NY*Grid.hy;
+	double2 L;
+	L.x = Grid.NX*Grid.hx; L.y = Grid.NY*Grid.hy;
 
 	// project back into domain
-	Ix0 -= Ix0W*Grid.NX; Iy0 -= Iy0W*Grid.NY; Ix1 -= Ix1W*Grid.NX; Iy1 -= Iy1W*Grid.NY;
+	Ix0 -= I_w[0]*Grid.NX; Iy0 -= I_w[1]*Grid.NY; Ix1 -= I_w[2]*Grid.NX; Iy1 -= I_w[3]*Grid.NY;
 
 	// I00, I10, I01, I11 in Vector to shorten function calls
 	int I[4] = {Iy0 * Grid.NX + Ix0, Iy0 * Grid.NX + Ix1, Iy1 * Grid.NX + Ix0, Iy1 * Grid.NX + Ix1};
@@ -202,15 +202,15 @@ __device__ void  device_diffeo_interpolate_2D(double *Hx, double *Hy, double x, 
 						bX[0]*bY[3], bX[1]*bY[3], bX[2]*bY[3], bX[3]*bY[3]
 					};
 
-	*x2 =  b[0][0]* (Hx[I[0]] + Ix0W*LX)      + b[0][1]* (Hx[I[1]] + Ix1W*LX)      + b[1][0]* (Hx[I[2]] + Ix0W*LX)      + b[1][1]* (Hx[I[3]] + Ix1W*LX) // Point interpolation
-	    + (b[0][2]*  Hx[1*Grid.N+I[0]]        + b[0][3]*  Hx[1*Grid.N+I[1]]        + b[1][2]*  Hx[1*Grid.N+I[2]]        + b[1][3]*  Hx[1*Grid.N+I[3]]) * (Grid.hx)  // dx
-	    + (b[2][0]*  Hx[2*Grid.N+I[0]]        + b[2][1]*  Hx[2*Grid.N+I[1]]        + b[3][0]*  Hx[2*Grid.N+I[2]]        + b[3][1]*  Hx[2*Grid.N+I[3]]) * (Grid.hy)  // dy
-	    + (b[2][2]*  Hx[3*Grid.N+I[0]]        + b[2][3]*  Hx[3*Grid.N+I[1]]        + b[3][2]*  Hx[3*Grid.N+I[2]]        + b[3][3]*  Hx[3*Grid.N+I[3]]) * (Grid.hx*Grid.hy);  // dx dy
+	*x2 =  b[0][0]* (Hx[I[0]] + I_w[0]*L.x) + b[0][1]* (Hx[I[1]] + I_w[2]*L.x) + b[1][0]* (Hx[I[2]] + I_w[0]*L.x) + b[1][1]* (Hx[I[3]] + I_w[2]*L.x) // Point interpolation
+	    + (b[0][2]*  Hx[1*Grid.N+I[0]]      + b[0][3]*  Hx[1*Grid.N+I[1]]      + b[1][2]*  Hx[1*Grid.N+I[2]]      + b[1][3]*  Hx[1*Grid.N+I[3]]) * (Grid.hx)  // dx
+	    + (b[2][0]*  Hx[2*Grid.N+I[0]]      + b[2][1]*  Hx[2*Grid.N+I[1]]      + b[3][0]*  Hx[2*Grid.N+I[2]]      + b[3][1]*  Hx[2*Grid.N+I[3]]) * (Grid.hy)  // dy
+	    + (b[2][2]*  Hx[3*Grid.N+I[0]]      + b[2][3]*  Hx[3*Grid.N+I[1]]      + b[3][2]*  Hx[3*Grid.N+I[2]]      + b[3][3]*  Hx[3*Grid.N+I[3]]) * (Grid.hx*Grid.hy);  // dx dy
 
-	*y2 =  b[0][0]* (Hy[I[0]] + Iy0W*LY)      + b[0][1]* (Hy[I[1]] + Iy0W*LY)      + b[1][0]* (Hy[I[2]] + Iy1W*LY)      + b[1][1]* (Hy[I[3]] + Iy1W*LY) // Point interpolation
-	    + (b[0][2]*  Hy[1*Grid.N+I[0]]        + b[0][3]*  Hy[1*Grid.N+I[1]]        + b[1][2]*  Hy[1*Grid.N+I[2]]        + b[1][3]*  Hy[1*Grid.N+I[3]]) * (Grid.hx)  // dx
-	    + (b[2][0]*  Hy[2*Grid.N+I[0]]        + b[2][1]*  Hy[2*Grid.N+I[1]]        + b[3][0]*  Hy[2*Grid.N+I[2]]        + b[3][1]*  Hy[2*Grid.N+I[3]]) * (Grid.hy)  // dy
-	    + (b[2][2]*  Hy[3*Grid.N+I[0]]        + b[2][3]*  Hy[3*Grid.N+I[1]]        + b[3][2]*  Hy[3*Grid.N+I[2]]        + b[3][3]*  Hy[3*Grid.N+I[3]]) * (Grid.hx*Grid.hy);  // dx dy
+	*y2 =  b[0][0]* (Hy[I[0]] + I_w[1]*L.y) + b[0][1]* (Hy[I[1]] + I_w[1]*L.y) + b[1][0]* (Hy[I[2]] + I_w[3]*L.y) + b[1][1]* (Hy[I[3]] + I_w[3]*L.y) // Point interpolation
+	    + (b[0][2]*  Hy[1*Grid.N+I[0]]      + b[0][3]*  Hy[1*Grid.N+I[1]]      + b[1][2]*  Hy[1*Grid.N+I[2]]      + b[1][3]*  Hy[1*Grid.N+I[3]]) * (Grid.hx)  // dx
+	    + (b[2][0]*  Hy[2*Grid.N+I[0]]      + b[2][1]*  Hy[2*Grid.N+I[1]]      + b[3][0]*  Hy[2*Grid.N+I[2]]      + b[3][1]*  Hy[2*Grid.N+I[3]]) * (Grid.hy)  // dy
+	    + (b[2][2]*  Hy[3*Grid.N+I[0]]      + b[2][3]*  Hy[3*Grid.N+I[1]]      + b[3][2]*  Hy[3*Grid.N+I[2]]      + b[3][3]*  Hy[3*Grid.N+I[3]]) * (Grid.hx*Grid.hy);  // dx dy
 }
 
 

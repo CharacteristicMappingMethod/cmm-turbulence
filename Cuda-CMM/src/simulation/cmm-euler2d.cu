@@ -223,10 +223,20 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	if (SettingsMain.getSampleOnGrid()) {
 		size_max_c = std::max(size_max_c, 2*Grid_sample.sizeNfft);
 		size_max_c = std::max(size_max_c, 2*Grid_sample.sizeNReal);  // is basically redundant, but lets take it anyways
+		if (SettingsMain.getForwardMap() and SettingsMain.getForwardParticles()) {
+			// we need to save and transfer new particle positions somehow, in addition to map
+			long int stacked_size = 2*(Grid_sample.sizeNReal+SettingsMain.getForwardParticlesNum()*sizeof(double));
+			size_max_c = std::max(size_max_c, stacked_size);
+		}
 	}
 	if (SettingsMain.getZoom()) {
 		size_max_c = std::max(size_max_c, 3*Grid_zoom.sizeNReal);
 //		if (SettingsMain.getZoomSavePsi()) size_max_c = std::max(size_max_c, 4*Grid_zoom.sizeNReal);
+		if (SettingsMain.getForwardMap() and SettingsMain.getForwardParticles()) {
+			// we need to save and transfer new particle positions somehow, in addition to map
+			long int stacked_size = 2*(Grid_zoom.sizeNReal+SettingsMain.getForwardParticlesNum()*sizeof(double));
+			size_max_c = std::max(size_max_c, stacked_size);
+		}
 	}
 	// for now three thrash variables are needed for cufft with hermites
 	cufftDoubleComplex *Dev_Temp_C1;
@@ -255,34 +265,19 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	cudaMalloc((void**)&Dev_ChiX, 4*Grid_coarse.sizeNReal);
 	cudaMalloc((void**)&Dev_ChiY, 4*Grid_coarse.sizeNReal);
 	mb_used_RAM_GPU += 8*Grid_coarse.sizeNReal / 1e6;
-	
-	// not ideal and a bit hackery, but my current initialization for the stack sucks
-	TCudaGrid2D Grid_forward(1+(NX_coarse-1)*SettingsMain.getForwardMap(), 1+(NY_coarse-1)*SettingsMain.getForwardMap(), bounds);
 
-	// initialize forward map
-	double *Dev_ChiX_f, *Dev_ChiY_f;
-	if (SettingsMain.getForwardMap()) {
-		cudaMalloc((void**)&Dev_ChiX_f, 4*Grid_forward.sizeNReal);
-		cudaMalloc((void**)&Dev_ChiY_f, 4*Grid_forward.sizeNReal);
-		mb_used_RAM_GPU += 8*Grid_forward.sizeNReal / 1e6;
-	}
 	
 
 	/*******************************************************************
 	*					       Chi_stack							   *
 	* 	We need to save the variable Chi to be able to make	the        *
-	* 	remapping or the zoom for forwards and backwards map		   *
+	* 	remapping or the zoom for backwards map		 				   *
 	* 																   *
 	*******************************************************************/
 	
 	// initialize backward map stack
 	MapStack Map_Stack(&Grid_coarse, cpu_map_num);
 	mb_used_RAM_GPU += 8*Grid_coarse.sizeNReal / 1e6;
-	mb_used_RAM_CPU += SettingsMain.getMemRamCpuRemaps();
-	
-	// initialize foward map stack dynamically to be super small if we are not computing it
-	MapStack Map_Stack_f(&Grid_forward, cpu_map_num);
-	mb_used_RAM_GPU += 8*Grid_forward.sizeNReal / 1e6;
 	mb_used_RAM_CPU += SettingsMain.getMemRamCpuRemaps();
 
 
@@ -367,10 +362,50 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	
 	
 	/*******************************************************************
+	 * 				    	Forward map settings
+	 ******************************************************************/
+
+	// not ideal and a bit hackery, but my current initialization for the stack sucks
+	TCudaGrid2D Grid_forward(1+(NX_coarse-1)*SettingsMain.getForwardMap(), 1+(NY_coarse-1)*SettingsMain.getForwardMap(), bounds);
+
+	// initialize forward map
+	double *Dev_ChiX_f, *Dev_ChiY_f;
+	if (SettingsMain.getForwardMap()) {
+		cudaMalloc((void**)&Dev_ChiX_f, 4*Grid_forward.sizeNReal);
+		cudaMalloc((void**)&Dev_ChiY_f, 4*Grid_forward.sizeNReal);
+		mb_used_RAM_GPU += 8*Grid_forward.sizeNReal / 1e6;
+	}
+
+	// initialize foward map stack dynamically to be super small if we are not computing it
+	MapStack Map_Stack_f(&Grid_forward, cpu_map_num);
+	mb_used_RAM_GPU += 8*Grid_forward.sizeNReal / 1e6;
+	mb_used_RAM_CPU += SettingsMain.getMemRamCpuRemaps();
+
+	// initialize forward particles position, will stay constant over time though so a dynamic approach could be chosen later too
+	// however, the particles should not take up too much memory, so I guess it's okay
+	int forward_particles_thread, forward_particles_block;  // cuda kernel settings, are constant
+	double *Host_forward_particles_pos ,*Dev_forward_particles_pos;  // position of particles
+	if (SettingsMain.getForwardMap() and SettingsMain.getForwardParticles()) {
+		// initialize all memory
+		forward_particles_thread =  256;  // threads for particles, seems good like that
+		forward_particles_block = ceil(SettingsMain.getForwardParticlesNum() / (double)forward_particles_thread);  // fit all particles
+		// cpu memory
+		Host_forward_particles_pos = new double[2*SettingsMain.getForwardParticlesNum()];
+		mb_used_RAM_CPU += 2*SettingsMain.getForwardParticlesNum()*sizeof(double) / 1e6;
+		// gpu memory
+		cudaMalloc((void**) &Dev_forward_particles_pos, 2*SettingsMain.getForwardParticlesNum()*sizeof(double));
+		mb_used_RAM_GPU += 4*SettingsMain.getForwardParticlesNum()*sizeof(double) / 1e6;
+
+		// initialize particle position with 1 as forward particle type for parameters
+		init_particles(Dev_forward_particles_pos, SettingsMain, forward_particles_thread, forward_particles_block, bounds, 1);
+	}
+
+
+	/*******************************************************************
 	*							 Particles							   *
 	*******************************************************************/
 	// all variables have to be defined outside
-	int Nb_particles, particle_thread, particle_block;
+	int particle_thread, particle_block;  // cuda kernel settings, are constant
 	double *Host_particles_pos ,*Dev_particles_pos;  // position of particles
 	double *Host_particles_vel ,*Dev_particles_vel;  // velocity of particles
 	int particles_fine_old; double particles_fine_max;
@@ -378,18 +413,19 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	// now set the variables if we have particles
 	if (SettingsMain.getParticles()) {
 		// initialize all memory
-		Nb_particles = SettingsMain.getParticlesNum();
 		particle_thread =  256;  // threads for particles, seems good like that
 		particle_block = ceil(SettingsMain.getParticlesNum() / (double)particle_thread);  // fit all particles
+		// cpu memory
 		Host_particles_pos = new double[2*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()];
 		Host_particles_vel = new double[2*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()];
+		// gpu memory
 		mb_used_RAM_CPU += 4*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()*sizeof(double) / 1e6;
 		cudaMalloc((void**) &Dev_particles_pos, 2*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()*sizeof(double));
 		cudaMalloc((void**) &Dev_particles_vel, 2*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()*sizeof(double));
 		mb_used_RAM_GPU += 4*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()*sizeof(double) / 1e6;
 
-		// initialize particle position
-		init_particles(Dev_particles_pos, SettingsMain, particle_thread, particle_block, bounds);
+		// initialize particle position with 0 as advected particle type for parameters
+		init_particles(Dev_particles_pos, SettingsMain, particle_thread, particle_block, bounds, 0);
 
 		// copy all starting positions onto the other tau values
 		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p+=1)
@@ -420,6 +456,11 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			}
 		}
 	}
+
+    cudaMemcpy(Host_forward_particles_pos, Dev_forward_particles_pos, 2*SettingsMain.getForwardParticlesNum()*sizeof(double), cudaMemcpyDeviceToHost);
+	writeAllRealToBinaryFile(2*SettingsMain.getForwardParticlesNum(), Host_forward_particles_pos, SettingsMain, "/Test_p_1");
+    cudaMemcpy(Host_particles_pos, Dev_particles_pos, 2*SettingsMain.getParticlesNum()*sizeof(double), cudaMemcpyDeviceToHost);
+	writeAllRealToBinaryFile(2*SettingsMain.getParticlesNum(), Host_particles_pos, SettingsMain, "/Test_p_2");
 
 
 	/*******************************************************************
@@ -685,6 +726,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	if (SettingsMain.getSampleOnGrid() && SettingsMain.getSampleSaveInitial()) {
 		sample_compute_and_write(Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Host_save, Dev_Temp_2,
 				cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
+				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 				bounds, Dev_W_H_initial, SettingsMain, "0",
 				Mesure_sample, count_mesure_sample);
@@ -707,8 +749,8 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 		// velocity initialization for inertial particles
 		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p++){
-			Particle_advect_inertia_init<<<particle_block, particle_thread>>>(Nb_particles, dt,
-					Dev_particles_pos + 2*Nb_particles*index_tau_p, Dev_particles_vel + 2*Nb_particles*index_tau_p,
+			Particle_advect_inertia_init<<<particle_block, particle_thread>>>(SettingsMain.getParticlesNum(), dt,
+					Dev_particles_pos + 2*SettingsMain.getParticlesNum()*index_tau_p, Dev_particles_vel + 2*SettingsMain.getParticlesNum()*index_tau_p,
 					Dev_Psi_real, Grid_psi);
 		}
 
@@ -722,7 +764,9 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		Zoom(SettingsMain, Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 				(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
-				Host_particles_pos, Dev_particles_pos, Host_save, "0");
+				Host_particles_pos, Dev_particles_pos,
+				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
+				Host_save, "0");
 	}
 
 
@@ -1011,6 +1055,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 				}
 				sample_compute_and_write(Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Host_save, Dev_Temp_2,
 						cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
+						Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 						Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 						bounds, Dev_W_H_initial, SettingsMain, to_str(t_vec[loop_ctr_l+1]),
 						Mesure_sample, count_mesure_sample);
@@ -1058,7 +1103,9 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 				Zoom(SettingsMain, Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
 						Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 						(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
-						Host_particles_pos, Dev_particles_pos, Host_save, to_str(t_vec[loop_ctr_l+1]));
+						Host_particles_pos, Dev_particles_pos,
+						Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
+						Host_save, to_str(t_vec[loop_ctr_l+1]));
 			}
 		}
 
@@ -1133,15 +1180,17 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		}
 
 		// initialize particle position
-		init_particles(Dev_particles_pos, SettingsMain, particle_thread, particle_block, bounds);
+		init_particles(Dev_particles_pos, SettingsMain, particle_thread, particle_block, bounds, 0);
 
 		// copy all starting positions onto the other tau values
 		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p+=1)
-			cudaMemcpy(&Dev_particles_pos[2*Nb_particles*index_tau_p], &Dev_particles_pos[0], 2*Nb_particles*sizeof(double), cudaMemcpyDeviceToDevice);
+			cudaMemcpy(&Dev_particles_pos[2*SettingsMain.getParticlesNum()*index_tau_p], &Dev_particles_pos[0],
+					2*SettingsMain.getParticlesNum()*sizeof(double), cudaMemcpyDeviceToDevice);
 
 		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p+=1){
-			Particle_advect_inertia_init<<<particle_block, particle_thread>>>(Nb_particles, dt, &Dev_particles_pos[2*Nb_particles*index_tau_p],
-					&Dev_particles_vel[2*Nb_particles*index_tau_p], Dev_Psi_real, Grid_psi);
+			Particle_advect_inertia_init<<<particle_block, particle_thread>>>(SettingsMain.getParticlesNum(), dt,
+					&Dev_particles_pos[2*SettingsMain.getParticlesNum()*index_tau_p],
+					&Dev_particles_vel[2*SettingsMain.getParticlesNum()*index_tau_p], Dev_Psi_real, Grid_psi);
 		}
 		// save inital position to check if they are qual
 		writeParticles(SettingsMain, "C0", Host_particles_pos, Dev_particles_pos);
@@ -1220,6 +1269,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	if (SettingsMain.getSampleOnGrid() && SettingsMain.getSampleSaveFinal()) {
 		sample_compute_and_write(Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Host_save, Dev_Temp_2,
 				cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
+				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 				bounds, Dev_W_H_initial, SettingsMain, "final",
 				Mesure_sample, count_mesure_sample);
@@ -1243,7 +1293,9 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		Zoom(SettingsMain, Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 				(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
-				Host_particles_pos, Dev_particles_pos, Host_save, "final");
+				Host_particles_pos, Dev_particles_pos,
+				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
+				Host_save, "final");
 	}
 	
 	// save map stack if wanted

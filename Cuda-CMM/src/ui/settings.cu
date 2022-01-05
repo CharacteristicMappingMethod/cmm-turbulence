@@ -27,7 +27,7 @@ void SettingsCMM::setPresets() {
 	 *  "gaussian_blobs"		-	gaussian blobs in order - version made by julius
 	 *  "shielded_vortex"		-	vortex core with ring of negative vorticity around it
 	 */
-	std::string initial_condition = "4_nodes";
+	std::string initial_condition = "gaussian_blobs";
 
 	// possibility to compute from discrete initial condition
 	bool initial_discrete = false;
@@ -44,9 +44,9 @@ void SettingsCMM::setPresets() {
 	int verbose = 3;
 
 	// set time properties
-	double final_time = 4;  // end of computation
+	double final_time = 1;  // end of computation
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
-	int steps_per_sec = 64;  // how many steps do we want per seconds?
+	int steps_per_sec = 128;  // how many steps do we want per seconds?
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
 	// dt will be set in cudaeuler, so that all changes can be applied there
 	double snapshots_per_sec = -1;  // how many times do we want to save data per sec, set <= 0 to disable
@@ -64,13 +64,14 @@ void SettingsCMM::setPresets() {
 	 * Backwards map: "Map", "Map_b", "Chi", "Chi_b"
 	 * Backwards map Hermite: "Map_H", "Chi_H" - only for save_var
 	 *
-	 * Laplacian of vorticity: "Laplacian" - only for sample_save_var
+	 * Laplacian of vorticity: "Laplacian_W" - only for sample_save_var - is stream function?
+	 * Gradient of vorticity: "Grad_W" - only for sample_save_var
+	 *
 	 * Passive scalar: "Scalar", "Theta" - not for save_var
 	 * Particles: "Particles", "P" - only for zoom_save_var and with particles
 	 *
 	 * Forward map: "Map_f", "Chi_f"
 	 * Forwards map Hermite: "Map_f_H", "Chi_f_H" - only for save_var
-	 * Forward particles: "Particles_f", "P_f" - not for save_var and with scalar
 	 */
 	std::string save_var = "W-U";  // string containing all wanted variables, works for W, Psi, U and Chi
 
@@ -146,10 +147,10 @@ void SettingsCMM::setPresets() {
 	bool zoom = false;  // en- or disable zoom
 	int grid_zoom = 1024;  // we can set our own gridsize for the zoom
 	// position settings
-	double zoom_center_x = twoPI * 0.75;
-	double zoom_center_y = twoPI * 0.75;
-	double zoom_width_x = twoPI * 1e-1;  // twoPI taken as LX, width of the zoom window
-	double zoom_width_y = twoPI * 1e-1;  // twoPI taken as LY, width of the zoom window
+	double zoom_center_x = twoPI * 0.5;
+	double zoom_center_y = twoPI * 0.6;
+	double zoom_width_x = twoPI * 2e-1;  // twoPI taken as LX, width of the zoom window
+	double zoom_width_y = twoPI * 2e-1;  // twoPI taken as LY, width of the zoom window
 	int zoom_repetitions = 4;  // how many repetitive zooms with decreasing windows?
 	double zoom_repetitions_factor = 0.5;  // how much do we want to decrease the window each time
 	// saving settings
@@ -165,6 +166,14 @@ void SettingsCMM::setPresets() {
 	 */
 	bool forward_map = true;  // en- or disable computing of forward map
 
+	bool forward_particles = true;  // en- or disable computing of forward particles
+	int forward_particles_num = (int)1e4;  // number of particles
+	std::string forward_particles_init_name = "circular_ring";  // same conditions as particles
+	unsigned long long forward_particles_seed = 0ULL;
+	double forward_particles_center_x = PI;  // frame center position, middle of particle domain
+	double forward_particles_center_y = PI;  // frame center position, middle of particle domain
+	double forward_particles_width_x = PI/2.0;  // frame width, variance for normal distribution
+	double forward_particles_width_y = PI/2.0;  // frame width, variance for normal distribution
 
 
 	/*
@@ -181,6 +190,7 @@ void SettingsCMM::setPresets() {
 	 *  "uniform"					-	uniformly distributed in particular frame
 	 *  "normal", "gaussian"		-	normal / gaussian distributed around center with specific variance
 	 *  "circular_ring"				-   circular ring around specific center with particles_width as radius
+	 *  "uniform_grid"				-   uniform grid with equal amount of points in x- and y-direction in particular frame
 	 */
 	std::string particles_init_name = "circular_ring";
 
@@ -274,6 +284,14 @@ void SettingsCMM::setPresets() {
 	setZoomSaveVar(zoom_save_var);
 
 	setForwardMap(forward_map);
+	setForwardParticles(forward_particles);
+	setForwardParticlesNum(forward_particles_num);
+	setForwardParticlesInitName(forward_particles_init_name);
+	setForwardParticlesSeed(forward_particles_seed);
+	setForwardParticlesCenterX(forward_particles_center_x);
+	setForwardParticlesCenterY(forward_particles_center_y);
+	setForwardParticlesWidthX(forward_particles_width_x);
+	setForwardParticlesWidthY(forward_particles_width_y);
 
 	setParticles(particles);
 	setParticlesInitName(particles_init_name);
@@ -393,6 +411,14 @@ void SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		else if (command == "zoom_save_var") setZoomSaveVar(value);
 
 		else if (command == "forward_map") setForwardMap(getBoolFromString(value));
+		else if (command == "forward_particles") setForwardParticles(getBoolFromString(value));
+		else if (command == "forward_particles_num") setForwardParticlesNum(std::stoi(value));
+		else if (command == "forward_particles_init_name") setForwardParticlesInitName(value);
+		else if (command == "forward_particles_seed") setForwardParticlesSeed(std::stoull(value));
+		else if (command == "forward_particles_center_x") setForwardParticlesCenterX(std::stod(value));
+		else if (command == "forward_particles_center_y") setForwardParticlesCenterY(std::stod(value));
+		else if (command == "forward_particles_width_x") setForwardParticlesWidthX(std::stod(value));
+		else if (command == "forward_particles_width_y") setForwardParticlesWidthY(std::stod(value));
 
 		else if (command == "particles") setParticles(getBoolFromString(value));
 		else if (command == "particles_init_name") setParticlesInitName(value);

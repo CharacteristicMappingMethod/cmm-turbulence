@@ -12,8 +12,11 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num);
 __device__ double d_init_scalar(double x, double y, int scalar_num);
 
 // initial condition for particles
-__host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain, int particle_thread, int particle_block, double* domain_bounds);
+__host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain,
+		int particle_thread, int particle_block, double* domain_bounds, int particle_type);
 __global__ void k_part_init_circle(double* Dev_particles_pos, int particle_num,
 		double circle_center_x, double circle_center_y, double circle_radius_x, double circle_radius_y);
+__global__ void k_part_init_uniform_grid(double* Dev_particles_pos, int particle_num,
+		double square_center_x, double square_center_y, double square_radius_x, double square_radius_y);
 
 #endif
