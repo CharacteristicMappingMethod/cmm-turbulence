@@ -457,11 +457,6 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		}
 	}
 
-    cudaMemcpy(Host_forward_particles_pos, Dev_forward_particles_pos, 2*SettingsMain.getForwardParticlesNum()*sizeof(double), cudaMemcpyDeviceToHost);
-	writeAllRealToBinaryFile(2*SettingsMain.getForwardParticlesNum(), Host_forward_particles_pos, SettingsMain, "/Test_p_1");
-    cudaMemcpy(Host_particles_pos, Dev_particles_pos, 2*SettingsMain.getParticlesNum()*sizeof(double), cudaMemcpyDeviceToHost);
-	writeAllRealToBinaryFile(2*SettingsMain.getParticlesNum(), Host_particles_pos, SettingsMain, "/Test_p_2");
-
 
 	/*******************************************************************
 	*				 ( Measure and file organization )				   *

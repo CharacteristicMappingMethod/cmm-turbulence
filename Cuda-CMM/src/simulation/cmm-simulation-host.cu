@@ -283,7 +283,7 @@ void grad_y(TCudaGrid2D Grid, double *Dev_W, double *Dev_out, cufftDoubleComplex
     cufftExecD2Z(cufft_plan_D2Z, Dev_W, Dev_Temp_C1);
     k_normalize_h<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Grid);
 
-    k_fft_dx_h<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, Grid);
+    k_fft_dy_h<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, Grid);
     cufftExecZ2D(cufft_plan_Z2D, Dev_Temp_C1, Dev_out);
 }
 

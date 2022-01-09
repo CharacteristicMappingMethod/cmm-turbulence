@@ -96,17 +96,6 @@ __global__ void Particle_advect(int Nb_particle, double dt, double *particles_po
 			part_pos_old[1] += dt * u[1];
 			break;
 		}
-		case 11:  // euler implicit
-		{
-			double u[2];
-			// k1 = f_x(x_n, t_n+1 ) = u_n+1 ( x_n )
-			device_hermite_interpolate_grad_2D(psi, part_pos_old, u, Grid, 1);
-
-			// x_n+1 = x_n + dt*u_n+1
-			part_pos_old[0] += dt * u[0];
-			part_pos_old[1] += dt * u[1];
-			break;
-		}
 		case 20:  // heun / modified euler / trapezoidal method
 		{
 			double k[4];

@@ -6,8 +6,6 @@
 // first order
 __device__ void euler_exp(double *psi, double *x_in, double *x_out, TCudaGrid2D Grid, double dt);
 __device__ void euler_exp_b(double *psi, double *d_L1, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order);
-__device__ void euler_imp(double *psi, double *d_L1, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order);
-__device__ void euler_imp_b(double *psi, double *x_in, double *x_out, TCudaGrid2D Grid, double dt);
 
 // second order
 __device__ void RK2_heun(double *psi, double *d_L1, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order);

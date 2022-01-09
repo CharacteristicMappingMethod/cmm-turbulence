@@ -215,7 +215,6 @@ __global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new
 	{
 		switch (time_integration_num) {
 			case 10: { euler_exp_b         (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
-			case 11: { euler_imp_b         (psi,              x_ep, x_f, Grid_psi, dt         ); break; }
 			// ABTwo
 			case 20: { adam_bashford_2_pc_b(psi,              x_ep, x_f, Grid_psi, dt         ); break; }
 			// ABTwo
@@ -241,7 +240,6 @@ __global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new
 
 		switch (time_integration_num) {
 			case 10: { euler_exp         (psi,              x_ep, x_f, Grid_psi, dt         ); break; }
-			case 11: { euler_imp         (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
 			// ABTwo
 			case 20: { adam_bashford_2_pc(psi,              x_ep, x_f, Grid_psi, dt         ); break; }
 			// ABTwo
@@ -460,7 +458,6 @@ __global__ void k_advect_using_stream_hermite(double *ChiX, double *ChiY, double
 		{
 			switch (time_integration_num) {
 				case 10: { euler_exp_b         (psi, d_L1,        x_ep, x_f, Grid_psi, dt, l_order); break; }
-				case 11: { euler_imp_b         (psi,              x_ep, x_f, Grid_psi, dt         ); break; }
 				// ABTwo
 				case 20: { adam_bashford_2_pc_b(psi,              x_ep, x_f, Grid_psi, dt         ); break; }
 				// ABTwo
@@ -486,7 +483,6 @@ __global__ void k_advect_using_stream_hermite(double *ChiX, double *ChiY, double
 
 			switch (time_integration_num) {
 				case 10: { euler_exp         (psi,              x_f, x_f, Grid_psi, dt         ); break; }
-				case 11: { euler_imp         (psi, d_L1,        x_f, x_f, Grid_psi, dt, l_order); break; }
 				// ABTwo
 				case 20: { adam_bashford_2_pc(psi,              x_f, x_f, Grid_psi, dt         ); break; }
 				// ABTwo

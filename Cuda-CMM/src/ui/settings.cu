@@ -27,7 +27,7 @@ void SettingsCMM::setPresets() {
 	 *  "gaussian_blobs"		-	gaussian blobs in order - version made by julius
 	 *  "shielded_vortex"		-	vortex core with ring of negative vorticity around it
 	 */
-	std::string initial_condition = "gaussian_blobs";
+	std::string initial_condition = "tanh_shear_layer";
 
 	// possibility to compute from discrete initial condition
 	bool initial_discrete = false;
@@ -44,7 +44,7 @@ void SettingsCMM::setPresets() {
 	int verbose = 3;
 
 	// set time properties
-	double final_time = 1;  // end of computation
+	double final_time = 6;  // end of computation
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
 	int steps_per_sec = 128;  // how many steps do we want per seconds?
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
@@ -92,7 +92,7 @@ void SettingsCMM::setPresets() {
 	// set specific settings
 	/*
 	 * Time integration
-	 * First order: "EulerExp", "EulerImp"
+	 * First order: "EulerExp"
 	 * Second order: "AB2", "RK2"
 	 * Third order: "RK3", "RK3Mod"
 	 * Fourth order: "RK4", "RK4Mod"
@@ -134,7 +134,7 @@ void SettingsCMM::setPresets() {
 	 *  "gaussian"					-	normal distribution / gaussian blob
 	 *  "circular_ring"				-   circular ring around center
 	 */
-	std::string scalar_name = "circular_ring";
+	std::string scalar_name = "rectangle";
 	// NOT IMPLEMENTED YET - possibility to compute from discrete initial scalar condition
 	bool scalar_discrete = false;
 	int scalar_discrete_grid = 2048;  // variable gridsize for discrete initial scalar grid
@@ -164,7 +164,7 @@ void SettingsCMM::setPresets() {
 	/*
 	 * Forward map settings to compute forward map for scalar particles,
 	 */
-	bool forward_map = true;  // en- or disable computing of forward map
+	bool forward_map = false;  // en- or disable computing of forward map
 
 	bool forward_particles = true;  // en- or disable computing of forward particles
 	int forward_particles_num = (int)1e4;  // number of particles
@@ -182,7 +182,7 @@ void SettingsCMM::setPresets() {
 	 *  - control saving intervals of particle positions
 	 *  - save some particles at every position for detailed analysis
 	 */
-	bool particles = true;  // en- or disable particles
+	bool particles = false;  // en- or disable particles
 	int particles_num = (int)1e4;  // number of particles
 
 	/*

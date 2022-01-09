@@ -29,25 +29,6 @@ __device__ void euler_exp_b(double *psi, double *d_L1, double *x_in, double *x_o
 	x_out[1] = x_in[1] - dt * k[1];
 }
 
-// first order euler implicit - no lagr int for backwards but for forwards
-__device__ void euler_imp(double *psi, double *d_L1, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
-	double u[8]; // velocity placeholders, set after largest l_order
-	device_hermite_interpolate_grad_2D(psi, x_in, u, Grid, l_order);
-	double k[2] = {d_L1[0] * u[0], d_L1[0] * u[1]};
-	for (int i_l = 1; i_l < l_order; i_l++) {
-		k[0] += d_L1[i_l] * u[i_l*2  ];
-		k[1] += d_L1[i_l] * u[i_l*2+1];
-	}
-	x_out[0] = x_in[0] + dt * k[0];
-	x_out[1] = x_in[1] + dt * k[1];
-}
-__device__ void euler_imp_b(double *psi, double *x_in, double *x_out, TCudaGrid2D Grid, double dt) {
-	double u[2]; // velocity placeholders, set after largest l_order
-	device_hermite_interpolate_grad_2D(psi, x_in, u, Grid, 1);
-	x_out[0] = x_in[0] - dt * u[0];
-	x_out[1] = x_in[1] - dt * u[1];
-}
-
 
 // second order Heun
 __device__ void RK2_heun(double *psi, double *d_L1, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
@@ -243,20 +224,20 @@ __device__ void RK4_classical(double *psi, double *d_L1, double *d_L12, double *
 	k[4] = x_in[0] + dt*k[2]/2.0; k[5] = x_in[1] + dt*k[3]/2.0;
 	device_hermite_interpolate_grad_2D(psi, k+4, u, Grid, l_order);
 	//k3 = u_tilde(x + k2 dt/2, t_n + dt/2) = 2.1875*u_n - 2.1875*u_n-1 + 1.3125*u_n-2 - 0.3125*u_n-3
-	k[4] = d_L1[0] * u[0]; k[5] = d_L1[0] * u[1];
+	k[4] = d_L12[0] * u[0]; k[5] = d_L12[0] * u[1];
 	for (int i_l = 1; i_l < l_order; i_l++) {
-		k[4] += d_L1[i_l] * u[i_l*2  ];
-		k[5] += d_L1[i_l] * u[i_l*2+1];
+		k[4] += d_L12[i_l] * u[i_l*2  ];
+		k[5] += d_L12[i_l] * u[i_l*2+1];
 	};
 
 	//compute u_tilde(x + dt*k3, t_n+1)
 	k[6] = x_in[0] + dt*k[4]; k[7] = x_in[1] + dt*k[5];
 	device_hermite_interpolate_grad_2D(psi, k+6, u, Grid, l_order);
 	// k4 = u_tilde(x + k3 dt, t_n+1) = 3*u_n - 3*u_n-1 + 1*u_n-2
-	k[6] = d_L1[0] * u[0]; k[7] = d_L1[0] * u[1];
+	k[6] = d_L12[0] * u[0]; k[7] = d_L12[0] * u[1];
 	for (int i_l = 1; i_l < l_order; i_l++) {
-		k[6] += d_L1[i_l] * u[i_l*2  ];
-		k[7] += d_L1[i_l] * u[i_l*2+1];
+		k[6] += d_L12[i_l] * u[i_l*2  ];
+		k[7] += d_L12[i_l] * u[i_l*2+1];
 	};
 
 	// build all RK-steps together
@@ -281,20 +262,20 @@ __device__ void RK4_classical_b(double *psi, double *d_L1, double *d_L12, double
 	k[2] = x_in[0] - dt*k[0]/2.0; k[3] = x_in[1] - dt*k[1]/2.0;
 	device_hermite_interpolate_grad_2D(psi, k+2, u, Grid, l_order);
 	//k2 = u_tilde(x - k1 dt/2, t_n+1 - dt/2) = 2.1875*u_n - 2.1875*u_n-1 + 1.3125*u_n-2 - 0.3125*u_n-3
-	k[2] = d_L1[0] * u[0]; k[3] = d_L1[0] * u[1];
+	k[2] = d_L12[0] * u[0]; k[3] = d_L12[0] * u[1];
 	for (int i_l = 1; i_l < l_order; i_l++) {
-		k[2] += d_L1[i_l] * u[i_l*2  ];
-		k[3] += d_L1[i_l] * u[i_l*2+1];
+		k[2] += d_L12[i_l] * u[i_l*2  ];
+		k[3] += d_L12[i_l] * u[i_l*2+1];
 	};
 
 	// compute u_tilde(x - dt*k2/2, t_n+1/2)
 	k[4] = x_in[0] - dt*k[2]/2.0; k[5] = x_in[1] - dt*k[3]/2.0;
 	device_hermite_interpolate_grad_2D(psi, k+4, u, Grid, l_order);
 	//k3 = u_tilde(x - k2 dt/2, t_n+1 - dt/2) = 2.1875*u_n - 2.1875*u_n-1 + 1.3125*u_n-2 - 0.3125*u_n-3
-	k[4] = d_L1[0] * u[0]; k[5] = d_L1[0] * u[1];
+	k[4] = d_L12[0] * u[0]; k[5] = d_L12[0] * u[1];
 	for (int i_l = 1; i_l < l_order; i_l++) {
-		k[4] += d_L1[i_l] * u[i_l*2  ];
-		k[5] += d_L1[i_l] * u[i_l*2+1];
+		k[4] += d_L12[i_l] * u[i_l*2  ];
+		k[5] += d_L12[i_l] * u[i_l*2+1];
 	};
 
 	//compute u_tilde(x - dt*k3, t_n)
@@ -323,20 +304,20 @@ __device__ void RK3_optimized(double *psi, double *x_in, double *x_out, TCudaGri
 	device_hermite_interpolate_grad_2D(psi, x_in, k, Grid, 1);
 	// k1 = u_tilde(x,t_n) = u
 
-	// compute u_tilde(X - dt*k1, t_n)
+	// compute u_tilde(X - dt*k1, t_n-1)
 	k[2] = x_in[0] - dt*k[0]; k[3] = x_in[1] - dt*k[1];
-	device_hermite_interpolate_grad_2D(psi + 2*Grid.N, k+2, k+2, Grid, 1);
-	// k2 = u_tilde(X - dt*k1, t_n) = u_n
+	device_hermite_interpolate_grad_2D(psi + 4*Grid.N, k+2, k+2, Grid, 1);
+	// k2 = u_tilde(X - dt*k1, t_n-1) = u_n-1
 
-	// compute u_tilde(X - 4*dt*k1 + 2*dt*k2, t_n-1)
+	// compute u_tilde(X - dt* (8*k1 + 2*k2) /5, t_n-2)
 	k[4] = x_in[0] - dt*(8*k[0] + 2*k[2])/5.0; k[5] = x_in[1] - dt*(8*k[1] + 2*k[3])/5.0;
-	device_hermite_interpolate_grad_2D(psi + 4*Grid.N, k+4, k+4, Grid, 1);
-	// k3 = u_tilde(X - 4*dt*k1 + 2*dt*k2, t_n-1) = u_n-1
+	device_hermite_interpolate_grad_2D(psi + 8*Grid.N, k+4, k+4, Grid, 1);
+	// k3 = u_tilde(X - dt* (8*k1 + 2*k2) /5, t_n-2) = u_n-2
 
 	// build all RK-steps together
-	// x = x_n - dt (5*k1 + 8*k2 - k3)/12
-	x_out[0] = x_in[0] - dt * (23*k[0] - 16*k[2] + 5*k[4])/12.0;
-	x_out[1] = x_in[1] - dt * (23*k[1] - 16*k[3] + 5*k[5])/12.0;
+	// x = x_n + dt (23*k1 - 16*k2 + 5*k3)/12
+	x_out[0] = x_in[0] + dt * (23*k[0] - 16*k[2] + 5*k[4])/12.0;
+	x_out[1] = x_in[1] + dt * (23*k[1] - 16*k[3] + 5*k[5])/12.0;
 }
 
 
@@ -408,10 +389,10 @@ __device__ void RK4_optimized(double *psi, double *d_L1, double *d_L12, double *
 	k[4] = x_in[0] - dt*(3*k[0] + k[2])/8.0; k[5] = x_in[1] - dt*(3*k[1] + k[3])/8.0;
 	device_hermite_interpolate_grad_2D(psi, k+4, u, Grid, l_order);
 	//k3 = u_tilde(X - 3/8 dt*k1 - 1/8 dt*k2, t_n+1/2) = 2.1875*u_n - 2.1875*u_n-1 + 1.3125*u_n-2 - 0.3125*u_n-3
-	k[4] = d_L1[0] * u[0]; k[5] = d_L1[0] * u[1];
+	k[4] = d_L12[0] * u[0]; k[5] = d_L12[0] * u[1];
 	for (int i_l = 1; i_l < l_order; i_l++) {
-		k[4] += d_L1[i_l] * u[i_l*2  ];
-		k[5] += d_L1[i_l] * u[i_l*2+1];
+		k[4] += d_L12[i_l] * u[i_l*2  ];
+		k[5] += d_L12[i_l] * u[i_l*2+1];
 	};
 
 	//compute u_tilde(X + 1/3 dt*k2 - 4/3 dt*k3, t_n)
@@ -456,10 +437,10 @@ __device__ void RK4_optimized_b(double *psi, double *d_L1, double *d_L12, double
 	k[4] = x_in[0] - dt*(3*k[0] + k[2])/8.0; k[5] = x_in[1] - dt*(3*k[1] + k[3])/8.0;
 	device_hermite_interpolate_grad_2D(psi, k+4, u, Grid, l_order);
 	//k3 = u_tilde(X - 3/8 dt*k1 - 1/8 dt*k2, t_n+1/2) = 2.1875*u_n - 2.1875*u_n-1 + 1.3125*u_n-2 - 0.3125*u_n-3
-	k[4] = d_L1[0] * u[0]; k[5] = d_L1[0] * u[1];
+	k[4] = d_L12[0] * u[0]; k[5] = d_L12[0] * u[1];
 	for (int i_l = 1; i_l < l_order; i_l++) {
-		k[4] += d_L1[i_l] * u[i_l*2  ];
-		k[5] += d_L1[i_l] * u[i_l*2+1];
+		k[4] += d_L12[i_l] * u[i_l*2  ];
+		k[5] += d_L12[i_l] * u[i_l*2+1];
 	};
 
 	//compute u_tilde(X + 1/3 dt*k2 - 4/3 dt*k3, t_n)

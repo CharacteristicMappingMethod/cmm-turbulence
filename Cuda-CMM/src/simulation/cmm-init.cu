@@ -93,18 +93,19 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 			return (1 + delta2*cos(2*x)) * exp(-delta*(y-PI)*(y-PI));
 			break;
 		}
-		case 5:  // tanh_shear_layer with more advanced properties by julius and assuming a tanh velocity profile
+		case 5:  // tanh_shear_layer with more parameters by julius and using a tanh velocity profile
 		{
-			double shear_delta = 20;  // thickness of shear layer
+			double fac = 5;  // factor to increase strength
+			double shear_delta = 10;  // thickness of shear layer
 			double inst_strength = 0.01;  // strength of instability
-			double inst_freq = 4;  // frequency of instability
+			double inst_freq = 4;  // frequency of instability / how many swirls
 
 			// (1 + sin-perturbation) * sech^2(thickness*x)
-			return (1 + inst_strength * cos(inst_freq*x))  * 4 / (exp(-shear_delta*(y-PI))+exp(shear_delta*(y-PI)))
-															   / (exp(-shear_delta*(y-PI))+exp(shear_delta*(y-PI)));
+			return fac * (1 + inst_strength * sin(inst_freq*x))  * 4 / (exp(-shear_delta*(y-PI))+exp(shear_delta*(y-PI)))
+															         / (exp(-shear_delta*(y-PI))+exp(shear_delta*(y-PI)));
 			break;
 		}
-		case 6:  // turbulence_gaussienne
+		case 6:  // turbulence_gaussienne by thibault, similar to clercx2000 / keetels2008
 		{
 			x -= floor(x/twoPI)*twoPI;
 			y -= floor(y/twoPI)*twoPI;
@@ -146,16 +147,16 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 			return ret - 0.008857380480028442;
 			break;
 		}
-		case 7:  // ordered gaussienne blobs by julius
+		case 7:  // ordered gaussienne blobs by julius, similar to clercx2000 / keetels2008
 		{
 			x -= floor(x/twoPI)*twoPI;
 			y -= floor(y/twoPI)*twoPI;
 
-			const int NB_gaus = 4;  // number of negative and positive blobs in each row
-			double sigma = 0.4;  // scaling in width
-			double fac = 1e1;  // strength scaling
-			double rand_offset = 1e-1;  // maximum random offset of blobs
-			int border = 5;  // increase parallel domain to include values of blobs from neighbouring domains
+			const int NB_gaus = 5;  // number of negative and positive blobs in each row
+			double sigma = twoPI*0.025;  // scaling in width
+			double fac = 1e0;  // strength scaling
+			double rand_offset = twoPI*0.0125;  // maximum random offset of blobs
+			int border = 2;  // increase parallel domain to include values of blobs from neighbouring domains
 
 			int dir = 1;  // a bit hackery, but it works
 			double ret = 0;  // initialize value
@@ -223,10 +224,12 @@ __device__ double d_init_scalar(double x, double y, int scalar_num) {
 	switch (scalar_num) {
 		case 0:  // rectangle
 		{
+			x -= floor(x/twoPI)*twoPI;
+			y -= floor(y/twoPI)*twoPI;
 			double center_x = PI;  // frame center position
-			double center_y = PI;  // frame center position
-			double width_x = PI/2.0;  // frame width
-			double width_y = PI/2.0;  // frame width
+			double center_y = PI/2.0;  // frame center position
+			double width_x = 2*PI;  // frame width
+			double width_y = PI;  // frame width
 
 			// check if position is inside of rectangle
 			if (    x > center_x - width_x/2.0 and x < center_x + width_x/2.0
@@ -306,7 +309,7 @@ __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain
 	// set seed
 	curandSetPseudoRandomGeneratorSeed(prng, seed);
 
-	switch (SettingsMain.getParticlesInitNum()) {
+	switch (init_num) {
 		case 0:  // uniformly distributed in rectangle
 		{
 			// create initial positions from random distribution

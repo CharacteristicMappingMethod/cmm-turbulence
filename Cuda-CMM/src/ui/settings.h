@@ -207,7 +207,6 @@ public:
 	void setTimeIntegration(std::string timeIntegration) {
 		time_integration = timeIntegration;
 		if (timeIntegration == "EulerExp") { time_integration_num = 10; if (getLagrangeOrder() < 1) lagrange_order = 1; }
-		else if (timeIntegration == "EulerImp") { time_integration_num = 11; if (getLagrangeOrder() < 1) lagrange_order = 1; }
 		else if (timeIntegration == "RK2") { time_integration_num = 21; if (getLagrangeOrder() < 2) lagrange_order = 2; }
 		else if (timeIntegration == "AB2") { time_integration_num = 20; if (getLagrangeOrder() < 2) lagrange_order = 2; }
 		else if (timeIntegration == "RK3") { time_integration_num = 30; if (getLagrangeOrder() < 3) lagrange_order = 3; }
