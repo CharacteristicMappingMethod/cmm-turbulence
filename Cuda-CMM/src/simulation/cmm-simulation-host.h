@@ -58,7 +58,7 @@ void grad_y(TCudaGrid2D Grid, double *Dev_W, double *Dev_out, cufftDoubleComplex
 void compute_conservation_targets(TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
 		double *Host_save, double *Dev_Psi, double *Dev_W_coarse, double *Dev_W_H_fine,
 		cufftHandle cufft_plan_coarse_D2Z, cufftHandle cufft_plan_coarse_Z2D, cufftHandle cufftPlan_fine_D2Z, cufftHandle cufftPlan_fine_Z2D,
-		cufftDoubleComplex *Dev_Temp_C1, double *Mesure, double *Mesure_fine, int count_mesure);
+		cufftDoubleComplex *Dev_Temp_C1, double *mesure, int count_mesure);
 
 // Sample on a specific grid and save everything
 void sample_compute_and_write(MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D Grid_sample, TCudaGrid2D Grid_discrete,
@@ -67,7 +67,7 @@ void sample_compute_and_write(MapStack Map_Stack, MapStack Map_Stack_f, TCudaGri
 		double *Host_forward_particles_pos, double *Dev_forward_particles_pos, int forward_particles_block, int forward_particles_thread,
 		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f,
 		double *bounds, double *W_initial_discrete, SettingsCMM SettingsMain, std::string i_num,
-		double *Mesure_sample, int count_mesure);
+		double *mesure_sample, int count_mesure);
 
 // sample vorticity with mapstack at arbitrary frame
 void Zoom(SettingsCMM SettingsMain, MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D Grid_zoom, TCudaGrid2D Grid_psi, TCudaGrid2D Grid_discrete,

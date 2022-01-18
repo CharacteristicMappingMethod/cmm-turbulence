@@ -19,6 +19,10 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax
 	string folder_name_tdata = folder_name + "/Monitoring_data";
 	mkdir(folder_name_tdata.c_str(), 0777);
 
+	// create general subfolder for mesure data
+	folder_name_tdata = folder_name + "/Monitoring_data/Mesure/";
+	mkdir(folder_name_tdata.c_str(), 0777);
+
 	// create general subfolder for timesteps
 	folder_name_tdata = folder_name + "/Time_data";
 	mkdir(folder_name_tdata.c_str(), 0777);
@@ -30,8 +34,8 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax
 	}
 
 	// empty all monitoring data so that we can later flush every value
-	std::string monitoring_names[7] = {"/Error_incompressibility", "/Map_counter", "/Map_gaps",
-			"/Timesteps", "/Timing_Values", "/Mesure", "/Mesure_fine",
+	std::string monitoring_names[10] = {"/Error_incompressibility", "/Map_counter", "/Map_gaps", "/Time_s", "/Time_c",
+			"/Mesure/Time_s", "/Mesure/Energy", "/Mesure/Enstrophy", "/Mesure/Palinstrophy", "/Mesure/Max_vorticity",
 	};
 	for ( const auto &i_mon_names : monitoring_names) {
 		std::string fileName = folder_name + "/Monitoring_data" + i_mon_names + ".data";
@@ -40,9 +44,13 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax
 	}
 	// empty out mesure file for sample
 	if (SettingsMain.getSampleOnGrid()) {
-		std::string fileName = folder_name + "/Monitoring_data/Mesure_" + to_str(SettingsMain.getGridSample()) + ".data";
-		ofstream file(fileName.c_str(), std::ios::out | std::ios::trunc);
-		file.close();
+		std::string monitoring_names[5] = {"/Time_s_", "/Energy_", "/Enstrophy_", "/Palinstrophy_", "/Max_vorticity_",
+		};
+		for ( const auto &i_mon_names : monitoring_names) {
+			std::string fileName = folder_name + "/Monitoring_data/Mesure" + i_mon_names + to_str(SettingsMain.getGridSample())  + ".data";
+			ofstream file(fileName.c_str(), std::ios::out | std::ios::trunc);
+			file.close();
+		}
 	}
 	if (SettingsMain.getForwardMap()) {
 		std::string fileName = folder_name + "/Monitoring_data/Error_incompressibility_forward.data";

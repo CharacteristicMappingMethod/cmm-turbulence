@@ -86,7 +86,7 @@ void SettingsCMM::setPresets() {
 	bool skip_remapping = false;
 
 	// set memory properties
-	int mem_RAM_CPU_remaps = 4096;  // mem_RAM_CPU_remaps in MB on the CPU
+	int mem_RAM_CPU_remaps = 9000;  // mem_RAM_CPU_remaps in MB on the CPU
 	bool save_map_stack = false;  // possibility to save the map stack to reuse for other computations to skip initial time
 
 	// set specific settings
@@ -116,7 +116,7 @@ void SettingsCMM::setPresets() {
 	int molly_stencil = 0;
 
 	// in addition to the upsampling, we want to lowpass in fourier space by cutting high frequencies
-	double freq_cut_psi = (double)(grid_coarse)/2.0;  // take into account, that frequencies are symmetric around N/2
+	double freq_cut_psi = (double)(grid_coarse)/4.0;  // take into account, that frequencies are symmetric around N/2
 
 	// possibility to sample values on a specified grid
 	bool sample_on_grid = true;

@@ -10,6 +10,7 @@
 
 // debugging, using printf
 #include "stdio.h"
+#include <math.h>
 
 // parallel reduce
 #include <thrust/transform_reduce.h>
@@ -327,19 +328,19 @@ void compute_conservation_targets(TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse
 		double *Host_save, double *Dev_Psi, double *Dev_W_coarse, double *Dev_W_H_fine,
 		cufftHandle cufft_plan_coarse_D2Z, cufftHandle cufft_plan_coarse_Z2D, cufftHandle cufftPlan_fine_D2Z, cufftHandle cufftPlan_fine_Z2D,
 		cufftDoubleComplex *Dev_Temp_C1,
-		double *Mesure, double *Mesure_fine, int count_mesure)
+		double *mesure, int count_mesure)
 {
-	// coarse grid
-	Compute_Energy(&Mesure[3*count_mesure], Dev_Psi, Grid_psi);
-	Compute_Enstrophy(&Mesure[1 + 3*count_mesure], Dev_W_coarse, Grid_coarse);
-	// fine grid, no energy because we do not have velocity on fine grid
-	// fine vorticity disabled, as this needs another Grid_fine.sizeNReal in temp buffer, need to resolve later
-//	Compute_Enstrophy(&Mesure_fine[1 + 3*count_mesure], Dev_W_H_fine, Grid_fine);
+	Compute_Energy(&mesure[4*count_mesure], Dev_Psi, Grid_psi);
+	Compute_Enstrophy(&mesure[4*count_mesure+1], Dev_W_coarse, Grid_coarse);
 
-	// palinstrophy, fine first because vorticity is saved in temporal array
-	// fine palinstrophy cannot be computed, as we have Dev_W_H_fine in Tev_Temp_C1, which is needed
-//	Compute_Palinstrophy(Grid_fine, &Mesure_fine[2 + 3*count_mesure], Dev_W_H_fine, Dev_Temp_C1, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D);
-	Compute_Palinstrophy(Grid_coarse, &Mesure[2 + 3*count_mesure], Dev_W_coarse, Dev_Temp_C1, cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D);
+	// palinstrophy
+	Compute_Palinstrophy(Grid_coarse, &mesure[4*count_mesure+2], Dev_W_coarse, Dev_Temp_C1, cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D);
+
+	// wmax
+	thrust::device_ptr<double> w_ptr = thrust::device_pointer_cast(Dev_W_coarse);
+	double w_max = thrust::reduce(w_ptr, w_ptr + Grid_coarse.N, 0.0, thrust::maximum<double>());
+	double w_min = thrust::reduce(w_ptr, w_ptr + Grid_coarse.N, 0.0, thrust::minimum<double>());
+	mesure[4*count_mesure+3] = std::max(w_max, -w_min);
 }
 
 
@@ -354,7 +355,7 @@ void sample_compute_and_write(MapStack Map_Stack, MapStack Map_Stack_f, TCudaGri
 		double *Host_forward_particles_pos, double *Dev_forward_particles_pos, int forward_particles_block, int forward_particles_thread,
 		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f,
 		double *bounds, double *W_initial_discrete, SettingsCMM SettingsMain, std::string i_num,
-		double *Mesure_sample, int count_mesure) {
+		double *mesure_sample, int count_mesure) {
 
 	// string containing the variables which should be saved
 	std::string save_var = SettingsMain.getSampleSaveVar();
@@ -423,8 +424,14 @@ void sample_compute_and_write(MapStack Map_Stack, MapStack Map_Stack_f, TCudaGri
 	}
 
 	// compute enstrophy and palinstrophy
-	Compute_Enstrophy(&Mesure_sample[1 + 3*count_mesure], Dev_sample, Grid_sample);
-	Compute_Palinstrophy(Grid_sample, &Mesure_sample[2 + 3*count_mesure], Dev_sample, Dev_Temp_C1, cufft_plan_sample_D2Z, cufft_plan_sample_Z2D);
+	Compute_Enstrophy(&mesure_sample[1 + 4*count_mesure], Dev_sample, Grid_sample);
+	Compute_Palinstrophy(Grid_sample, &mesure_sample[2 + 4*count_mesure], Dev_sample, Dev_Temp_C1, cufft_plan_sample_D2Z, cufft_plan_sample_Z2D);
+
+	// compute wmax
+	thrust::device_ptr<double> w_ptr = thrust::device_pointer_cast(Dev_sample);
+	double w_max = thrust::reduce(w_ptr, w_ptr + Grid_sample.N, 0.0, thrust::maximum<double>());
+	double w_min = thrust::reduce(w_ptr, w_ptr + Grid_sample.N, 0.0, thrust::minimum<double>());
+	mesure_sample[4*count_mesure+3] = std::max(w_max, -w_min);
 
 	// compute laplacian of vorticity
 	if (save_var.find("Laplacian_W") != std::string::npos) {
@@ -467,7 +474,7 @@ void sample_compute_and_write(MapStack Map_Stack, MapStack Map_Stack_f, TCudaGri
 	}
 
 	// compute energy
-	Compute_Energy(&Mesure_sample[3*count_mesure], Dev_sample+shift, Grid_sample);
+	Compute_Energy(&mesure_sample[4*count_mesure], Dev_sample+shift, Grid_sample);
 }
 
 

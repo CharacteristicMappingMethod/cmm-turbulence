@@ -467,16 +467,16 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	if (SettingsMain.getConvSnapshotsPerSec() > 0) {
 		mes_size += (int)(tf*SettingsMain.getConvSnapshotsPerSec());  // add all intermediate targets
 	}
-    double *Mesure, *Mesure_fine, *Mesure_sample;
-	cudaMallocManaged(&Mesure, (3*mes_size+1)*sizeof(double));  // + 1 because i dont know what it does with 0
-	cudaMallocManaged(&Mesure_fine, (3*mes_size+1)*sizeof(double));
+    double *mesure;
+    cudaMallocManaged(&mesure, (4*mes_size+1)*sizeof(double));  // + 1 because i dont know what it does with 0
 
+    double *mesure_sample;
 	int mes_sample_size = SettingsMain.getSampleSaveInitial() + SettingsMain.getSampleSaveFinal();  // initial and last step if computed
 	if (SettingsMain.getSampleSnapshotsPerSec() > 0) {
 		mes_sample_size += (int)(tf*SettingsMain.getSampleSnapshotsPerSec());  // add all intermediate targets
 	}
 	if (SettingsMain.getSampleOnGrid()) {
-		cudaMallocManaged(&Mesure_sample, (3*mes_sample_size+1)*sizeof(double));
+	    cudaMallocManaged(&mesure_sample, (4*mes_sample_size+1)*sizeof(double));  // + 1 because i dont know what it does with 0
 	}
 
     double* err_incomp_b = new double[iterMax];  // incompressibility error of backwards map
@@ -706,15 +706,20 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		if (SettingsMain.getConvInitFinal()) {
 			compute_conservation_targets(Grid_fine, Grid_coarse, Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
 					cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
-					Dev_Temp_C1, Mesure, Mesure_fine, count_mesure);
+					Dev_Temp_C1, mesure, count_mesure);
 			// directly append to file to prevent data loss in case simulation stops early
-			writeAppendToBinaryFile(3, Mesure + 3*count_mesure, SettingsMain, "/Monitoring_data/Mesure");
-			writeAppendToBinaryFile(3, Mesure_fine + 3*count_mesure, SettingsMain, "/Monitoring_data/Mesure_fine");
+			double time_zero = 0.0;
+			writeAppendToBinaryFile(1, &time_zero, SettingsMain, "/Monitoring_data/Mesure/Time_s");  // time vector for data
+			writeAppendToBinaryFile(1, mesure + 4*count_mesure   , SettingsMain, "/Monitoring_data/Mesure/Energy");
+			writeAppendToBinaryFile(1, mesure + 4*count_mesure +1, SettingsMain, "/Monitoring_data/Mesure/Enstrophy");
+			writeAppendToBinaryFile(1, mesure + 4*count_mesure +2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy");
+			writeAppendToBinaryFile(1, mesure + 4*count_mesure +3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity");
 			// output status to console
 			if (SettingsMain.getVerbose() >= 3) {
-				message = "Coarse Cons : Energ = " + to_str(Mesure[3*count_mesure], 8)
-						+    " \t Enstr = " + to_str(Mesure[3*count_mesure+1], 8)
-						+ " \t Palinstr = " + to_str(Mesure[3*count_mesure+2], 8);
+				message = "Coarse Cons : Energ = " + to_str(mesure[4*count_mesure], 8)
+						+    " \t Enstr = " + to_str(mesure[4*count_mesure+1], 8)
+						+ " \t Palinstr = " + to_str(mesure[4*count_mesure+2], 8)
+						+ " \t Wmax = " + to_str(mesure[4*count_mesure+3], 8);
 				std::cout<<message+"\n"; logger.push(message);
 			}
 			count_mesure++;
@@ -728,14 +733,20 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 				bounds, Dev_W_H_initial, SettingsMain, "0",
-				Mesure_sample, count_mesure_sample);
+				mesure_sample, count_mesure_sample);
 		// directly append to file to prevent data loss in case simulation stops early
-		writeAppendToBinaryFile(3, Mesure_sample + 3*count_mesure_sample, SettingsMain, "/Monitoring_data/Mesure_"+ to_str(SettingsMain.getGridSample()));
+		double time_zero = 0.0;
+		writeAppendToBinaryFile(1, &time_zero, SettingsMain, "/Monitoring_data/Mesure/Time_s_"+ to_str(SettingsMain.getGridSample()));  // time vector for data
+		writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample   , SettingsMain, "/Monitoring_data/Mesure/Energy_"+ to_str(SettingsMain.getGridSample()));
+		writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +1, SettingsMain, "/Monitoring_data/Mesure/Enstrophy_"+ to_str(SettingsMain.getGridSample()));
+		writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy_"+ to_str(SettingsMain.getGridSample()));
+		writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity_"+ to_str(SettingsMain.getGridSample()));
 		// output status to console
 		if (SettingsMain.getVerbose() >= 3) {
-			message = "Sample Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample], 8)
-					+    " \t Enstr = " + to_str(Mesure_sample[3*count_mesure_sample+1], 8)
-					+ " \t Palinstr = " + to_str(Mesure_sample[3*count_mesure_sample+2], 8);
+			message = "Sample Cons : Energ = " + to_str(mesure_sample[4*count_mesure_sample], 8)
+					+    " \t Enstr = " + to_str(mesure_sample[4*count_mesure_sample+1], 8)
+					+ " \t Palinstr = " + to_str(mesure_sample[4*count_mesure_sample+2], 8)
+					+ " \t Wmax = " + to_str(mesure_sample[4*count_mesure_sample+3], 8);
 			std::cout<<message+"\n"; logger.push(message);
 		}
 		count_mesure_sample++;
@@ -804,7 +815,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		auto step = std::chrono::high_resolution_clock::now();
 		double diff = std::chrono::duration_cast<std::chrono::microseconds>(step - begin).count()/1e6;
 		time_values[loop_ctr] = diff; // loop_ctr was already increased
-		writeAppendToBinaryFile(1, time_values + loop_ctr, SettingsMain, "/Monitoring_data/Timing_Values");
+		writeAppendToBinaryFile(1, time_values + loop_ctr, SettingsMain, "/Monitoring_data/Time_c");
 	}
 
 	/*******************************************************************
@@ -1029,22 +1040,21 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 	    if (SettingsMain.getConvSnapshotsPerSec() > 0) {
 			if( fmod(t_vec[loop_ctr_l+1]+dt*1e-5, 1.0/(double)SettingsMain.getConvSnapshotsPerSec()) < dt_vec[loop_ctr_l+1] ) {
-				// fine vorticity disabled, as this needs another Grid_fine.sizeNReal in temp buffer, need to resolve later
-//				apply_map_stack_to_W_part_All(Grid_fine, Map_Stack, Dev_ChiX, Dev_ChiY,
-//						(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
-
-				// compute conservation
 				compute_conservation_targets(Grid_fine, Grid_coarse, Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
 						cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
-						Dev_Temp_C1, Mesure, Mesure_fine, count_mesure);
+						Dev_Temp_C1, mesure, count_mesure);
 				// directly append to file to prevent data loss in case simulation stops early
-				writeAppendToBinaryFile(3, Mesure + 3*count_mesure, SettingsMain, "/Monitoring_data/Mesure");
-				writeAppendToBinaryFile(3, Mesure_fine + 3*count_mesure, SettingsMain, "/Monitoring_data/Mesure_fine");
+				writeAppendToBinaryFile(1, t_vec + loop_ctr_l+1, SettingsMain, "/Monitoring_data/Mesure/Time_s");  // time vector for data
+				writeAppendToBinaryFile(1, mesure + 4*count_mesure   , SettingsMain, "/Monitoring_data/Mesure/Energy");
+				writeAppendToBinaryFile(1, mesure + 4*count_mesure +1, SettingsMain, "/Monitoring_data/Mesure/Enstrophy");
+				writeAppendToBinaryFile(1, mesure + 4*count_mesure +2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy");
+				writeAppendToBinaryFile(1, mesure + 4*count_mesure +3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity");
 				// output status to console
 				if (SettingsMain.getVerbose() >= 3) {
-					message = "Coarse Cons : Energ = " + to_str(Mesure[3*count_mesure], 8)
-							+    " \t Enstr = " + to_str(Mesure[3*count_mesure+1], 8)
-							+ " \t Palinstr = " + to_str(Mesure[3*count_mesure+2], 8);
+					message = "Coarse Cons : Energ = " + to_str(mesure[4*count_mesure], 8)
+							+    " \t Enstr = " + to_str(mesure[4*count_mesure+1], 8)
+							+ " \t Palinstr = " + to_str(mesure[4*count_mesure+2], 8)
+							+ " \t Wmax = " + to_str(mesure[4*count_mesure+3], 8);
 					std::cout<<message+"\n"; logger.push(message);
 				}
 				count_mesure++;
@@ -1061,14 +1071,19 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 						Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 						Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 						bounds, Dev_W_H_initial, SettingsMain, to_str(t_vec[loop_ctr_l+1]),
-						Mesure_sample, count_mesure_sample);
+						mesure_sample, count_mesure_sample);
 				// directly append to file to prevent data loss in case simulation stops early
-				writeAppendToBinaryFile(3, Mesure_sample + 3*count_mesure_sample, SettingsMain, "/Monitoring_data/Mesure_"+ to_str(SettingsMain.getGridSample()));
+				writeAppendToBinaryFile(1, t_vec + loop_ctr_l+1, SettingsMain, "/Monitoring_data/Mesure/Time_s_"+ to_str(SettingsMain.getGridSample()));  // time vector for data
+				writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample   , SettingsMain, "/Monitoring_data/Mesure/Energy_"+ to_str(SettingsMain.getGridSample()));
+				writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +1, SettingsMain, "/Monitoring_data/Mesure/Enstrophy_"+ to_str(SettingsMain.getGridSample()));
+				writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy_"+ to_str(SettingsMain.getGridSample()));
+				writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity_"+ to_str(SettingsMain.getGridSample()));
 				// output status to console
 				if (SettingsMain.getVerbose() >= 3) {
-					message = "Sample Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample], 8)
-							+    " \t Enstr = " + to_str(Mesure_sample[3*count_mesure_sample+1], 8)
-							+ " \t Palinstr = " + to_str(Mesure_sample[3*count_mesure_sample+2], 8);
+					message = "Sample Cons : Energ = " + to_str(mesure_sample[4*count_mesure_sample], 8)
+							+    " \t Enstr = " + to_str(mesure_sample[4*count_mesure_sample+1], 8)
+							+ " \t Palinstr = " + to_str(mesure_sample[4*count_mesure_sample+2], 8)
+							+ " \t Wmax = " + to_str(mesure_sample[4*count_mesure_sample+3], 8);
 					std::cout<<message+"\n"; logger.push(message);
 				}
 				count_mesure_sample++;
@@ -1134,7 +1149,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 		// append monitoring values to files
 		// save timings
-		writeAppendToBinaryFile(1, t_vec + loop_ctr_l + 1, SettingsMain, "/Monitoring_data/Timesteps");
+		writeAppendToBinaryFile(1, t_vec + loop_ctr_l + 1, SettingsMain, "/Monitoring_data/Time_s");
 	    // save error for backwards incompressibility check, forwards incomp and invertibility
 		writeAppendToBinaryFile(1, err_incomp_b + loop_ctr-1, SettingsMain, "/Monitoring_data/Error_incompressibility");
 		if (SettingsMain.getForwardMap()) {
@@ -1163,7 +1178,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			std::cout<<message+"\n"; logger.push(message);
 		}
 
-		writeAppendToBinaryFile(1, time_values + loop_ctr, SettingsMain, "/Monitoring_data/Timing_Values");
+		writeAppendToBinaryFile(1, time_values + loop_ctr, SettingsMain, "/Monitoring_data/Time_c");
 	}
 	
 	// introduce part to console
@@ -1186,14 +1201,14 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		init_particles(Dev_particles_pos, SettingsMain, particle_thread, particle_block, bounds, 0);
 
 		// copy all starting positions onto the other tau values
-		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p+=1)
-			cudaMemcpy(&Dev_particles_pos[2*SettingsMain.getParticlesNum()*index_tau_p], &Dev_particles_pos[0],
+		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p++)
+			cudaMemcpy(Dev_particles_pos + 2*SettingsMain.getParticlesNum()*index_tau_p, Dev_particles_pos,
 					2*SettingsMain.getParticlesNum()*sizeof(double), cudaMemcpyDeviceToDevice);
 
 		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p+=1){
 			Particle_advect_inertia_init<<<particle_block, particle_thread>>>(SettingsMain.getParticlesNum(), dt,
-					&Dev_particles_pos[2*SettingsMain.getParticlesNum()*index_tau_p],
-					&Dev_particles_vel[2*SettingsMain.getParticlesNum()*index_tau_p], Dev_Psi_real, Grid_psi);
+					Dev_particles_pos + 2*SettingsMain.getParticlesNum()*index_tau_p,
+					Dev_particles_vel + 2*SettingsMain.getParticlesNum()*index_tau_p, Dev_Psi_real, Grid_psi);
 		}
 		// save inital position to check if they are qual
 		writeParticles(SettingsMain, "C0", Host_particles_pos, Dev_particles_pos);
@@ -1252,15 +1267,19 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		if (SettingsMain.getConvInitFinal()) {
 			compute_conservation_targets(Grid_fine, Grid_coarse, Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
 					cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
-					Dev_Temp_C1, Mesure, Mesure_fine, count_mesure);
+					Dev_Temp_C1, mesure, count_mesure);
 			// directly append to file to prevent data loss in case simulation stops early
-			writeAppendToBinaryFile(3, Mesure + 3*count_mesure, SettingsMain, "/Monitoring_data/Mesure");
-			writeAppendToBinaryFile(3, Mesure_fine + 3*count_mesure, SettingsMain, "/Monitoring_data/Mesure_fine");
+			writeAppendToBinaryFile(1, t_vec + loop_ctr + SettingsMain.getLagrangeOrder()-1, SettingsMain, "/Monitoring_data/Mesure/Time_s");  // time vector for data
+			writeAppendToBinaryFile(1, mesure + 4*count_mesure   , SettingsMain, "/Monitoring_data/Mesure/Energy");
+			writeAppendToBinaryFile(1, mesure + 4*count_mesure +1, SettingsMain, "/Monitoring_data/Mesure/Enstrophy");
+			writeAppendToBinaryFile(1, mesure + 4*count_mesure +2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy");
+			writeAppendToBinaryFile(1, mesure + 4*count_mesure +3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity");
 			// output status to console
 			if (SettingsMain.getVerbose() >= 3) {
-				message = "Coarse Cons : Energ = " + to_str(Mesure[3*count_mesure], 8)
-						+    " \t Enstr = " + to_str(Mesure[3*count_mesure+1], 8)
-						+ " \t Palinstr = " + to_str(Mesure[3*count_mesure+2], 8);
+				message = "Coarse Cons : Energ = " + to_str(mesure[4*count_mesure], 8)
+						+    " \t Enstr = " + to_str(mesure[4*count_mesure+1], 8)
+						+ " \t Palinstr = " + to_str(mesure[4*count_mesure+2], 8)
+						+ " \t Wmax = " + to_str(mesure[4*count_mesure+3], 8);
 				std::cout<<message+"\n"; logger.push(message);
 			}
 			count_mesure++;
@@ -1275,14 +1294,19 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 				bounds, Dev_W_H_initial, SettingsMain, "final",
-				Mesure_sample, count_mesure_sample);
+				mesure_sample, count_mesure_sample);
 		// directly append to file to prevent data loss in case simulation stops early
-		writeAppendToBinaryFile(3, Mesure_sample + 3*count_mesure_sample, SettingsMain, "/Monitoring_data/Mesure_"+ to_str(SettingsMain.getGridSample()));
+		writeAppendToBinaryFile(1, t_vec + loop_ctr + SettingsMain.getLagrangeOrder()-1, SettingsMain, "/Monitoring_data/Mesure/Time_s_"+ to_str(SettingsMain.getGridSample()));  // time vector for data
+		writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample   , SettingsMain, "/Monitoring_data/Mesure/Energy_"+ to_str(SettingsMain.getGridSample()));
+		writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +1, SettingsMain, "/Monitoring_data/Mesure/Enstrophy_"+ to_str(SettingsMain.getGridSample()));
+		writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy_"+ to_str(SettingsMain.getGridSample()));
+		writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity_"+ to_str(SettingsMain.getGridSample()));
 		// output status to console
 		if (SettingsMain.getVerbose() >= 3) {
-			message = "Sample Cons : Energ = " + to_str(Mesure_sample[3*count_mesure_sample], 8)
-					+    " \t Enstr = " + to_str(Mesure_sample[3*count_mesure_sample+1], 8)
-					+ " \t Palinstr = " + to_str(Mesure_sample[3*count_mesure_sample+2], 8);
+			message = "Sample Cons : Energ = " + to_str(mesure_sample[4*count_mesure_sample], 8)
+					+    " \t Enstr = " + to_str(mesure_sample[4*count_mesure_sample+1], 8)
+					+ " \t Palinstr = " + to_str(mesure_sample[4*count_mesure_sample+2], 8)
+					+ " \t Wmax = " + to_str(mesure_sample[4*count_mesure_sample+3], 8);
 			std::cout<<message+"\n"; logger.push(message);
 		}
 		count_mesure_sample++;
@@ -1360,10 +1384,9 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
         cudaFree(Dev_particles_vel);
 	}
 
-    cudaFree(Mesure);
-    cudaFree(Mesure_fine);
+    cudaFree(mesure);
 	if (SettingsMain.getSampleOnGrid()) {
-		cudaFree(Mesure_sample);
+		cudaFree(mesure_sample);
 	}
 
 	// delete monitoring values
@@ -1374,7 +1397,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		auto step = std::chrono::high_resolution_clock::now();
 		double diff = std::chrono::duration_cast<std::chrono::microseconds>(step - begin).count()/1e6;
 		time_values[loop_ctr+1] = diff;
-		writeAppendToBinaryFile(1, time_values + loop_ctr+1, SettingsMain, "/Monitoring_data/Timing_Values");
+		writeAppendToBinaryFile(1, time_values + loop_ctr+1, SettingsMain, "/Monitoring_data/Time_c");
     }
     // save timing to file
 //	writeAllRealToBinaryFile(loop_ctr+2, time_values, SettingsMain, "/Monitoring_data/Timing_Values");

@@ -95,10 +95,11 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 		}
 		case 5:  // tanh_shear_layer with more parameters by julius and using a tanh velocity profile
 		{
-			double fac = 5;  // factor to increase strength
-			double shear_delta = 10;  // thickness of shear layer
+			double fac = 5;  // Factor to set freestream velocity
+
 			double inst_strength = 0.01;  // strength of instability
 			double inst_freq = 4;  // frequency of instability / how many swirls
+			double shear_delta = 14 * inst_freq / twoPI;  // thickness of shear layer, physically connected, twoPi as domainsize
 
 			// (1 + sin-perturbation) * sech^2(thickness*x)
 			return fac * (1 + inst_strength * sin(inst_freq*x))  * 4 / (exp(-shear_delta*(y-PI))+exp(shear_delta*(y-PI)))
