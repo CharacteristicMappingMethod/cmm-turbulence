@@ -28,7 +28,7 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax
 	mkdir(folder_name_tdata.c_str(), 0777);
 
 	// create general subfolder for zoom
-	if (SettingsMain.getZoom()) {
+	if (SettingsMain.getSaveZoomNum() > 0) {
 		folder_name_tdata = folder_name + "/Zoom_data";
 		mkdir(folder_name_tdata.c_str(), 0777);
 	}
@@ -43,14 +43,24 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax
 		file.close();
 	}
 	// empty out mesure file for sample
-	if (SettingsMain.getSampleOnGrid()) {
+	if (SettingsMain.getSaveSampleNum() > 0) {
 		std::string monitoring_names[5] = {"/Time_s_", "/Energy_", "/Enstrophy_", "/Palinstrophy_", "/Max_vorticity_",
 		};
-		for ( const auto &i_mon_names : monitoring_names) {
-			std::string fileName = folder_name + "/Monitoring_data/Mesure" + i_mon_names + to_str(SettingsMain.getGridSample())  + ".data";
-			ofstream file(fileName.c_str(), std::ios::out | std::ios::trunc);
-			file.close();
+		for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
+			int grid_i = SettingsMain.getSaveSample()[i_save].grid;
+			std::string var_i = SettingsMain.getSaveSample()[i_save].var;
+			for ( const auto &i_mon_names : monitoring_names) {
+				std::string fileName = folder_name + "/Monitoring_data/Mesure" + i_mon_names + to_str(grid_i)  + ".data";
+				ofstream file(fileName.c_str(), std::ios::out | std::ios::trunc);
+				file.close();
+			}
+			if (var_i.find("Scalar") != std::string::npos or var_i.find("Theta") != std::string::npos) {
+				std::string fileName = folder_name + "/Monitoring_data/Mesure/Scalar_integral_" + to_str(grid_i)  + ".data";
+				ofstream file(fileName.c_str(), std::ios::out | std::ios::trunc);
+				file.close();
+			}
 		}
+
 	}
 	if (SettingsMain.getForwardMap()) {
 		std::string fileName = folder_name + "/Monitoring_data/Error_incompressibility_forward.data";
@@ -176,95 +186,113 @@ void writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid2D Grid
 
 // binary version
 #else
-	void writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
+	void writeTimeStep(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
+			TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
 			double *Host_save, double *Dev_W_coarse, double *Dev_W_fine, double *Dev_Psi_real,
 			double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f) {
 
-		// create new subfolder for current timestep
-		std::string sub_folder_name = "/Time_data/Time_" + i_num;
-		std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
-		struct stat st = {0};
-		if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
-
-		// execute binary save for all wanted variables
-		std::string save_var = SettingsMain.getSaveVar();
-
-		// Vorticity on coarse grid : W_coarse
-		if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos) {
-			cudaMemcpy(Host_save, Dev_W_coarse, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
-			writeAllRealToBinaryFile(Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Vorticity_W_coarse");
-		}
-		// Vorticity on fine grid : W_fine
-//		cudaMemcpy(Host_save, Dev_W_fine, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
-//	    writeAllRealToBinaryFile(Grid_fine.N, Host_save, SettingsMain, sub_folder_name + "/Vorticity_W_fine");
-
-		// Stream function on psi grid : Psi_psi
-		if (save_var.find("Stream") != std::string::npos or save_var.find("Psi") != std::string::npos) {
-			cudaMemcpy(Host_save, Dev_Psi_real, Grid_psi.sizeNReal, cudaMemcpyDeviceToHost);
-			writeAllRealToBinaryFile(Grid_psi.N, Host_save, SettingsMain, sub_folder_name + "/Stream_function_Psi_psi");
-		}
-		if (save_var.find("Stream_H") != std::string::npos or save_var.find("Psi_H") != std::string::npos) {
-			cudaMemcpy(Host_save, Dev_Psi_real, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToHost);
-			writeAllRealToBinaryFile(4*Grid_psi.N, Host_save, SettingsMain, sub_folder_name + "/Stream_function_Psi_H_psi");
+		// check if we want to save at this time, combine all variables if so
+		bool save_now = false; std::string save_var;
+		SaveComputational* save_comp = SettingsMain.getSaveComputational();
+		for (int i_save = 0; i_save < SettingsMain.getSaveComputationalNum(); ++i_save) {
+			// instants - distance to target is smaller than threshhold
+			if (save_comp[i_save].is_instant && t_now - save_comp[i_save].time_start + dt*1e-5 < dt_now && t_now - save_comp[i_save].time_start + dt*1e-5 >= 0) {
+				save_now = true; save_var = save_var + save_comp[i_save].var;
+			}
+			// intervals - modulo to steps with safety-increased targets is smaller than step
+			if (!save_comp[i_save].is_instant
+				&& fmod(t_now - save_comp[i_save].time_start + dt*1e-5, save_comp[i_save].time_step) < dt_now
+				&& t_now + dt*1e-5 >= save_comp[i_save].time_start
+				&& t_now - dt*1e-5 <= save_comp[i_save].time_end) {
+				save_now = true; save_var = save_var + save_comp[i_save].var;
+			}
 		}
 
-		// Velocity on psi grid : U_psi
-		if (save_var.find("Velocity") != std::string::npos or save_var.find("U") != std::string::npos) {
-			// Velocity in x direction
-			cudaMemcpy(Host_save, Dev_Psi_real+1*Grid_psi.N, Grid_psi.sizeNReal, cudaMemcpyDeviceToHost);
-			writeAllRealToBinaryFile(Grid_psi.N, Host_save, SettingsMain, sub_folder_name + "/Velocity_UX_psi");
-			// Velocity in y direction
-			cudaMemcpy(Host_save, Dev_Psi_real+2*Grid_psi.N, Grid_psi.sizeNReal, cudaMemcpyDeviceToHost);
-			writeAllRealToBinaryFile(Grid_psi.N, Host_save, SettingsMain, sub_folder_name + "/Velocity_UY_psi");
-		}
+		if (save_now) {
+			// create new subfolder for current timestep
+			std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
+			std::string sub_folder_name = "/Time_data/Time_" + t_s_now;
+			std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
+			struct stat st = {0};
+			if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
 
-		// Backwards map on coarse grid in Hermite or single version : Chi_coarse
-		if (save_var.find("Map") != std::string::npos or save_var.find("Chi") != std::string::npos) {
-			// Map in x direction on coarse grid : ChiX
-			cudaMemcpy(Host_save, Dev_ChiX, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
-			writeAllRealToBinaryFile(Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiX_coarse");
-			// Map in y direction on coarse grid : ChiY
-			cudaMemcpy(Host_save, Dev_ChiY, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
-			writeAllRealToBinaryFile(Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiY_coarse");
-		}
-		if (save_var.find("Map_H") != std::string::npos or save_var.find("Chi_H") != std::string::npos) {
-			// Map in x direction on coarse grid : ChiX
-			cudaMemcpy(Host_save, Dev_ChiX, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
-			writeAllRealToBinaryFile(4*Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiX_H_coarse");
-			// Map in y direction on coarse grid : ChiY
-			cudaMemcpy(Host_save, Dev_ChiY, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
-			writeAllRealToBinaryFile(4*Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiY_H_coarse");
-		}
+			// Vorticity on coarse grid : W_coarse
+			if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos) {
+				cudaMemcpy(Host_save, Dev_W_coarse, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+				writeAllRealToBinaryFile(Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Vorticity_W_coarse");
+			}
+			// Vorticity on fine grid : W_fine
+	//		cudaMemcpy(Host_save, Dev_W_fine, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
+	//	    writeAllRealToBinaryFile(Grid_fine.N, Host_save, SettingsMain, sub_folder_name + "/Vorticity_W_fine");
 
-		// Forwards map on coarse grid in Hermite or single version : Chi_f_coarse
-		if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos) {
-			// Map in x direction on coarse grid : ChiX
-			cudaMemcpy(Host_save, Dev_ChiX_f, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
-			writeAllRealToBinaryFile(Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiX_f_coarse");
-			// Map in y direction on coarse grid : ChiY
-			cudaMemcpy(Host_save, Dev_ChiY_f, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
-			writeAllRealToBinaryFile(Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiY_f_coarse");
-		}
-		if (save_var.find("Map_f_H") != std::string::npos or save_var.find("Chi_f_H") != std::string::npos) {
-			// Map in x direction on coarse grid : ChiX
-			cudaMemcpy(Host_save, Dev_ChiX_f, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
-			writeAllRealToBinaryFile(4*Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiX_f_H_coarse");
-			// Map in y direction on coarse grid : ChiY
-			cudaMemcpy(Host_save, Dev_ChiY_f, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
-			writeAllRealToBinaryFile(4*Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiY_f_H_coarse");
+			// Stream function on psi grid : Psi_psi
+			if (save_var.find("Stream") != std::string::npos or save_var.find("Psi") != std::string::npos) {
+				cudaMemcpy(Host_save, Dev_Psi_real, Grid_psi.sizeNReal, cudaMemcpyDeviceToHost);
+				writeAllRealToBinaryFile(Grid_psi.N, Host_save, SettingsMain, sub_folder_name + "/Stream_function_Psi_psi");
+			}
+			if (save_var.find("Stream_H") != std::string::npos or save_var.find("Psi_H") != std::string::npos) {
+				cudaMemcpy(Host_save, Dev_Psi_real, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToHost);
+				writeAllRealToBinaryFile(4*Grid_psi.N, Host_save, SettingsMain, sub_folder_name + "/Stream_function_Psi_H_psi");
+			}
+
+			// Velocity on psi grid : U_psi
+			if (save_var.find("Velocity") != std::string::npos or save_var.find("U") != std::string::npos) {
+				// Velocity in x direction
+				cudaMemcpy(Host_save, Dev_Psi_real+1*Grid_psi.N, Grid_psi.sizeNReal, cudaMemcpyDeviceToHost);
+				writeAllRealToBinaryFile(Grid_psi.N, Host_save, SettingsMain, sub_folder_name + "/Velocity_UX_psi");
+				// Velocity in y direction
+				cudaMemcpy(Host_save, Dev_Psi_real+2*Grid_psi.N, Grid_psi.sizeNReal, cudaMemcpyDeviceToHost);
+				writeAllRealToBinaryFile(Grid_psi.N, Host_save, SettingsMain, sub_folder_name + "/Velocity_UY_psi");
+			}
+
+			// Backwards map on coarse grid in Hermite or single version : Chi_coarse
+			if (save_var.find("Map") != std::string::npos or save_var.find("Chi") != std::string::npos) {
+				// Map in x direction on coarse grid : ChiX
+				cudaMemcpy(Host_save, Dev_ChiX, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+				writeAllRealToBinaryFile(Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiX_coarse");
+				// Map in y direction on coarse grid : ChiY
+				cudaMemcpy(Host_save, Dev_ChiY, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+				writeAllRealToBinaryFile(Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiY_coarse");
+			}
+			if (save_var.find("Map_H") != std::string::npos or save_var.find("Chi_H") != std::string::npos) {
+				// Map in x direction on coarse grid : ChiX
+				cudaMemcpy(Host_save, Dev_ChiX, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+				writeAllRealToBinaryFile(4*Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiX_H_coarse");
+				// Map in y direction on coarse grid : ChiY
+				cudaMemcpy(Host_save, Dev_ChiY, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+				writeAllRealToBinaryFile(4*Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiY_H_coarse");
+			}
+
+			// Forwards map on coarse grid in Hermite or single version : Chi_f_coarse
+			if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos) {
+				// Map in x direction on coarse grid : ChiX
+				cudaMemcpy(Host_save, Dev_ChiX_f, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+				writeAllRealToBinaryFile(Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiX_f_coarse");
+				// Map in y direction on coarse grid : ChiY
+				cudaMemcpy(Host_save, Dev_ChiY_f, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+				writeAllRealToBinaryFile(Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiY_f_coarse");
+			}
+			if (save_var.find("Map_f_H") != std::string::npos or save_var.find("Chi_f_H") != std::string::npos) {
+				// Map in x direction on coarse grid : ChiX
+				cudaMemcpy(Host_save, Dev_ChiX_f, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+				writeAllRealToBinaryFile(4*Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiX_f_H_coarse");
+				// Map in y direction on coarse grid : ChiY
+				cudaMemcpy(Host_save, Dev_ChiY_f, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
+				writeAllRealToBinaryFile(4*Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiY_f_H_coarse");
+			}
 		}
 	}
 #endif
 
 
 // script to save only one of the variables, needed because we need temporal arrays to save
-void writeTimeVariable(SettingsCMM SettingsMain, string data_name, string i_num, double *Host_save, double *Dev_save, long int size_N, long int N) {
+void writeTimeVariable(SettingsCMM SettingsMain, string data_name, double t_now, double *Host_save, double *Dev_save, long int size_N, long int N) {
 	// create new subfolder for current timestep, doesn't matter if we try to create it several times
-	string sub_folder_name = "/Time_data/Time_" + i_num;
+	std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
+	std::string sub_folder_name = "/Time_data/Time_" + t_s_now;
 	string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
 	struct stat st = {0};
 	if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
-//	mkdir(folder_name_now.c_str(), 0777);
 
 	// copy and save
 	cudaMemcpy(Host_save, Dev_save, size_N, cudaMemcpyDeviceToHost);
@@ -272,13 +300,13 @@ void writeTimeVariable(SettingsCMM SettingsMain, string data_name, string i_num,
 }
 
 // script to save only one of the variables, but with offset
-void writeTimeVariable(SettingsCMM SettingsMain, string data_name, string i_num, double *Host_save, double *Dev_save, long int size_N, long int N, int offset) {
+void writeTimeVariable(SettingsCMM SettingsMain, string data_name, double t_now, double *Host_save, double *Dev_save, long int size_N, long int N, int offset) {
 	// create new subfolder for current timestep, doesn't matter if we try to create it several times
-	string sub_folder_name = "/Time_data/Time_" + i_num;
+	std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
+	std::string sub_folder_name = "/Time_data/Time_" + t_s_now;
 	string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
 	struct stat st = {0};
 	if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
-//	mkdir(folder_name_now.c_str(), 0777);
 
 	// copy and save
 	cudaMemcpy2D(Host_save, sizeof(double), Dev_save, sizeof(double)*2,

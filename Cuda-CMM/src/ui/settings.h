@@ -7,6 +7,57 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <sstream>
+
+#define T_MAX 10000  // maximum time, used to simplify saving and stuff
+
+
+// class to define the saving of computational variables
+class SaveComputational {
+
+public:
+	// attributes, not modern style but i was too lazy to include getters and setters
+	bool is_instant;
+	double time_start, time_end, time_step;
+	std::string var;
+	bool conv;
+
+	void setAllVariables(std::string value);
+	void setVariable(std::string value);
+	std::string getVariables();
+};
+
+// class to define the saving of sample variables
+class SaveSample {
+
+public:
+	// attributes, not modern style but i was too lazy to include getters and setters
+	bool is_instant;
+	double time_start, time_end, time_step;
+	std::string var;
+	int grid;
+
+	void setAllVariables(std::string value);
+	void setVariable(std::string value);
+	std::string getVariables();
+};
+
+// class to define the saving of zooms
+class SaveZoom {
+
+public:
+	// attributes, not modern style but i was too lazy to include getters and setters
+	bool is_instant;
+	double time_start, time_end, time_step;
+	std::string var;
+	int grid;
+	double pos_x, pos_y, width_x, width_y;
+	int rep; double rep_fac;
+
+	void setAllVariables(std::string value);
+	void setVariable(std::string value);
+	std::string getVariables();
+};
 
 
 class SettingsCMM {
@@ -19,11 +70,12 @@ private:
 	int initial_condition_num, initial_discrete_grid; bool initial_discrete;
 	int verbose;
 	// time stepping properties
-	double final_time, factor_dt_by_grid, snapshots_per_sec, conv_snapshots_per_sec;
+	double final_time, factor_dt_by_grid;
 	int steps_per_sec;
 	bool set_dt_by_steps;
-	bool save_initial, save_final, conv_init_final;
-	std::string save_var;
+	// save computational
+	int save_computational_num;
+	SaveComputational* save_computational;
 	// minor properties, can be tweaked but mainly remain constant
 	double incomp_threshhold;
 	double map_epsilon;
@@ -39,30 +91,23 @@ private:
 	double freq_cut_psi;
 	bool skip_remapping;
 	// sample grid
-	bool sample_on_grid;
-	int grid_sample;
-	double sample_snapshots_per_sec;
-	bool sample_save_initial, sample_save_final;
-	std::string sample_save_var;
+	int save_sample_num;
+	SaveSample* save_sample;
 	// passive scalar
 	std::string scalar_name, scalar_discrete_location;
 	int scalar_num, scalar_discrete_grid; bool scalar_discrete;
 	// zoom
-	bool zoom;
-	double zoom_center_x, zoom_center_y, zoom_width_x, zoom_width_y, zoom_repetitions_factor, zoom_snapshots_per_sec;
-	int grid_zoom, zoom_repetitions;
-	bool zoom_save_initial, zoom_save_final;
-	std::string zoom_save_var;
+	int save_zoom_num;
+	SaveZoom* save_zoom;
 	// forward map
 	bool forward_map, forward_particles; int forward_particles_num;
 	std::string forward_particles_init_name; int forward_particles_init_num;
 	unsigned long long forward_particles_seed;
-	double forward_particles_center_x, forward_particles_center_y, forward_particles_width_x, forward_particles_width_y;
 	// particles
 	bool particles, save_fine_particles;
 	std::string particles_init_name; int particles_init_num;
 	unsigned long long particles_seed;
-	double particles_center_x, particles_center_y, particles_width_x, particles_width_y;
+	double particles_init_time;
 	int particles_tau_num;
 	bool particles_save_initial, particles_save_final;
 	int particles_num, particles_fine_num;
@@ -72,8 +117,8 @@ private:
 	int particles_steps;
 
 public:
-	// arrays are hard to deal with methods in c++, so i make them public
-	double particles_tau[100];
+	// arrays are hard to deal with methods in c++, so i make them public, 100 is taken just to have enough space
+	double forward_particles_init_parameter[100], particles_tau[100], particles_init_parameter[100];
 
 	// main functions
 	SettingsCMM(std::string sim_name, int gridCoarse, int gridFine, std::string initialCondition);
@@ -85,9 +130,10 @@ public:
 	// function to apply commands from command line
 	void applyCommands(int argc, char *args[]);
 	// function to set variables, useful for param file or command line args
-	void setVariable(std::string command_full, std::string delimiter);
-	// helper functions
-	bool getBoolFromString(std::string value);
+	int setVariable(std::string command_full, std::string delimiter);
+	void setSaveComputational(std::string command_full, std::string delimiter, int number);
+	void setSaveSample(std::string command_full, std::string delimiter, int number);
+	void setSaveZoom(std::string command_full, std::string delimiter, int number);
 	// work with arrays
 	void string_to_int_array(std::string s_array, int *array);
 	void string_to_double_array(std::string s_array, double *array);
@@ -122,23 +168,19 @@ public:
 	void setFactorDtByGrid(double factorDtByGrid) { factor_dt_by_grid = factorDtByGrid; }
 	int getStepsPerSec() const { return steps_per_sec; }
 	void setStepsPerSec(int stepsPerSec) { steps_per_sec = stepsPerSec; }
-	double getSnapshotsPerSec() const { return snapshots_per_sec; }
-	void setSnapshotsPerSec(double snapshotsPerSec) { snapshots_per_sec = snapshotsPerSec; }
+//	double getSnapshotsPerSec() const { return snapshots_per_sec; }
+//	void setSnapshotsPerSec(double snapshotsPerSec) { snapshots_per_sec = snapshotsPerSec; }
 	bool getSetDtBySteps() const { return set_dt_by_steps; }
 	void setSetDtBySteps(bool setDtBySteps) { set_dt_by_steps = setDtBySteps; }
 
-	bool getSaveInitial() const { return save_initial; }
-	void setSaveInitial(bool saveInitial) { save_initial = saveInitial; }
-	bool getSaveFinal() const { return save_final; }
-	void setSaveFinal(bool saveFinal) { save_final = saveFinal; }
-	std::string getSaveVar() const { return save_var; }
-	void setSaveVar(std::string saveVar) { save_var = saveVar; }
+	int getSaveComputationalNum() const { return save_computational_num; }
+	void setSaveComputationalNum(int saveComputationalNum) {
+		save_computational_num = saveComputationalNum;
+		delete [] save_computational;
+		save_computational = new SaveComputational[save_computational_num];
+	}
+	SaveComputational* getSaveComputational() const { return save_computational; }
 
-
-	bool getConvInitFinal() const { return conv_init_final; }
-	void setConvInitFinal(bool convInitFinal) { conv_init_final = convInitFinal; }
-	double getConvSnapshotsPerSec() const { return conv_snapshots_per_sec; }
-	void setConvSnapshotsPerSec(double convSnapshotsPerSec) { conv_snapshots_per_sec = convSnapshotsPerSec; }
 
 	// initial conditions setting
 	std::string getInitialCondition() const { return initial_condition; }
@@ -233,19 +275,13 @@ public:
 
 
 	// possibility to sample on specific grid
-	bool getSampleOnGrid() const { return sample_on_grid; }
-	void setSampleOnGrid(bool sampleOnGrid) { sample_on_grid = sampleOnGrid; }
-	int getGridSample() const { return grid_sample; }
-	void setGridSample(int gridSample) { grid_sample = gridSample; }
-	double getSampleSnapshotsPerSec() const { return sample_snapshots_per_sec; }
-	void setSampleSnapshotsPerSec(double sampleSnapshotsPerSec) { sample_snapshots_per_sec = sampleSnapshotsPerSec; }
-
-	bool getSampleSaveInitial() const { return sample_save_initial; }
-	void setSampleSaveInitial(bool sampleSaveInitial) { sample_save_initial = sampleSaveInitial; }
-	bool getSampleSaveFinal() const { return sample_save_final; }
-	void setSampleSaveFinal(bool sampleSaveFinal) { sample_save_final = sampleSaveFinal; }
-	std::string getSampleSaveVar() const { return sample_save_var; }
-	void setSampleSaveVar(std::string sampleSaveVar) { sample_save_var = sampleSaveVar; }
+	int getSaveSampleNum() const { return save_sample_num; }
+	void setSaveSampleNum(int saveSampleNum) {
+		save_sample_num = saveSampleNum;
+		delete [] save_sample;
+		save_sample = new SaveSample[save_sample_num];
+	}
+	SaveSample* getSaveSample() const { return save_sample; }
 
 
 	// passive scalar
@@ -269,34 +305,13 @@ public:
 
 
 	// zoom
-	bool getZoom() const { return zoom; }
-	void setZoom(bool Zoom) { zoom = Zoom; }
-	int getGridZoom() const { return grid_zoom; }
-	void setGridZoom(int gridZoom) { grid_zoom = gridZoom; }
-
-	double getZoomCenterX() const { return zoom_center_x; }
-	void setZoomCenterX(double zoomCenterX) { zoom_center_x = zoomCenterX; }
-	double getZoomCenterY() const { return zoom_center_y; }
-	void setZoomCenterY(double zoomCenterY) { zoom_center_y = zoomCenterY; }
-	double getZoomWidthX() const { return zoom_width_x; }
-	void setZoomWidthX(double zoomWidthX) { zoom_width_x = zoomWidthX; }
-	double getZoomWidthY() const { return zoom_width_y; }
-	void setZoomWidthY(double zoomWidthY) { zoom_width_y = zoomWidthY; }
-
-	int getZoomRepetitions() const { return zoom_repetitions; }
-	void setZoomRepetitions(int zoomRepetitions) { zoom_repetitions = zoomRepetitions; }
-	double getZoomRepetitionsFactor() const { return zoom_repetitions_factor; }
-	void setZoomRepetitionsFactor(double zoomRepetitionsFactor) { zoom_repetitions_factor = zoomRepetitionsFactor; }
-
-	double getZoomSnapshotsPerSec() const { return zoom_snapshots_per_sec; }
-	void setZoomSnapshotsPerSec(double zoomSnapshotsPerSec) { zoom_snapshots_per_sec = zoomSnapshotsPerSec; }
-
-	bool getZoomSaveInitial() const { return zoom_save_initial; }
-	void setZoomSaveInitial(bool zoomSaveInitial) { zoom_save_initial = zoomSaveInitial; }
-	bool getZoomSaveFinal() const { return zoom_save_final; }
-	void setZoomSaveFinal(bool zoomSaveFinal) { zoom_save_final = zoomSaveFinal; }
-	std::string getZoomSaveVar() const { return zoom_save_var; }
-	void setZoomSaveVar(std::string zoomSaveVar) { zoom_save_var = zoomSaveVar; }
+	int getSaveZoomNum() const { return save_zoom_num; }
+	void setSaveZoomNum(int saveZoomNum) {
+		save_zoom_num = saveZoomNum;
+		delete [] save_zoom;
+		save_zoom = new SaveZoom[save_zoom_num];
+	}
+	SaveZoom* getSaveZoom() const { return save_zoom; }
 
 
 	// forward map
@@ -323,15 +338,6 @@ public:
 	unsigned long long getForwardParticlesSeed() const { return forward_particles_seed; }
 	void setForwardParticlesSeed(unsigned long long forwardParticlesSeed) { forward_particles_seed = forwardParticlesSeed; }
 
-	double getForwardParticlesCenterX() const { return forward_particles_center_x; }
-	void setForwardParticlesCenterX(double forwardParticlesCenterX) { forward_particles_center_x = forwardParticlesCenterX; }
-	double getForwardParticlesCenterY() const { return forward_particles_center_y; }
-	void setForwardParticlesCenterY(double forwardParticlesCenterY) { forward_particles_center_y = forwardParticlesCenterY; }
-	double getForwardParticlesWidthX() const { return forward_particles_width_x; }
-	void setForwardParticlesWidthX(double forwardParticlesWidthX) { forward_particles_width_x = forwardParticlesWidthX; }
-	double getForwardParticlesWidthY() const { return forward_particles_width_y; }
-	void setForwardParticlesWidthY(double forwardParticlesWidthY) { forward_particles_width_y = forwardParticlesWidthY; }
-
 
 	// particles
 	bool getParticles() const { return particles; }
@@ -354,14 +360,8 @@ public:
 	unsigned long long getParticlesSeed() const { return particles_seed; }
 	void setParticlesSeed(unsigned long long particlesSeed) { particles_seed = particlesSeed; }
 
-	double getParticlesCenterX() const { return particles_center_x; }
-	void setParticlesCenterX(double particlesCenterX) { particles_center_x = particlesCenterX; }
-	double getParticlesCenterY() const { return particles_center_y; }
-	void setParticlesCenterY(double particlesCenterY) { particles_center_y = particlesCenterY; }
-	double getParticlesWidthX() const { return particles_width_x; }
-	void setParticlesWidthX(double particlesWidthX) { particles_width_x = particlesWidthX; }
-	double getParticlesWidthY() const { return particles_width_y; }
-	void setParticlesWidthY(double particlesWidthY) { particles_width_y = particlesWidthY; }
+	double getParticlesInitTime() const { return particles_init_time; }
+	void setParticlesInitTime(double particlesInitTime) { particles_init_time = particlesInitTime; }
 
 	int getParticlesTauNum() const { return particles_tau_num; }
 	void setParticlesTauNum(int particlesTauNum) { particles_tau_num = particlesTauNum; }
@@ -397,5 +397,19 @@ public:
 	int getParticlesSteps() const { return particles_steps; }
 	void setParticlesSteps(int particlesSteps) { particles_steps = particlesSteps; }
 };
+
+
+// format datatype to string with high precision, needed to have variables in string arrays
+template<typename Type> std::string str_t (const Type & t)
+{
+  std::ostringstream os;
+  os.precision(16);
+  os << t;
+  return os.str ();
+}
+
+
+// little helper function to combine parsing the bool value
+bool getBoolFromString(std::string value);
 
 #endif

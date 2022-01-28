@@ -38,6 +38,42 @@ TCudaGrid2D::TCudaGrid2D (int NX, int NY, double *bounds)
 }
 
 
+void fill_grid(TCudaGrid2D *Grid, int NX, int NY, double *bounds) {
+	Grid->NX = NX;
+	Grid->NX_fft = (int)(NX/2.0+1);
+	Grid->NY = NY;
+
+	Grid->h = (bounds[1] - bounds[0]) / (float)NX;  // for quadratic problems, is used everywhere so changing it is tedious
+
+	Grid->hx = (bounds[1] - bounds[0]) / (float)NX;
+	Grid->hy = (bounds[3] - bounds[2]) / (float)NY;
+
+	for (int i_b = 0; i_b < 4; ++i_b) {
+		Grid->bounds[i_b] = bounds[i_b];
+	}
+
+	Grid->N = NX*NY;
+	Grid->Nfft = Grid->NX_fft*NY;
+
+	Grid->sizeNReal = sizeof(double)*Grid->N;
+	Grid->sizeNComplex = sizeof(cufftDoubleComplex)*Grid->N;
+	Grid->sizeNfft = sizeof(cufftDoubleComplex)*Grid->Nfft;  // fft D2Z and Z2D size
+
+	//block & grid
+	Grid->threadsPerBlock.x = BLOCK_SIZE;
+	Grid->threadsPerBlock.y = BLOCK_SIZE;
+	Grid->threadsPerBlock.z = 1;
+
+	Grid->blocksPerGrid.x = ceil(NX/(double)Grid->threadsPerBlock.x);
+	Grid->blocksPerGrid.y = ceil(NY/(double)Grid->threadsPerBlock.y);
+	Grid->blocksPerGrid.z = 1;
+
+	Grid->fft_blocks.x = ceil((NX+1)/2.0/(double)Grid->threadsPerBlock.x);
+	Grid->fft_blocks.y = ceil(NY/(double)Grid->threadsPerBlock.y);
+	Grid->fft_blocks.z = 1;
+}
+
+
 MapStack::MapStack(TCudaGrid2D *Grid, int cpu_map_num)
 {
 

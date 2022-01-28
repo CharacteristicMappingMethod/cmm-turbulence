@@ -55,27 +55,32 @@ void grad_y(TCudaGrid2D Grid, double *Dev_W, double *Dev_out, cufftDoubleComplex
 		cufftHandle cufft_plan_D2Z, cufftHandle cufft_plan_Z2D);
 
 // Computation of Global conservation values
-void compute_conservation_targets(TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
+std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
+		TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
 		double *Host_save, double *Dev_Psi, double *Dev_W_coarse, double *Dev_W_H_fine,
 		cufftHandle cufft_plan_coarse_D2Z, cufftHandle cufft_plan_coarse_Z2D, cufftHandle cufftPlan_fine_D2Z, cufftHandle cufftPlan_fine_Z2D,
-		cufftDoubleComplex *Dev_Temp_C1, double *mesure, int count_mesure);
+		cufftDoubleComplex *Dev_Temp_C1);
 
 // Sample on a specific grid and save everything
-void sample_compute_and_write(MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D Grid_sample, TCudaGrid2D Grid_discrete,
+std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
+		MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D* Grid_sample, TCudaGrid2D Grid_discrete,
 		double *Host_sample, double *Dev_sample,
-		cufftHandle cufft_plan_sample_D2Z, cufftHandle cufft_plan_sample_Z2D, cufftDoubleComplex *Dev_Temp_C1,
+		cufftHandle* cufft_plan_sample_D2Z, cufftHandle* cufft_plan_sample_Z2D, cufftDoubleComplex *Dev_Temp_C1,
 		double *Host_forward_particles_pos, double *Dev_forward_particles_pos, int forward_particles_block, int forward_particles_thread,
 		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f,
-		double *bounds, double *W_initial_discrete, SettingsCMM SettingsMain, std::string i_num,
-		double *mesure_sample, int count_mesure);
+		double *bounds, double *W_initial_discrete);
 
 // sample vorticity with mapstack at arbitrary frame
-void Zoom(SettingsCMM SettingsMain, MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D Grid_zoom, TCudaGrid2D Grid_psi, TCudaGrid2D Grid_discrete,
+void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
+		MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D* Grid_zoom, TCudaGrid2D Grid_psi, TCudaGrid2D Grid_discrete,
 		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f,
 		double *Dev_Temp, double *W_initial_discrete, double *psi,
 		double *Host_particles_pos, double *Dev_particles_pos,
 		double *Host_forward_particles_pos, double *Dev_forward_particles_pos, int forward_particles_block, int forward_particles_thread,
-		double *Host_debug, std::string i_num);
+		double *Host_debug);
+
+// check all targets to compute the next intermediate step
+double compute_next_timestep(SettingsCMM SettingsMain, double t_now, double dt_now);
 
 //void Zoom_load_frame(string File, int grid_scale, int fine_grid_scale, string t_nb);
 

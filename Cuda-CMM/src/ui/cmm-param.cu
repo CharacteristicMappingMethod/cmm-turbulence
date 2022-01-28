@@ -9,7 +9,7 @@
  * parameter file version, which should be increased with every major new setting
  * maybe this is not important, however, as older parameter files could leave out settings, they might not work anymore afterwards
  */
-#define PARAM_VERSION 1
+#define PARAM_VERSION 2
 #define PARAM_HEADER_LINE "CMM Parameter file"
 #define PARAM_COMMAND "param_version"
 
@@ -51,17 +51,24 @@ void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 
 		// time details
 		file << write_line("final_time", to_str(SettingsMain.getFinalTime(), 16));
-		file << write_line("factor_dt_by_grid", to_str(SettingsMain.getFactorDtByGrid(), 16));
-		file << write_line("steps_per_sec", to_str(SettingsMain.getStepsPerSec(), 16));
 		file << write_line("set_dt_by_steps", to_str(SettingsMain.getSetDtBySteps(), 16));
-
-		file << write_line("snapshots_per_sec", to_str(SettingsMain.getSnapshotsPerSec(), 16));
-		file << write_line("save_initial", to_str(SettingsMain.getSaveInitial(), 16));
-		file << write_line("save_final", to_str(SettingsMain.getSaveFinal(), 16));
-		file << write_line("save_var", to_str(SettingsMain.getSaveVar(), 16));
-
-		file << write_line("conv_init_final", to_str(SettingsMain.getConvInitFinal(), 16));
-		file << write_line("conv_snapshots_per_sec", to_str(SettingsMain.getConvSnapshotsPerSec(), 16));
+		if (SettingsMain.getSetDtBySteps()) {
+			file << write_line("steps_per_sec", to_str(SettingsMain.getStepsPerSec(), 16));
+		}
+		else {
+			file << write_line("factor_dt_by_grid", to_str(SettingsMain.getFactorDtByGrid(), 16));
+		}
+		file << write_line("save_computational_num", to_str(SettingsMain.getSaveComputationalNum(), 16));
+		for (int i_save = 0; i_save < SettingsMain.getSaveComputationalNum(); ++i_save) {
+			file << write_line("save_computational", to_str(SettingsMain.getSaveComputational()[i_save].getVariables(), 16));
+		}
+//		file << write_line("snapshots_per_sec", to_str(SettingsMain.getSnapshotsPerSec(), 16));
+//		file << write_line("save_initial", to_str(SettingsMain.getSaveInitial(), 16));
+//		file << write_line("save_final", to_str(SettingsMain.getSaveFinal(), 16));
+//		file << write_line("save_var", to_str(SettingsMain.getSaveVar(), 16));
+//
+//		file << write_line("conv_init_final", to_str(SettingsMain.getConvInitFinal(), 16));
+//		file << write_line("conv_snapshots_per_sec", to_str(SettingsMain.getConvSnapshotsPerSec(), 16));
 
 		file << write_line("mem_RAM_CPU_remaps", to_str(SettingsMain.getMemRamCpuRemaps(), 16));
 		file << write_line("save_map_stack", to_str(SettingsMain.getSaveMapStack(), 16));
@@ -70,8 +77,10 @@ void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 
 		file << write_line("initial_condition", to_str(SettingsMain.getInitialCondition(), 16));
 		file << write_line("initial_discrete", to_str(SettingsMain.getInitialDiscrete(), 16));
-		file << write_line("initial_discrete_grid", to_str(SettingsMain.getInitialDiscreteGrid(), 16));
-		file << write_line("initial_discrete_location", to_str(SettingsMain.getInitialDiscreteLocation(), 16));
+		if (SettingsMain.getInitialDiscrete())  {
+			file << write_line("initial_discrete_grid", to_str(SettingsMain.getInitialDiscreteGrid(), 16));
+			file << write_line("initial_discrete_location", to_str(SettingsMain.getInitialDiscreteLocation(), 16));
+		}
 
 		file << write_line("incomp_threshold", to_str(SettingsMain.getIncompThreshold(), 16));
 		file << write_line("map_epsilon", to_str(SettingsMain.getMapEpsilon(), 16));
@@ -84,60 +93,69 @@ void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 		file << write_line("freq_cut_psi", to_str(SettingsMain.getFreqCutPsi(), 16));
 		file << write_line("skip_remapping", to_str(SettingsMain.getSkipRemapping(), 16));
 
-		file << write_line("sample_on_grid", to_str(SettingsMain.getSampleOnGrid(), 16));
-		file << write_line("grid_sample", to_str(SettingsMain.getGridSample(), 16));
-		file << write_line("sample_snapshots_per_sec", to_str(SettingsMain.getSampleSnapshotsPerSec(), 16));
-		file << write_line("sample_save_initial", to_str(SettingsMain.getSampleSaveInitial(), 16));
-		file << write_line("sample_save_final", to_str(SettingsMain.getSampleSaveFinal(), 16));
-		file << write_line("sample_save_var", to_str(SettingsMain.getSampleSaveVar(), 16));
+		file << write_line("save_sample_num", to_str(SettingsMain.getSaveSampleNum(), 16));
+		for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
+			file << write_line("save_sample", to_str(SettingsMain.getSaveSample()[i_save].getVariables(), 16));
+		}
+//		file << write_line("sample_on_grid", to_str(SettingsMain.getSampleOnGrid(), 16));
+//		file << write_line("grid_sample", to_str(SettingsMain.getGridSample(), 16));
+//		file << write_line("sample_snapshots_per_sec", to_str(SettingsMain.getSampleSnapshotsPerSec(), 16));
+//		file << write_line("sample_save_initial", to_str(SettingsMain.getSampleSaveInitial(), 16));
+//		file << write_line("sample_save_final", to_str(SettingsMain.getSampleSaveFinal(), 16));
+//		file << write_line("sample_save_var", to_str(SettingsMain.getSampleSaveVar(), 16));
 
 		file << write_line("scalar_name", to_str(SettingsMain.getScalarName(), 16));
 		file << write_line("scalar_discrete", to_str(SettingsMain.getScalarDiscrete(), 16));
-		file << write_line("scalar_discrete_grid", to_str(SettingsMain.getScalarDiscreteGrid(), 16));
-		file << write_line("scalar_discrete_location", to_str(SettingsMain.getScalarDiscreteLocation(), 16));
+		if (SettingsMain.getScalarDiscrete()) {
+			file << write_line("scalar_discrete_grid", to_str(SettingsMain.getScalarDiscreteGrid(), 16));
+			file << write_line("scalar_discrete_location", to_str(SettingsMain.getScalarDiscreteLocation(), 16));
+		}
 
-		file << write_line("zoom", to_str(SettingsMain.getZoom(), 16));
-		file << write_line("grid_zoom", to_str(SettingsMain.getGridZoom(), 16));
-		file << write_line("zoom_center_x", to_str(SettingsMain.getZoomCenterX(), 16));
-		file << write_line("zoom_center_y", to_str(SettingsMain.getZoomCenterY(), 16));
-		file << write_line("zoom_width_x", to_str(SettingsMain.getZoomWidthX(), 16));
-		file << write_line("zoom_width_y", to_str(SettingsMain.getZoomWidthY(), 16));
-		file << write_line("zoom_repetitions", to_str(SettingsMain.getZoomRepetitions(), 16));
-		file << write_line("zoom_repetitions_factor", to_str(SettingsMain.getZoomRepetitionsFactor(), 16));
-		file << write_line("zoom_snapshots_per_sec", to_str(SettingsMain.getZoomSnapshotsPerSec(), 16));
-		file << write_line("zoom_save_initial", to_str(SettingsMain.getZoomSaveInitial(), 16));
-		file << write_line("zoom_save_final", to_str(SettingsMain.getZoomSaveFinal(), 16));
-		file << write_line("zoom_save_var", to_str(SettingsMain.getZoomSaveVar(), 16));
+		file << write_line("save_zoom_num", to_str(SettingsMain.getSaveZoomNum(), 16));
+		for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); ++i_save) {
+			file << write_line("save_zoom", to_str(SettingsMain.getSaveZoom()[i_save].getVariables(), 16));
+		}
+
+//		file << write_line("zoom", to_str(SettingsMain.getZoom(), 16));
+//		if (SettingsMain.getZoom()) {
+//			file << write_line("grid_zoom", to_str(SettingsMain.getGridZoom(), 16));
+//			file << write_line("zoom_location_parameter", array_to_str(SettingsMain.zoom_location_parameter, 4, 16));
+//			file << write_line("zoom_repetitions", to_str(SettingsMain.getZoomRepetitions(), 16));
+//			file << write_line("zoom_repetitions_factor", to_str(SettingsMain.getZoomRepetitionsFactor(), 16));
+//			file << write_line("zoom_snapshots_per_sec", to_str(SettingsMain.getZoomSnapshotsPerSec(), 16));
+//			file << write_line("zoom_save_initial", to_str(SettingsMain.getZoomSaveInitial(), 16));
+//			file << write_line("zoom_save_final", to_str(SettingsMain.getZoomSaveFinal(), 16));
+//			file << write_line("zoom_save_var", to_str(SettingsMain.getZoomSaveVar(), 16));
+//		}
 
 		file << write_line("forward_map", to_str(SettingsMain.getForwardMap(), 16));
-		file << write_line("forward_particles", to_str(SettingsMain.getForwardParticles(), 16));
-		file << write_line("forward_particles_init_name", to_str(SettingsMain.getForwardParticlesInitName(), 16));
-		file << write_line("forward_particles_seed", to_str(SettingsMain.getForwardParticlesSeed(), 16));
-		file << write_line("forward_particles_center_x", to_str(SettingsMain.getForwardParticlesCenterX(), 16));
-		file << write_line("forward_particles_center_y", to_str(SettingsMain.getForwardParticlesCenterY(), 16));
-		file << write_line("forward_particles_width_x", to_str(SettingsMain.getForwardParticlesWidthX(), 16));
-		file << write_line("forward_particles_width_y", to_str(SettingsMain.getForwardParticlesWidthY(), 16));
-		file << write_line("forward_particles_num", to_str(SettingsMain.getForwardParticlesNum(), 16));
+		if (SettingsMain.getForwardMap()) {
+			file << write_line("forward_particles", to_str(SettingsMain.getForwardParticles(), 16));
+			file << write_line("forward_particles_init_name", to_str(SettingsMain.getForwardParticlesInitName(), 16));
+			file << write_line("forward_particles_seed", to_str(SettingsMain.getForwardParticlesSeed(), 16));
+			file << write_line("forward_particles_init_parameter", array_to_str(SettingsMain.forward_particles_init_parameter, 4, 16));
+			file << write_line("forward_particles_num", to_str(SettingsMain.getForwardParticlesNum(), 16));
+		}
 
 		file << write_line("particles", to_str(SettingsMain.getParticles(), 16));
-		file << write_line("particles_init_name", to_str(SettingsMain.getParticlesInitName(), 16));
-		file << write_line("particles_seed", to_str(SettingsMain.getParticlesSeed(), 16));
-		file << write_line("particles_center_x", to_str(SettingsMain.getParticlesCenterX(), 16));
-		file << write_line("particles_center_y", to_str(SettingsMain.getParticlesCenterY(), 16));
-		file << write_line("particles_width_x", to_str(SettingsMain.getParticlesWidthX(), 16));
-		file << write_line("particles_width_y", to_str(SettingsMain.getParticlesWidthY(), 16));
-		file << write_line("particles_num", to_str(SettingsMain.getParticlesNum(), 16));
-		file << write_line("particles_tau_num", to_str(SettingsMain.getParticlesTauNum(), 16));
-		file << write_line("particles_tau", array_to_str(SettingsMain.particles_tau, SettingsMain.getParticlesTauNum(), 16));
-		file << write_line("particles_snapshots_per_sec", to_str(SettingsMain.getParticlesSnapshotsPerSec(), 16));
-		file << write_line("particles_save_initial", to_str(SettingsMain.getParticlesSaveInitial(), 16));
-		file << write_line("particles_save_final", to_str(SettingsMain.getParticlesSaveFinal(), 16));
-		file << write_line("save_fine_particles", to_str(SettingsMain.getSaveFineParticles(), 16));
-		file << write_line("particles_fine_num", to_str(SettingsMain.getParticlesFineNum(), 16));
-		file << write_line("particles_time_integration", to_str(SettingsMain.getParticlesTimeIntegration(), 16));
+		if (SettingsMain.getParticles()) {
+			file << write_line("particles_init_name", to_str(SettingsMain.getParticlesInitName(), 16));
+			file << write_line("particles_seed", to_str(SettingsMain.getParticlesSeed(), 16));
+			file << write_line("particles_init_parameter", array_to_str(SettingsMain.particles_init_parameter, 4, 16));
+			file << write_line("particles_init_time", to_str(SettingsMain.getParticlesInitTime(), 16));
+			file << write_line("particles_num", to_str(SettingsMain.getParticlesNum(), 16));
+			file << write_line("particles_tau_num", to_str(SettingsMain.getParticlesTauNum(), 16));
+			file << write_line("particles_tau", array_to_str(SettingsMain.particles_tau, SettingsMain.getParticlesTauNum(), 16));
+			file << write_line("particles_snapshots_per_sec", to_str(SettingsMain.getParticlesSnapshotsPerSec(), 16));
+			file << write_line("particles_save_initial", to_str(SettingsMain.getParticlesSaveInitial(), 16));
+			file << write_line("particles_save_final", to_str(SettingsMain.getParticlesSaveFinal(), 16));
+			file << write_line("save_fine_particles", to_str(SettingsMain.getSaveFineParticles(), 16));
+			file << write_line("particles_fine_num", to_str(SettingsMain.getParticlesFineNum(), 16));
+			file << write_line("particles_time_integration", to_str(SettingsMain.getParticlesTimeIntegration(), 16));
 
-		// hackery for particle convergence
-		file << write_line("particles_steps", to_str(SettingsMain.getParticlesSteps(), 16));
+			// hackery for particle convergence
+			file << write_line("particles_steps", to_str(SettingsMain.getParticlesSteps(), 16));
+		}
 
 		file.close();
 	}
@@ -178,13 +196,27 @@ void load_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 
 					// now read in all the values
 					while(getline(file, file_line)){ //read data from file object and put it into string.
-						SettingsMain.setVariable(file_line, delimiter);
+						int set_save = SettingsMain.setVariable(file_line, delimiter);
+						if (set_save == 1) {
+							for (int i_save = 0; i_save < SettingsMain.getSaveComputationalNum(); ++i_save) {
+								SettingsMain.setSaveComputational(file_line, delimiter, i_save);
+							}
+						}
+						else if (set_save == 2) {
+							for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
+								SettingsMain.setSaveSample(file_line, delimiter, i_save);
+							}
+						}
+						else if (set_save == 3) {
+							for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); ++i_save) {
+								SettingsMain.setSaveZoom(file_line, delimiter, i_save);
+							}
+						}
 					}
 
 					// here, future settings for newer param-file versions could be implemented for example to disable stuff by default
 					if (param_version < 2) {
-						// this is an example
-//						SettingsMain.setExample("Example");
+						std::cout<<"Tried to read in old file. Save settings cannot be set.\n";
 					}
 				}
 			}

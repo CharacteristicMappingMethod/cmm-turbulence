@@ -44,7 +44,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	int NX_fine = SettingsMain.getGridFine();							// fine grid size
 	int NY_fine = SettingsMain.getGridFine();							// fine grid size
 	
-	double t0 = 0.0;													// time - initial
+	double t0 = 0;													// time - initial
 	double tf = SettingsMain.getFinalTime();							// time - final
 	double grid_by_time = SettingsMain.getFactorDtByGrid();				// time - factor by grid
 	int steps_per_sec = SettingsMain.getStepsPerSec();					// time - steps per second
@@ -54,7 +54,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	std::string workspace = SettingsMain.getWorkspace();						// folder where we work in
 	std::string sim_name = SettingsMain.getSimName();						// name of the simulation
 	std::string initial_condition = SettingsMain.getInitialCondition();		// name of the initial condition
-	int snapshots_per_second = SettingsMain.getSnapshotsPerSec();		// saves per second
+//	int snapshots_per_second = SettingsMain.getSnapshotsPerSec();		// saves per second
 
 	double mb_used_RAM_GPU, mb_used_RAM_CPU;  // count memory usage by variables in mbyte
 
@@ -124,8 +124,20 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	TCudaGrid2D Grid_psi(SettingsMain.getGridPsi(), SettingsMain.getGridPsi(), bounds);
 	TCudaGrid2D Grid_vort(SettingsMain.getGridVort(), SettingsMain.getGridVort(), bounds);
 
-	TCudaGrid2D Grid_sample(SettingsMain.getGridSample(), SettingsMain.getGridSample(), bounds);
-	TCudaGrid2D Grid_zoom(SettingsMain.getGridZoom(), SettingsMain.getGridZoom(), bounds);
+	TCudaGrid2D *Grid_sample = (TCudaGrid2D *)malloc(sizeof(TCudaGrid2D) * SettingsMain.getSaveSampleNum());
+	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
+		fill_grid(Grid_sample+i_save, SettingsMain.getSaveSample()[i_save].grid, SettingsMain.getSaveSample()[i_save].grid, bounds);
+	}
+
+//	TCudaGrid2D Grid_sample[SettingsMain.getSampleNum()];
+//							(SettingsMain.getGridSample(), SettingsMain.getGridSample(), bounds);
+
+	TCudaGrid2D *Grid_zoom = (TCudaGrid2D *)malloc(sizeof(TCudaGrid2D) * SettingsMain.getSaveZoomNum());
+	for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); ++i_save) {
+		fill_grid(Grid_zoom+i_save, SettingsMain.getSaveZoom()[i_save].grid, SettingsMain.getSaveZoom()[i_save].grid, bounds);
+	}
+
+//	TCudaGrid2D Grid_zoom(SettingsMain.getGridZoom(), SettingsMain.getGridZoom(), bounds);
 	
 	TCudaGrid2D Grid_discrete(SettingsMain.getInitialDiscreteGrid(), SettingsMain.getInitialDiscreteGrid(), bounds);
 
@@ -139,25 +151,30 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	cufftHandle cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D;
 	cufftHandle cufft_plan_fine_D2Z, cufft_plan_fine_Z2D;
 	cufftHandle cufft_plan_vort_D2Z, cufft_plan_psi_Z2D;  // used for psi, but work on different grid for forward and backward
-	cufftHandle cufft_plan_sample_D2Z, cufft_plan_sample_Z2D;
+	cufftHandle* cufft_plan_sample_D2Z = (cufftHandle*)malloc(sizeof(cufftHandle) * SettingsMain.getSaveSampleNum());
+	cufftHandle* cufft_plan_sample_Z2D = (cufftHandle*)malloc(sizeof(cufftHandle) * SettingsMain.getSaveSampleNum());
 	cufftHandle cufft_plan_discrete_D2Z, cufft_plan_discrete_Z2D;
 
 	// preinitialize handles
 	cufftCreate(&cufft_plan_coarse_D2Z); cufftCreate(&cufft_plan_coarse_Z2D);
 	cufftCreate(&cufft_plan_fine_D2Z);   cufftCreate(&cufft_plan_fine_Z2D);
 	cufftCreate(&cufft_plan_vort_D2Z);   cufftCreate(&cufft_plan_psi_Z2D);
-	cufftCreate(&cufft_plan_sample_D2Z); cufftCreate(&cufft_plan_sample_Z2D);
+	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
+		cufftCreate(&cufft_plan_sample_D2Z[i_save]); cufftCreate(&cufft_plan_sample_Z2D[i_save]);
+	}
 	cufftCreate(&cufft_plan_discrete_D2Z); cufftCreate(&cufft_plan_discrete_Z2D);
 
 	// disable auto workspace creation for fft plans
 	cufftSetAutoAllocation(cufft_plan_coarse_D2Z, 0); cufftSetAutoAllocation(cufft_plan_coarse_Z2D, 0);
 	cufftSetAutoAllocation(cufft_plan_fine_D2Z, 0);   cufftSetAutoAllocation(cufft_plan_fine_Z2D, 0);
 	cufftSetAutoAllocation(cufft_plan_vort_D2Z, 0);   cufftSetAutoAllocation(cufft_plan_psi_Z2D, 0);
-	cufftSetAutoAllocation(cufft_plan_sample_D2Z, 0); cufftSetAutoAllocation(cufft_plan_sample_Z2D, 0);
+	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
+		cufftSetAutoAllocation(cufft_plan_sample_D2Z[i_save], 0); cufftSetAutoAllocation(cufft_plan_sample_Z2D[i_save], 0);
+	}
 	cufftSetAutoAllocation(cufft_plan_discrete_D2Z, 0); cufftSetAutoAllocation(cufft_plan_discrete_Z2D, 0);
 
 	// create plans and compute needed size of each plan
-	size_t workSize[10];
+	size_t workSize[8];
     cufftMakePlan2d(cufft_plan_coarse_D2Z, Grid_coarse.NX, Grid_coarse.NY, CUFFT_D2Z, &workSize[0]);
     cufftMakePlan2d(cufft_plan_coarse_Z2D, Grid_coarse.NX, Grid_coarse.NY, CUFFT_Z2D, &workSize[1]);
 
@@ -166,25 +183,24 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
     cufftMakePlan2d(cufft_plan_vort_D2Z,   Grid_vort.NX,   Grid_vort.NY,   CUFFT_D2Z, &workSize[4]);
     cufftMakePlan2d(cufft_plan_psi_Z2D,    Grid_psi.NX,    Grid_psi.NY,    CUFFT_Z2D, &workSize[5]);
-	if (SettingsMain.getSampleOnGrid()) {
-	    cufftMakePlan2d(cufft_plan_sample_D2Z, Grid_sample.NX,   Grid_sample.NY,   CUFFT_D2Z, &workSize[6]);
-	    cufftMakePlan2d(cufft_plan_sample_Z2D, Grid_sample.NX,   Grid_sample.NY,   CUFFT_Z2D, &workSize[7]);
-	}
 	if (SettingsMain.getInitialDiscrete()) {
-	    cufftMakePlan2d(cufft_plan_discrete_D2Z, Grid_discrete.NX,   Grid_discrete.NY,   CUFFT_D2Z, &workSize[8]);
-	    cufftMakePlan2d(cufft_plan_discrete_Z2D, Grid_discrete.NX,   Grid_discrete.NY,   CUFFT_Z2D, &workSize[9]);
+	    cufftMakePlan2d(cufft_plan_discrete_D2Z, Grid_discrete.NX,   Grid_discrete.NY,   CUFFT_D2Z, &workSize[6]);
+	    cufftMakePlan2d(cufft_plan_discrete_Z2D, Grid_discrete.NX,   Grid_discrete.NY,   CUFFT_Z2D, &workSize[7]);
+	}
+	size_t size_max_fft = 0; size_t workSize_sample[2];
+	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
+	    cufftMakePlan2d(cufft_plan_sample_D2Z[i_save], Grid_sample[i_save].NX,   Grid_sample[i_save].NY,   CUFFT_D2Z, &workSize_sample[0]);
+	    cufftMakePlan2d(cufft_plan_sample_Z2D[i_save], Grid_sample[i_save].NX,   Grid_sample[i_save].NY,   CUFFT_Z2D, &workSize_sample[1]);
+	    size_max_fft = std::max(size_max_fft, workSize_sample[0]); size_max_fft = std::max(size_max_fft, workSize_sample[1]);
 	}
 
+
     // allocate memory to new workarea for cufft plans with maximum size
-	size_t size_max_fft = 0;
 	for (int i_size = 0; i_size < 6; i_size++) {
 		size_max_fft = std::max(size_max_fft, workSize[i_size]);
 	}
-	if (SettingsMain.getSampleOnGrid()) {
-		size_max_fft = std::max(size_max_fft, workSize[6]); size_max_fft = std::max(size_max_fft, workSize[7]);
-	}
 	if (SettingsMain.getInitialDiscrete()) {
-		size_max_fft = std::max(size_max_fft, workSize[8]); size_max_fft = std::max(size_max_fft, workSize[9]);
+		size_max_fft = std::max(size_max_fft, workSize[6]); size_max_fft = std::max(size_max_fft, workSize[7]);
 	}
 	void *fft_work_area;
 	cudaMalloc(&fft_work_area, size_max_fft);
@@ -194,8 +210,8 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	cufftSetWorkArea(cufft_plan_coarse_D2Z, fft_work_area); cufftSetWorkArea(cufft_plan_coarse_Z2D, fft_work_area);
 	cufftSetWorkArea(cufft_plan_fine_D2Z, fft_work_area);   cufftSetWorkArea(cufft_plan_fine_Z2D, fft_work_area);
 	cufftSetWorkArea(cufft_plan_vort_D2Z, fft_work_area);   cufftSetWorkArea(cufft_plan_psi_Z2D, fft_work_area);
-	if (SettingsMain.getSampleOnGrid()) {
-		cufftSetWorkArea(cufft_plan_sample_D2Z, fft_work_area); cufftSetWorkArea(cufft_plan_sample_Z2D, fft_work_area);
+	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
+		cufftSetWorkArea(cufft_plan_sample_D2Z[i_save], fft_work_area); cufftSetWorkArea(cufft_plan_sample_Z2D[i_save], fft_work_area);
 	}
 	if (SettingsMain.getInitialDiscrete()) {
 		cufftSetWorkArea(cufft_plan_discrete_D2Z, fft_work_area); cufftSetWorkArea(cufft_plan_discrete_Z2D, fft_work_area);
@@ -220,21 +236,21 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		size_max_c = std::max(size_max_c, Grid_discrete.sizeNfft);
 		size_max_c = std::max(size_max_c, Grid_discrete.sizeNReal);  // is basically redundant, but lets take it anyways
 	}
-	if (SettingsMain.getSampleOnGrid()) {
-		size_max_c = std::max(size_max_c, 2*Grid_sample.sizeNfft);
-		size_max_c = std::max(size_max_c, 2*Grid_sample.sizeNReal);  // is basically redundant, but lets take it anyways
+	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
+		size_max_c = std::max(size_max_c, 2*Grid_sample[i_save].sizeNfft);
+		size_max_c = std::max(size_max_c, 2*Grid_sample[i_save].sizeNReal);  // is basically redundant, but lets take it anyways
 		if (SettingsMain.getForwardMap() and SettingsMain.getForwardParticles()) {
 			// we need to save and transfer new particle positions somehow, in addition to map
-			long int stacked_size = 2*(Grid_sample.sizeNReal+SettingsMain.getForwardParticlesNum()*sizeof(double));
+			long int stacked_size = 2*(Grid_sample[i_save].sizeNReal+SettingsMain.getForwardParticlesNum()*sizeof(double));
 			size_max_c = std::max(size_max_c, stacked_size);
 		}
 	}
-	if (SettingsMain.getZoom()) {
-		size_max_c = std::max(size_max_c, 3*Grid_zoom.sizeNReal);
+	for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); ++i_save) {
+		size_max_c = std::max(size_max_c, 3*Grid_zoom[i_save].sizeNReal);
 //		if (SettingsMain.getZoomSavePsi()) size_max_c = std::max(size_max_c, 4*Grid_zoom.sizeNReal);
 		if (SettingsMain.getForwardMap() and SettingsMain.getForwardParticles()) {
 			// we need to save and transfer new particle positions somehow, in addition to map
-			long int stacked_size = 2*(Grid_zoom.sizeNReal+SettingsMain.getForwardParticlesNum()*sizeof(double));
+			long int stacked_size = 2*(Grid_zoom[i_save].sizeNReal+SettingsMain.getForwardParticlesNum()*sizeof(double));
 			size_max_c = std::max(size_max_c, stacked_size);
 		}
 	}
@@ -246,8 +262,12 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	// we actually only need one host array, as we always just copy from and to this and never really read files
 	long int size_max_r = std::max(4*Grid_fine.N, 4*Grid_psi.N);
 	size_max_r = std::max(size_max_r, 4*Grid_coarse.N);
-	if (SettingsMain.getSampleOnGrid()) { size_max_r = std::max(size_max_r, 4*Grid_sample.N); }
-	if (SettingsMain.getZoom()) { size_max_r = std::max(size_max_r, 4*Grid_zoom.N); }
+	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
+		size_max_r = std::max(size_max_r, 4*Grid_sample[i_save].N);
+	}
+	for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); ++i_save) {
+		size_max_r = std::max(size_max_r, 4*Grid_zoom[i_save].N);
+	}
 	double *Host_save;
 	Host_save = new double[size_max_r];
 	mb_used_RAM_CPU = size_max_r*sizeof(double) / 1e6;
@@ -278,7 +298,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	// initialize backward map stack
 	MapStack Map_Stack(&Grid_coarse, cpu_map_num);
 	mb_used_RAM_GPU += 8*Grid_coarse.sizeNReal / 1e6;
-	mb_used_RAM_CPU += SettingsMain.getMemRamCpuRemaps();
+	mb_used_RAM_CPU += cpu_map_num * map_size * Nb_array_RAM;
 
 
 	/*******************************************************************
@@ -379,7 +399,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	// initialize foward map stack dynamically to be super small if we are not computing it
 	MapStack Map_Stack_f(&Grid_forward, cpu_map_num);
 	mb_used_RAM_GPU += 8*Grid_forward.sizeNReal / 1e6;
-	mb_used_RAM_CPU += SettingsMain.getMemRamCpuRemaps();
+	mb_used_RAM_CPU += cpu_map_num * map_size * Nb_array_RAM * SettingsMain.getForwardMap();
 
 	// initialize forward particles position, will stay constant over time though so a dynamic approach could be chosen later too
 	// however, the particles should not take up too much memory, so I guess it's okay
@@ -462,46 +482,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	*				 ( Measure and file organization )				   *
 	*******************************************************************/
 
-	int count_mesure = 0; int count_mesure_sample = 0;
-	int mes_size = 2*SettingsMain.getConvInitFinal();  // initial and last step if computed
-	if (SettingsMain.getConvSnapshotsPerSec() > 0) {
-		mes_size += (int)(tf*SettingsMain.getConvSnapshotsPerSec());  // add all intermediate targets
-	}
-    double *mesure;
-    cudaMallocManaged(&mesure, (4*mes_size+1)*sizeof(double));  // + 1 because i dont know what it does with 0
-
-    double *mesure_sample;
-	int mes_sample_size = SettingsMain.getSampleSaveInitial() + SettingsMain.getSampleSaveFinal();  // initial and last step if computed
-	if (SettingsMain.getSampleSnapshotsPerSec() > 0) {
-		mes_sample_size += (int)(tf*SettingsMain.getSampleSnapshotsPerSec());  // add all intermediate targets
-	}
-	if (SettingsMain.getSampleOnGrid()) {
-	    cudaMallocManaged(&mesure_sample, (4*mes_sample_size+1)*sizeof(double));  // + 1 because i dont know what it does with 0
-	}
-
-    double* err_incomp_b = new double[iterMax];  // incompressibility error of backwards map
-    double* map_gap = new double[iterMax];  // save map gaps for investigations
-    double* map_ctr = new double[iterMax];  // save map counter for investigations
-    double* time_values = new double[iterMax+2];  // save timing for investigations
-    mb_used_RAM_CPU += 6*iterMax*sizeof(double) / 1e6;  // +2 from t and dt vector
-
-    double* err_incomp_f; double* err_invert;
-    if (SettingsMain.getForwardMap()) {
-    	err_incomp_f = new double[iterMax];  // incomressibility error of forward map
-    	err_invert = new double[iterMax];  // invertibility error of forward and backward map
-    }
-
-    // Laplacian
-	/*
-    double *Host_lap_fine, *Dev_lap_fine_real;
-    cufftDoubleComplex *Dev_lap_fine_complex, *Dev_lap_fine_hat;
-
-    Host_lap_fine = new double[Grid_fine.N];
-
-    cudaMalloc((void**)&Dev_lap_fine_real, Grid_fine.sizeNReal);
-    cudaMalloc((void**)&Dev_lap_fine_complex, Grid_fine.sizeNComplex);
-    cudaMalloc((void**)&Dev_lap_fine_hat, Grid_fine.sizeNComplex);
-	*/
+	// all was made dynamic
 	
 	/*******************************************************************
 	*						       Streams							   *
@@ -528,7 +509,9 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	
 	double *Dev_Temp_2;
 	long int size_max_temp_2 = 0;
-	if (SettingsMain.getSampleOnGrid()) size_max_temp_2 = std::max(size_max_temp_2, 3*Grid_sample.sizeNReal + Grid_sample.sizeNfft);
+	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
+		size_max_temp_2 = std::max(size_max_c, 3*Grid_sample[i_save].sizeNReal + Grid_sample[i_save].sizeNfft);
+	}
 	// define third temporary variable as safe buffer to be used for sample and zoom
 	if (size_max_temp_2 != 0) {
 		cudaMalloc((void**)&Dev_Temp_2, size_max_temp_2);
@@ -691,65 +674,31 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 	// save function to save variables, combined so we always save in the same way and location
     // use Dev_Hat_fine for W_fine, this works because just at the end of conservation it is overwritten
-	if (SettingsMain.getSaveInitial() || SettingsMain.getConvInitFinal()) {
-		// fine vorticity disabled, as this needs another Grid_fine.sizeNReal in temp buffer, need to resolve later
-//		apply_map_stack_to_W_part_All(Grid_fine, Map_Stack, Dev_ChiX, Dev_ChiY,
-//				(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
+	writeTimeStep(SettingsMain, 0.0, dt, dt, Grid_fine, Grid_coarse, Grid_psi,
+			Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
+			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
 
-		if (SettingsMain.getSaveInitial()) {
-			writeTimeStep(SettingsMain, "0", Grid_fine, Grid_coarse, Grid_psi,
-					Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
-					Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
-		}
-
-		// compute conservation if wanted, not connected to normal saving to reduce data
-		if (SettingsMain.getConvInitFinal()) {
-			compute_conservation_targets(Grid_fine, Grid_coarse, Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
-					cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
-					Dev_Temp_C1, mesure, count_mesure);
-			// directly append to file to prevent data loss in case simulation stops early
-			double time_zero = 0.0;
-			writeAppendToBinaryFile(1, &time_zero, SettingsMain, "/Monitoring_data/Mesure/Time_s");  // time vector for data
-			writeAppendToBinaryFile(1, mesure + 4*count_mesure   , SettingsMain, "/Monitoring_data/Mesure/Energy");
-			writeAppendToBinaryFile(1, mesure + 4*count_mesure +1, SettingsMain, "/Monitoring_data/Mesure/Enstrophy");
-			writeAppendToBinaryFile(1, mesure + 4*count_mesure +2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy");
-			writeAppendToBinaryFile(1, mesure + 4*count_mesure +3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity");
-			// output status to console
-			if (SettingsMain.getVerbose() >= 3) {
-				message = "Coarse Cons : Energ = " + to_str(mesure[4*count_mesure], 8)
-						+    " \t Enstr = " + to_str(mesure[4*count_mesure+1], 8)
-						+ " \t Palinstr = " + to_str(mesure[4*count_mesure+2], 8)
-						+ " \t Wmax = " + to_str(mesure[4*count_mesure+3], 8);
-				std::cout<<message+"\n"; logger.push(message);
-			}
-			count_mesure++;
-		}
-
+	// compute conservation if wanted
+	message = compute_conservation_targets(SettingsMain, 0.0, dt, dt, Grid_fine, Grid_coarse, Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
+			cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
+			Dev_Temp_C1);
+	// output status to console
+	if (SettingsMain.getVerbose() >= 3 && message != "") {
+		std::cout<<message+"\n"; logger.push(message);
 	}
+
+
 	// sample if wanted
-	if (SettingsMain.getSampleOnGrid() && SettingsMain.getSampleSaveInitial()) {
-		sample_compute_and_write(Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Host_save, Dev_Temp_2,
-				cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
-				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
-				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
-				bounds, Dev_W_H_initial, SettingsMain, "0",
-				mesure_sample, count_mesure_sample);
-		// directly append to file to prevent data loss in case simulation stops early
-		double time_zero = 0.0;
-		writeAppendToBinaryFile(1, &time_zero, SettingsMain, "/Monitoring_data/Mesure/Time_s_"+ to_str(SettingsMain.getGridSample()));  // time vector for data
-		writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample   , SettingsMain, "/Monitoring_data/Mesure/Energy_"+ to_str(SettingsMain.getGridSample()));
-		writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +1, SettingsMain, "/Monitoring_data/Mesure/Enstrophy_"+ to_str(SettingsMain.getGridSample()));
-		writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy_"+ to_str(SettingsMain.getGridSample()));
-		writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity_"+ to_str(SettingsMain.getGridSample()));
-		// output status to console
-		if (SettingsMain.getVerbose() >= 3) {
-			message = "Sample Cons : Energ = " + to_str(mesure_sample[4*count_mesure_sample], 8)
-					+    " \t Enstr = " + to_str(mesure_sample[4*count_mesure_sample+1], 8)
-					+ " \t Palinstr = " + to_str(mesure_sample[4*count_mesure_sample+2], 8)
-					+ " \t Wmax = " + to_str(mesure_sample[4*count_mesure_sample+3], 8);
-			std::cout<<message+"\n"; logger.push(message);
-		}
-		count_mesure_sample++;
+	message = sample_compute_and_write(SettingsMain, 0.0, dt, dt,
+			Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Host_save, Dev_Temp_2,
+			cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
+			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
+			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
+			bounds, Dev_W_H_initial);
+
+	// output status to console
+	if (SettingsMain.getVerbose() >= 3) {
+		std::cout<<message+"\n"; logger.push(message);
 	}
 
     cudaDeviceSynchronize();
@@ -770,14 +719,13 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	}
 
 	// zoom if wanted, has to be done after particle initialization, maybe a bit useless at first instance
-	if (SettingsMain.getZoom() && SettingsMain.getZoomSaveInitial()) {
-		Zoom(SettingsMain, Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
-				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
-				(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
-				Host_particles_pos, Dev_particles_pos,
-				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
-				Host_save, "0");
-	}
+	Zoom(SettingsMain, 0.0, dt, dt,
+			Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
+			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
+			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
+			Host_particles_pos, Dev_particles_pos,
+			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
+			Host_save);
 
 
 	// displaying max and min of vorticity and velocity for plotting limits and cfl condition
@@ -814,8 +762,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	{
 		auto step = std::chrono::high_resolution_clock::now();
 		double diff = std::chrono::duration_cast<std::chrono::microseconds>(step - begin).count()/1e6;
-		time_values[loop_ctr] = diff; // loop_ctr was already increased
-		writeAppendToBinaryFile(1, time_values + loop_ctr, SettingsMain, "/Monitoring_data/Time_c");
+		writeAppendToBinaryFile(1, &diff, SettingsMain, "/Monitoring_data/Time_c");
 	}
 
 	/*******************************************************************
@@ -845,31 +792,16 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		/*
 		 * Timestep initialization:
 		 *  - avoid overstepping final time
-		 *  - avoid overstepping targets
+		 *  - avoid overstepping time targets
 		 *  - save dt and t into vectors for lagrange interpolation
 		 */
 		int loop_ctr_l = loop_ctr + SettingsMain.getLagrangeOrder()-1;
-		double dt_now = dt;  // compute current timestep size
+
+		// avoid overstepping specific time targets
+		double dt_now = compute_next_timestep(SettingsMain, t_vec[loop_ctr_l], dt);
 
 		// avoid overstepping final time
-		if(t_vec[loop_ctr_l] + dt > tf) dt_now = tf - t_vec[loop_ctr_l];
-		// avoid overstepping specific targets
-		double targets[5] = {SettingsMain.getSnapshotsPerSec(),
-						  SettingsMain.getConvSnapshotsPerSec(),
-						  SettingsMain.getSampleOnGrid()*SettingsMain.getSampleSnapshotsPerSec(),
-						  SettingsMain.getZoom()*SettingsMain.getZoomSnapshotsPerSec(),
-						  SettingsMain.getParticles()*SettingsMain.getParticlesSnapshotsPerSec(),
-//						  4/PI  // enforce one step change to test convergence behaviour
-		};
-		for ( const auto &i_target : targets) {
-			if (i_target > 0) {
-				double target_now = 1.0/(double)i_target;
-				if(fmod(t_vec[loop_ctr_l]+dt*1e-5, target_now) > fmod(t_vec[loop_ctr_l] + dt*(1+1e-5), target_now)) {
-					dt_now = fmin(dt_now, target_now - fmod(t_vec[loop_ctr_l], target_now));
-				}
-			}
-		}
-
+		if(t_vec[loop_ctr_l] + dt_now > tf) dt_now = tf - t_vec[loop_ctr_l];
 		// set new dt into time vectors for lagrange interpolation
 		t_vec[loop_ctr_l + 1] = t_vec[loop_ctr_l] + dt_now;
 		dt_vec[loop_ctr_l + 1] = dt_now;
@@ -921,18 +853,19 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		*				If exceeded: Safe map on CPU RAM
 		*							 Initialize variables
 		*******************************************************************/
-		err_incomp_b[loop_ctr] = incompressibility_check(Grid_fine, Grid_coarse, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1);
-//		err_incomp_b[loop_ctr] = incompressibility_check(Grid_coarse, Grid_coarse, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1);
+	    double monitor_map[5];
+	    monitor_map[0] = incompressibility_check(Grid_fine, Grid_coarse, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1);
+//		monitor_map[0] = incompressibility_check(Grid_coarse, Grid_coarse, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1);
 
 		if (SettingsMain.getForwardMap()) {
-			err_invert[loop_ctr] = invertibility_check(Grid_coarse, Grid_coarse, Grid_forward,
+			monitor_map[2] = invertibility_check(Grid_coarse, Grid_coarse, Grid_forward,
 					Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, (cufftDoubleReal*)Dev_Temp_C1);
 
-			err_incomp_f[loop_ctr] = incompressibility_check(Grid_coarse, Grid_forward, Dev_ChiX_f, Dev_ChiY_f, (cufftDoubleReal*)Dev_Temp_C1);
+			monitor_map[1] = incompressibility_check(Grid_coarse, Grid_forward, Dev_ChiX_f, Dev_ChiY_f, (cufftDoubleReal*)Dev_Temp_C1);
 		}
 
 		// resetting map and adding to stack if resetting condition is met
-		if( err_incomp_b[loop_ctr] > SettingsMain.getIncompThreshold() && !SettingsMain.getSkipRemapping()) {
+		if( monitor_map[0] > SettingsMain.getIncompThreshold() && !SettingsMain.getSkipRemapping()) {
 
 			//		if( err_incomp_b[loop_ctr] > SettingsMain.getIncompThreshold() && !SettingsMain.getSkipRemapping()) {
 			if(Map_Stack.map_stack_ctr > Map_Stack.cpu_map_num*Map_Stack.Nb_array_RAM)
@@ -971,8 +904,8 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			}
 		}
 		// save map invetigative details
-		map_gap[loop_ctr] = loop_ctr - old_ctr;
-		map_ctr[loop_ctr] = Map_Stack.map_stack_ctr;
+		monitor_map[3] = loop_ctr - old_ctr;
+		monitor_map[4] = Map_Stack.map_stack_ctr;
 
 
 	    /*
@@ -1021,73 +954,30 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			*				Variables on sampled grid if wanted
 			*				Particles together with fine particles
 			*******************************************************************/
-	    if (SettingsMain.getSnapshotsPerSec() > 0) {
-			if( fmod(t_vec[loop_ctr_l+1]+dt*1e-5, 1.0/(double)SettingsMain.getSnapshotsPerSec()) < dt_vec[loop_ctr_l+1] ) {
-				if (SettingsMain.getVerbose() >= 2) {
-					message = "Saving data : T = " + to_str(t_vec[loop_ctr_l+1]) + " \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
-					std::cout<<message+"\n"; logger.push(message);
-				}
+		// save function to save variables, combined so we always save in the same way and location
+		writeTimeStep(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Grid_fine, Grid_coarse, Grid_psi,
+				Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
+				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
 
-				// save function to save variables, combined so we always save in the same way and location
-				// fine vorticity disabled, as this needs another Grid_fine.sizeNReal in temp buffer, need to resolve later
-//				apply_map_stack_to_W_part_All(Grid_fine, Map_Stack, Dev_ChiX, Dev_ChiY,
-//						(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
-				writeTimeStep(SettingsMain, to_str(t_vec[loop_ctr_l+1]), Grid_fine, Grid_coarse, Grid_psi,
-						Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
-						Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
-			}
-	    }
+		// compute conservation if wanted
+		message = compute_conservation_targets(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Grid_fine, Grid_coarse, Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
+				cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
+				Dev_Temp_C1);
+		// output computational mesure status to console
+		if (SettingsMain.getVerbose() >= 3 && message != "") {
+			std::cout<<message+"\n"; logger.push(message);
+		}
 
-	    if (SettingsMain.getConvSnapshotsPerSec() > 0) {
-			if( fmod(t_vec[loop_ctr_l+1]+dt*1e-5, 1.0/(double)SettingsMain.getConvSnapshotsPerSec()) < dt_vec[loop_ctr_l+1] ) {
-				compute_conservation_targets(Grid_fine, Grid_coarse, Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
-						cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
-						Dev_Temp_C1, mesure, count_mesure);
-				// directly append to file to prevent data loss in case simulation stops early
-				writeAppendToBinaryFile(1, t_vec + loop_ctr_l+1, SettingsMain, "/Monitoring_data/Mesure/Time_s");  // time vector for data
-				writeAppendToBinaryFile(1, mesure + 4*count_mesure   , SettingsMain, "/Monitoring_data/Mesure/Energy");
-				writeAppendToBinaryFile(1, mesure + 4*count_mesure +1, SettingsMain, "/Monitoring_data/Mesure/Enstrophy");
-				writeAppendToBinaryFile(1, mesure + 4*count_mesure +2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy");
-				writeAppendToBinaryFile(1, mesure + 4*count_mesure +3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity");
-				// output status to console
-				if (SettingsMain.getVerbose() >= 3) {
-					message = "Coarse Cons : Energ = " + to_str(mesure[4*count_mesure], 8)
-							+    " \t Enstr = " + to_str(mesure[4*count_mesure+1], 8)
-							+ " \t Palinstr = " + to_str(mesure[4*count_mesure+2], 8)
-							+ " \t Wmax = " + to_str(mesure[4*count_mesure+3], 8);
-					std::cout<<message+"\n"; logger.push(message);
-				}
-				count_mesure++;
-			}
-	    }
-	    if (SettingsMain.getSampleOnGrid()*SettingsMain.getSampleSnapshotsPerSec() > 0) {
-	    	if( fmod(t_vec[loop_ctr_l+1]+dt*1e-5, 1.0/(double)SettingsMain.getSampleSnapshotsPerSec()) < dt_vec[loop_ctr_l+1] ) {
-				if (SettingsMain.getVerbose() >= 2) {
-					message = "Saving sample data : T = " + to_str(t_vec[loop_ctr_l+1]) + " \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
-					std::cout<<message+"\n"; logger.push(message);
-				}
-				sample_compute_and_write(Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Host_save, Dev_Temp_2,
-						cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
-						Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
-						Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
-						bounds, Dev_W_H_initial, SettingsMain, to_str(t_vec[loop_ctr_l+1]),
-						mesure_sample, count_mesure_sample);
-				// directly append to file to prevent data loss in case simulation stops early
-				writeAppendToBinaryFile(1, t_vec + loop_ctr_l+1, SettingsMain, "/Monitoring_data/Mesure/Time_s_"+ to_str(SettingsMain.getGridSample()));  // time vector for data
-				writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample   , SettingsMain, "/Monitoring_data/Mesure/Energy_"+ to_str(SettingsMain.getGridSample()));
-				writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +1, SettingsMain, "/Monitoring_data/Mesure/Enstrophy_"+ to_str(SettingsMain.getGridSample()));
-				writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy_"+ to_str(SettingsMain.getGridSample()));
-				writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity_"+ to_str(SettingsMain.getGridSample()));
-				// output status to console
-				if (SettingsMain.getVerbose() >= 3) {
-					message = "Sample Cons : Energ = " + to_str(mesure_sample[4*count_mesure_sample], 8)
-							+    " \t Enstr = " + to_str(mesure_sample[4*count_mesure_sample+1], 8)
-							+ " \t Palinstr = " + to_str(mesure_sample[4*count_mesure_sample+2], 8)
-							+ " \t Wmax = " + to_str(mesure_sample[4*count_mesure_sample+3], 8);
-					std::cout<<message+"\n"; logger.push(message);
-				}
-				count_mesure_sample++;
-	    	}
+		// sample if wanted
+		message = sample_compute_and_write(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt,
+				Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Host_save, Dev_Temp_2,
+				cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
+				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
+				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
+				bounds, Dev_W_H_initial);
+		// output sample mesure status to console
+		if (SettingsMain.getVerbose() >= 3 && message != "") {
+			std::cout<<message+"\n"; logger.push(message);
 		}
 
 		if (SettingsMain.getParticles()*SettingsMain.getParticlesSnapshotsPerSec() > 0) {
@@ -1110,22 +1000,14 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			}
 		}
 		
-		// zoom if wanted, has to be done after particle initialization, maybe a bit useless at first instance
-		if (SettingsMain.getZoom()*SettingsMain.getZoomSnapshotsPerSec() > 0) {
-			if( fmod(t_vec[loop_ctr_l+1]+dt*1e-5, 1.0/(double)SettingsMain.getZoomSnapshotsPerSec()) < dt_vec[loop_ctr_l+1] ) {
-				if (SettingsMain.getVerbose() >= 2) {
-					message = "Saving Zoom : T = " + to_str(t_vec[loop_ctr_l+1]) + " \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
-					std::cout<<message+"\n"; logger.push(message);
-				}
-
-				Zoom(SettingsMain, Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
-						Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
-						(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
-						Host_particles_pos, Dev_particles_pos,
-						Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
-						Host_save, to_str(t_vec[loop_ctr_l+1]));
-			}
-		}
+		// zoom if wanted
+		Zoom(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt,
+				Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
+				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
+				(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
+				Host_particles_pos, Dev_particles_pos,
+				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
+				Host_save);
 
 		/*
 		 * Some small things at the end of the loop
@@ -1151,34 +1033,35 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		// save timings
 		writeAppendToBinaryFile(1, t_vec + loop_ctr_l + 1, SettingsMain, "/Monitoring_data/Time_s");
 	    // save error for backwards incompressibility check, forwards incomp and invertibility
-		writeAppendToBinaryFile(1, err_incomp_b + loop_ctr-1, SettingsMain, "/Monitoring_data/Error_incompressibility");
+		writeAppendToBinaryFile(1, monitor_map, SettingsMain, "/Monitoring_data/Error_incompressibility");
 		if (SettingsMain.getForwardMap()) {
-			writeAppendToBinaryFile(1, err_incomp_f + loop_ctr-1, SettingsMain, "/Monitoring_data/Error_incompressibility_forward");
-			writeAppendToBinaryFile(1, err_invert + loop_ctr-1, SettingsMain, "/Monitoring_data/Error_invertibility");
+			writeAppendToBinaryFile(1, monitor_map+1, SettingsMain, "/Monitoring_data/Error_incompressibility_forward");
+			writeAppendToBinaryFile(1, monitor_map+2, SettingsMain, "/Monitoring_data/Error_invertibility");
 		}
 		// save map monitorings
-		writeAppendToBinaryFile(1, map_gap + loop_ctr-1, SettingsMain, "/Monitoring_data/Map_gaps");
-		writeAppendToBinaryFile(1, map_ctr + loop_ctr-1, SettingsMain, "/Monitoring_data/Map_counter");
+		writeAppendToBinaryFile(1, monitor_map+3, SettingsMain, "/Monitoring_data/Map_gaps");
+		writeAppendToBinaryFile(1, monitor_map+4, SettingsMain, "/Monitoring_data/Map_counter");
 
 		// save timing at last part of a step to take everything into account
+		double c_time;
 		{
 			auto step = std::chrono::high_resolution_clock::now();
 			double diff = std::chrono::duration_cast<std::chrono::microseconds>(step - begin).count()/1e6;
-			time_values[loop_ctr] = diff; // loop_ctr was already increased but first entry is init time
+			c_time = diff; // loop_ctr was already increased but first entry is init time
 		}
 		if (SettingsMain.getVerbose() >= 2) {
 			message = "Step = " + to_str(loop_ctr)
 					+ " \t S-Time = " + to_str(t_vec[loop_ctr_l+1]) + "/" + to_str(tf)
-					+ " \t E-inc = " + to_str(err_incomp_b[loop_ctr-1]);
+					+ " \t E-inc = " + to_str(monitor_map[0]);
 			if (SettingsMain.getForwardMap()) {
-				message += " \t E-inc_f = " + to_str(err_incomp_f[loop_ctr-1])
-						+ " \t E-inv = " + to_str(err_invert[loop_ctr-1]);
+				message += " \t E-inc_f = " + to_str(monitor_map[1])
+						+ " \t E-inv = " + to_str(monitor_map[2]);
 			}
-			message += " \t C-Time = " + format_duration(time_values[loop_ctr]);
+			message += " \t C-Time = " + format_duration(c_time);
 			std::cout<<message+"\n"; logger.push(message);
 		}
 
-		writeAppendToBinaryFile(1, time_values + loop_ctr, SettingsMain, "/Monitoring_data/Time_c");
+		writeAppendToBinaryFile(1, &c_time, SettingsMain, "/Monitoring_data/Time_c");
 	}
 	
 	// introduce part to console
@@ -1251,79 +1134,46 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	*						 Save final step						   *
 	*******************************************************************/
 
-	// save function to save variables, combined so we always save in the same way and location, last step so we can actually modify the condition
-	if (SettingsMain.getSaveFinal() || SettingsMain.getConvInitFinal()) {
-		// fine vorticity disabled, as this needs another Grid_fine.sizeNReal in temp buffer, need to resolve later
-//		apply_map_stack_to_W_part_All(Grid_fine, Map_Stack, Dev_ChiX, Dev_ChiY,
-//				(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, SettingsMain.getInitialConditionNum());
+	// save function to save variables, combined so we always save in the same way and location
+	writeTimeStep(SettingsMain, T_MAX-dt, 1e300, dt, Grid_fine, Grid_coarse, Grid_psi,
+			Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
+			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
 
-		if (SettingsMain.getSaveFinal()) {
-			writeTimeStep(SettingsMain, "final", Grid_fine, Grid_coarse, Grid_psi,
-					Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
-					Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
-		}
-
-		// compute conservation if wanted, not connected to normal saving to reduce data
-		if (SettingsMain.getConvInitFinal()) {
-			compute_conservation_targets(Grid_fine, Grid_coarse, Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
-					cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
-					Dev_Temp_C1, mesure, count_mesure);
-			// directly append to file to prevent data loss in case simulation stops early
-			writeAppendToBinaryFile(1, t_vec + loop_ctr + SettingsMain.getLagrangeOrder()-1, SettingsMain, "/Monitoring_data/Mesure/Time_s");  // time vector for data
-			writeAppendToBinaryFile(1, mesure + 4*count_mesure   , SettingsMain, "/Monitoring_data/Mesure/Energy");
-			writeAppendToBinaryFile(1, mesure + 4*count_mesure +1, SettingsMain, "/Monitoring_data/Mesure/Enstrophy");
-			writeAppendToBinaryFile(1, mesure + 4*count_mesure +2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy");
-			writeAppendToBinaryFile(1, mesure + 4*count_mesure +3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity");
-			// output status to console
-			if (SettingsMain.getVerbose() >= 3) {
-				message = "Coarse Cons : Energ = " + to_str(mesure[4*count_mesure], 8)
-						+    " \t Enstr = " + to_str(mesure[4*count_mesure+1], 8)
-						+ " \t Palinstr = " + to_str(mesure[4*count_mesure+2], 8)
-						+ " \t Wmax = " + to_str(mesure[4*count_mesure+3], 8);
-				std::cout<<message+"\n"; logger.push(message);
-			}
-			count_mesure++;
-		}
-
+	// compute conservation if wanted
+	message = compute_conservation_targets(SettingsMain, T_MAX-dt, 1e300, dt, Grid_fine, Grid_coarse, Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
+			cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
+			Dev_Temp_C1);
+	// output computational mesure status to console
+	if (SettingsMain.getVerbose() >= 3 && message != "") {
+		std::cout<<message+"\n"; logger.push(message);
 	}
 
 	// sample if wanted
-	if (SettingsMain.getSampleOnGrid() && SettingsMain.getSampleSaveFinal()) {
-		sample_compute_and_write(Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Host_save, Dev_Temp_2,
-				cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
-				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
-				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
-				bounds, Dev_W_H_initial, SettingsMain, "final",
-				mesure_sample, count_mesure_sample);
-		// directly append to file to prevent data loss in case simulation stops early
-		writeAppendToBinaryFile(1, t_vec + loop_ctr + SettingsMain.getLagrangeOrder()-1, SettingsMain, "/Monitoring_data/Mesure/Time_s_"+ to_str(SettingsMain.getGridSample()));  // time vector for data
-		writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample   , SettingsMain, "/Monitoring_data/Mesure/Energy_"+ to_str(SettingsMain.getGridSample()));
-		writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +1, SettingsMain, "/Monitoring_data/Mesure/Enstrophy_"+ to_str(SettingsMain.getGridSample()));
-		writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy_"+ to_str(SettingsMain.getGridSample()));
-		writeAppendToBinaryFile(1, mesure_sample + 4*count_mesure_sample +3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity_"+ to_str(SettingsMain.getGridSample()));
-		// output status to console
-		if (SettingsMain.getVerbose() >= 3) {
-			message = "Sample Cons : Energ = " + to_str(mesure_sample[4*count_mesure_sample], 8)
-					+    " \t Enstr = " + to_str(mesure_sample[4*count_mesure_sample+1], 8)
-					+ " \t Palinstr = " + to_str(mesure_sample[4*count_mesure_sample+2], 8)
-					+ " \t Wmax = " + to_str(mesure_sample[4*count_mesure_sample+3], 8);
-			std::cout<<message+"\n"; logger.push(message);
-		}
-		count_mesure_sample++;
+	message = sample_compute_and_write(SettingsMain, T_MAX-dt, 1e300, dt,
+			Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Host_save, Dev_Temp_2,
+			cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
+			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
+			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
+			bounds, Dev_W_H_initial);
+	// output sample mesure status to console
+	if (SettingsMain.getVerbose() >= 3 && message != "") {
+		std::cout<<message+"\n"; logger.push(message);
 	}
+
+	// save particles
 	if (SettingsMain.getParticles() && SettingsMain.getParticlesSaveFinal()) {
 		writeParticles(SettingsMain, "final", Host_particles_pos, Dev_particles_pos);
 	}
 
 	// zoom if wanted
-	if (SettingsMain.getZoom() && SettingsMain.getZoomSaveFinal()) {
-		Zoom(SettingsMain, Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
-				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
-				(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
-				Host_particles_pos, Dev_particles_pos,
-				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
-				Host_save, "final");
-	}
+	Zoom(SettingsMain, T_MAX-dt, 1e300, dt,
+			Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
+			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
+			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
+			Host_particles_pos, Dev_particles_pos,
+			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
+			Host_save);
+
 	
 	// save map stack if wanted
 	if (SettingsMain.getSaveMapStack()) {
@@ -1370,8 +1220,8 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	cufftDestroy(cufft_plan_coarse_D2Z); cufftDestroy(cufft_plan_coarse_Z2D);
 	cufftDestroy(cufft_plan_fine_D2Z);   cufftDestroy(cufft_plan_fine_Z2D);
 	cufftDestroy(cufft_plan_vort_D2Z);   cufftDestroy(cufft_plan_psi_Z2D);
-	if (SettingsMain.getSampleOnGrid()) {
-		cufftDestroy(cufft_plan_sample_D2Z); cufftDestroy(cufft_plan_sample_Z2D);
+	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
+		cufftDestroy(cufft_plan_sample_D2Z[i_save]); cufftDestroy(cufft_plan_sample_Z2D[i_save]);
 	}
 	cudaFree(fft_work_area);
 
@@ -1384,20 +1234,14 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
         cudaFree(Dev_particles_vel);
 	}
 
-    cudaFree(mesure);
-	if (SettingsMain.getSampleOnGrid()) {
-		cudaFree(mesure_sample);
-	}
-
 	// delete monitoring values
-	delete []     err_incomp_b, map_gap, map_ctr, time_values, t_vec, dt_vec;
+	delete [] t_vec, dt_vec;
 
 	// save timing at last part of a step to take everything into account
     {
 		auto step = std::chrono::high_resolution_clock::now();
 		double diff = std::chrono::duration_cast<std::chrono::microseconds>(step - begin).count()/1e6;
-		time_values[loop_ctr+1] = diff;
-		writeAppendToBinaryFile(1, time_values + loop_ctr+1, SettingsMain, "/Monitoring_data/Time_c");
+		writeAppendToBinaryFile(1, &diff, SettingsMain, "/Monitoring_data/Time_c");
     }
     // save timing to file
 //	writeAllRealToBinaryFile(loop_ctr+2, time_values, SettingsMain, "/Monitoring_data/Timing_Values");

@@ -102,7 +102,7 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 			double shear_delta = 14 * inst_freq / twoPI;  // thickness of shear layer, physically connected, twoPi as domainsize
 
 			// (1 + sin-perturbation) * sech^2(thickness*x)
-			return fac * (1 + inst_strength * sin(inst_freq*x))  * 4 / (exp(-shear_delta*(y-PI))+exp(shear_delta*(y-PI)))
+			return fac * (1 + inst_strength * cos(inst_freq*x))  * 4 / (exp(-shear_delta*(y-PI))+exp(shear_delta*(y-PI)))
 															         / (exp(-shear_delta*(y-PI))+exp(shear_delta*(y-PI)));
 			break;
 		}
@@ -281,7 +281,8 @@ __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain
 
 	// unpack all parameters according to type
 	long long int seed;
-	int init_num; int num; int center_x, center_y, width_x, width_y;
+	int init_num; int num;
+	double* init_parameter;  // parameter array
 
 	switch (particle_type) {
 		case 0:  // advected particles
@@ -289,8 +290,8 @@ __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain
 			seed = SettingsMain.getParticlesSeed();
 			init_num = SettingsMain.getParticlesInitNum();
 			num = SettingsMain.getParticlesNum();
-			center_x = SettingsMain.getParticlesCenterX(); center_y = SettingsMain.getParticlesCenterY();
-			width_x = SettingsMain.getParticlesWidthX(); width_y = SettingsMain.getParticlesWidthY();
+
+			init_parameter = SettingsMain.particles_init_parameter;
 			break;
 		}
 		case 1:  // forward particles
@@ -298,8 +299,8 @@ __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain
 			seed = SettingsMain.getForwardParticlesSeed();
 			init_num = SettingsMain.getForwardParticlesInitNum();
 			num = SettingsMain.getForwardParticlesNum();
-			center_x = SettingsMain.getForwardParticlesCenterX(); center_y = SettingsMain.getForwardParticlesCenterY();
-			width_x = SettingsMain.getForwardParticlesWidthX(); width_y = SettingsMain.getForwardParticlesWidthY();
+
+			init_parameter = SettingsMain.forward_particles_init_parameter;
 			break;
 		}
 	}
@@ -317,8 +318,9 @@ __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain
 			curandGenerateUniformDouble(prng, Dev_particles_pos, 2*num);
 
 			// project 0-1 onto particle frame
+			// init_param constitute to center_x, center_y, width_x, width_y
 			k_rescale<<<particle_block, particle_thread>>>(num,
-					center_x, center_y, width_x, width_y,
+					init_parameter[0], init_parameter[1], init_parameter[2], init_parameter[3],
 					Dev_particles_pos, domain_bounds[1], domain_bounds[3]);
 
 			break;
@@ -328,23 +330,26 @@ __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain
 			// create all values with standard variance around 0.5, 0.5 is subtracted later in k_rescale
 			curandGenerateNormalDouble( prng, Dev_particles_pos, 2*num, 0.5, 1.0);
 
-			// shift and scale all values to fit the desired quantities, width represents the variance
+			// shift and scale all values to fit the desired quantities
+			// init_param constitute to center_x, center_y, variance_x, variance_y
 			k_rescale<<<particle_block, particle_thread>>>(num,
-					center_x, center_y, width_x, width_y,
+					init_parameter[0], init_parameter[1], init_parameter[2], init_parameter[3],
 					Dev_particles_pos, domain_bounds[1], domain_bounds[3]);
 
 			break;
 		}
 		case 2:  // distributed in a circle
 		{
+			// init_param constitute to center_x, center_y, radius_x, radius_y
 			k_part_init_circle<<<particle_block, particle_thread>>>(Dev_particles_pos, num,
-					center_x, center_y, width_x, width_y);
+					init_parameter[0], init_parameter[1], init_parameter[2], init_parameter[3]);
 			break;
 		}
-		case 3:  // uniform grid
+		case 3:  // uniform grid with equal amount of points in x- and y-direction
 		{
+			// init_param constitute to center_x, center_y, length_x/2, length_y/2
 			k_part_init_uniform_grid<<<particle_block, particle_thread>>>(Dev_particles_pos, num,
-					center_x, center_y, width_x, width_y);
+					init_parameter[0], init_parameter[1], init_parameter[2], init_parameter[3]);
 			break;
 		}
 
@@ -377,7 +382,7 @@ __global__ void k_part_init_uniform_grid(double* Dev_particles_pos, int particle
 	if (i >= particle_num)
 		return;
 
-	int length = ceil(sqrt((double)particle_num));  // distribute all points with equal points in x- and y-direction
+	int length = ceil(sqrt((double)particle_num));  // distribute all points with equal points num in x- and y-direction
 
 	Dev_particles_pos[2*i]   = square_center_x + square_radius_x * (-1 + 2*(i % length)/(double)length);
 	Dev_particles_pos[2*i+1] = square_center_y + square_radius_y * (-1 + 2*(i / length)/(double)length);

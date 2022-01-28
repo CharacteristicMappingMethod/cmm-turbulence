@@ -44,39 +44,40 @@ void SettingsCMM::setPresets() {
 	int verbose = 3;
 
 	// set time properties
-	double final_time = 6;  // end of computation
+	double final_time = 1;  // end of computation
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
 	int steps_per_sec = 128;  // how many steps do we want per seconds?
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
 	// dt will be set in cudaeuler, so that all changes can be applied there
-	double snapshots_per_sec = -1;  // how many times do we want to save data per sec, set <= 0 to disable
-	bool save_initial = true;  // consume less data and make it possible to disable saving the initial data
-	bool save_final = true;  // consume less data and make it possible to disable saving the final data
 
 	/*
 	 * Which variables do we want to save? Best separated by a "-"
 	 * Vorticity: "Vorticity", "W"
 	 *
 	 * Stream function: "Stream", "Psi"
-	 * Stream function hermite: "Stream_H", "Psi_H" - not for zoom_save_var
-	 * Velocity: "Velocity", "U" - not for zoom_save_var
+	 * Stream function hermite: "Stream_H", "Psi_H" - not for zoom
+	 * Velocity: "Velocity", "U" - not for zoom
 	 *
 	 * Backwards map: "Map", "Map_b", "Chi", "Chi_b"
-	 * Backwards map Hermite: "Map_H", "Chi_H" - only for save_var
+	 * Backwards map Hermite: "Map_H", "Chi_H" - only for save
 	 *
-	 * Laplacian of vorticity: "Laplacian_W" - only for sample_save_var - is stream function?
-	 * Gradient of vorticity: "Grad_W" - only for sample_save_var
+	 * Laplacian of vorticity: "Laplacian_W" - only for sample - is stream function?
+	 * Gradient of vorticity: "Grad_W" - only for sample
 	 *
 	 * Passive scalar: "Scalar", "Theta" - not for save_var
-	 * Particles: "Particles", "P" - only for zoom_save_var and with particles
+	 * Particles: "Particles", "P" - only for zoom and with particles
 	 *
 	 * Forward map: "Map_f", "Chi_f"
-	 * Forwards map Hermite: "Map_f_H", "Chi_f_H" - only for save_var
+	 * Forwards map Hermite: "Map_f_H", "Chi_f_H" - only for save
 	 */
-	std::string save_var = "W-U";  // string containing all wanted variables, works for W, Psi, U and Chi
+	// time instants or intervals at what we want to save computational data, 0 for initial and T_MAX for final
+	int save_computational_num = 3;
+	std::string save_computational_s[3] = {
+			"{is_instant=1,time_start=0,var=W-U,conv=1}",  // save begin
+			"{is_instant=1,time_start="+str_t(T_MAX)+",var=W-U,conv=1}",  // save end
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var= ,conv=1}"  // conv over simulation
+	};
 
-	bool conv_init_final = true;  // compute initial and final convergence details?
-	double conv_snapshots_per_sec = -1;  // how many times do we want to compute conservation details per sec, set <= 0 to disable
 
 	// set minor properties
 	double incomp_threshhold = 1e-4;  // the maximum allowance of map to deviate from grad_chi begin 1
@@ -118,13 +119,11 @@ void SettingsCMM::setPresets() {
 	// in addition to the upsampling, we want to lowpass in fourier space by cutting high frequencies
 	double freq_cut_psi = (double)(grid_coarse)/4.0;  // take into account, that frequencies are symmetric around N/2
 
-	// possibility to sample values on a specified grid
-	bool sample_on_grid = true;
-	int grid_sample = 1024;
-	double sample_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save sample data per sec, set <= 0 to disable
-	bool sample_save_initial = true;  // consume less data and make it possible to disable saving the initial data
-	bool sample_save_final = true;  // consume less data and make it possible to disable saving the final data
-	std::string sample_save_var = "W-U-Theta";  // see save_var
+	// time instants or intervals at what we want to save computational data, 0 for initial and T_MAX for final
+	int save_sample_num = 1;
+	std::string save_sample_s[1] = {
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step="+str_t(T_MAX)+",var=W-U-Theta,grid=1024}",  // save over simulation
+	};
 
 
 	/*
@@ -144,20 +143,13 @@ void SettingsCMM::setPresets() {
 	/*
 	 * Zoom settings
 	 */
-	bool zoom = false;  // en- or disable zoom
-	int grid_zoom = 1024;  // we can set our own gridsize for the zoom
-	// position settings
-	double zoom_center_x = twoPI * 0.5;
-	double zoom_center_y = twoPI * 0.6;
-	double zoom_width_x = twoPI * 2e-1;  // twoPI taken as LX, width of the zoom window
-	double zoom_width_y = twoPI * 2e-1;  // twoPI taken as LY, width of the zoom window
-	int zoom_repetitions = 4;  // how many repetitive zooms with decreasing windows?
-	double zoom_repetitions_factor = 0.5;  // how much do we want to decrease the window each time
-	// saving settings
-	double zoom_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save zoom per sec, set <= 0 to disable
-	bool zoom_save_initial = true;  // consume less data and make it possible to disable saving the initial zoom
-	bool zoom_save_final = true;  // consume less data and make it possible to disable saving the final zoom
-	std::string zoom_save_var = "W-P";
+	// time instants or intervalls at what we want to save computational data, 0 for initial and T_MAX for final
+	int save_zoom_num = 0;
+	std::string save_zoom_s[1] = {
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=W-P,grid=1024"
+			",pos_x="+str_t(twoPI * 0.5)+",pos_y="+str_t(twoPI * 0.6)+",width_x="+str_t(twoPI * 2e-1)+",width_y"+str_t(twoPI * 2e-1)+
+			",rep="+str_t(2)+",rep_fac="+str_t(0.5)+"}"
+	};
 
 
 
@@ -170,10 +162,9 @@ void SettingsCMM::setPresets() {
 	int forward_particles_num = (int)1e4;  // number of particles
 	std::string forward_particles_init_name = "circular_ring";  // same conditions as particles
 	unsigned long long forward_particles_seed = 0ULL;
-	double forward_particles_center_x = PI;  // frame center position, middle of particle domain
-	double forward_particles_center_y = PI;  // frame center position, middle of particle domain
-	double forward_particles_width_x = PI/2.0;  // frame width, variance for normal distribution
-	double forward_particles_width_y = PI/2.0;  // frame width, variance for normal distribution
+	// array containing all parameter, this list can be extended for different init settings with more parameters, see zoom function
+	std::string forward_particles_init_parameter_s = "\"" + str_t(PI) + "," + str_t(PI)
+													+ "," + str_t(PI/2.0) + "," + str_t(PI/2.0) + "\"";
 
 
 	/*
@@ -182,7 +173,7 @@ void SettingsCMM::setPresets() {
 	 *  - control saving intervals of particle positions
 	 *  - save some particles at every position for detailed analysis
 	 */
-	bool particles = false;  // en- or disable particles
+	bool particles = true;  // en- or disable particles
 	int particles_num = (int)1e4;  // number of particles
 
 	/*
@@ -192,20 +183,19 @@ void SettingsCMM::setPresets() {
 	 *  "circular_ring"				-   circular ring around specific center with particles_width as radius
 	 *  "uniform_grid"				-   uniform grid with equal amount of points in x- and y-direction in particular frame
 	 */
-	std::string particles_init_name = "circular_ring";
+	std::string particles_init_name = "gaussian";
 
 	unsigned long long particles_seed = 0ULL;
-	double particles_center_x = PI;  // frame center position, middle of particle domain
-	double particles_center_y = PI;  // frame center position, middle of particle domain
-	double particles_width_x = PI/2.0;  // frame width, variance for normal distribution
-	double particles_width_y = PI/2.0;  // frame width, variance for normal distribution
+	// array containing all parameter, this list can be extended for different init settings with more parameters, see cmm-init.cu
+	std::string particles_init_parameter_s = "\"" + str_t(PI) + "," + str_t(PI) + "," + str_t(PI/2.0) + "," + str_t(PI/2.0) + "\"";
+	double particles_init_time = 3;  // at what time should the particle computation start?
 
 	int particles_tau_num = 1;  // how many tau_p values do we have? for now maximum is 100
 //	double Tau_p[Nb_Tau_p] = {0.0, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.125, 0.15, 0.25, 0.5, 0.75, 1, 2, 5, 13};
 	// timestep restriction : tau is coupled to dt due to stability reasons
 	std::string particles_tau_s = "\"0, 0.1, 1\"";  // escape character \ needed for "
 
-	double particles_snapshots_per_sec = snapshots_per_sec;  // how many times do we want to save particles per sec, set <= 0 to disable
+	double particles_snapshots_per_sec = -1;  // how many times do we want to save particles per sec, set <= 0 to disable
 	bool particles_save_initial = true;  // consume less data and make it possible to disable saving the initial data
 	bool particles_save_final = true;  // consume less data and make it possible to disable saving the final data
 	int particles_steps = -1;  // hackery for particle convergence
@@ -230,13 +220,13 @@ void SettingsCMM::setPresets() {
 	setGridCoarse(grid_coarse); setGridFine(grid_fine);
 	setGridPsi(grid_psi); setGridVort(grid_vort);
 	setFinalTime(final_time);
-	setFactorDtByGrid(factor_dt_by_grid); setStepsPerSec(steps_per_sec);
-	setSnapshotsPerSec(snapshots_per_sec); setSetDtBySteps(set_dt_by_steps);
+	setSetDtBySteps(set_dt_by_steps); setFactorDtByGrid(factor_dt_by_grid); setStepsPerSec(steps_per_sec);
 
-	setSaveInitial(save_initial); setSaveFinal(save_final);
-	setSaveVar(save_var);
-
-	setConvInitFinal(conv_init_final); setConvSnapshotsPerSec(conv_snapshots_per_sec);
+	setSaveComputationalNum(save_computational_num);
+	for (int i_save = 0; i_save < save_computational_num; ++i_save) {
+		save_computational[i_save] = SaveComputational();
+		save_computational[i_save].setAllVariables(save_computational_s[i_save]);
+	}
 
 	setInitialCondition(initial_condition);
 	setInitialDiscrete(initial_discrete);
@@ -259,47 +249,35 @@ void SettingsCMM::setPresets() {
 	setFreqCutPsi(freq_cut_psi);
 	setSkipRemapping(skip_remapping);
 
-	setSampleOnGrid(sample_on_grid);
-	setGridSample(grid_sample);
-	setSampleSnapshotsPerSec(sample_snapshots_per_sec);
-	setSampleSaveInitial(sample_save_initial); setSampleSaveFinal(sample_save_final);
-	setSampleSaveVar(sample_save_var);
+	setSaveSampleNum(save_sample_num);
+	for (int i_save = 0; i_save < save_sample_num; ++i_save) {
+		save_sample[i_save] = SaveSample();
+		save_sample[i_save].setAllVariables(save_sample_s[i_save]);
+	}
 
 	setScalarName(scalar_name);
 	setScalarDiscrete(scalar_discrete);
 	setScalarDiscreteGrid(scalar_discrete_grid);
 	setScalarDiscreteLocation(scalar_discrete_location);
 
-	setZoom(zoom);
-	setGridZoom(grid_zoom);
-	setZoomCenterX(zoom_center_x);
-	setZoomCenterY(zoom_center_y);
-	setZoomWidthX(zoom_width_x);
-	setZoomWidthY(zoom_width_y);
-	setZoomRepetitions(zoom_repetitions);
-	setZoomRepetitionsFactor(zoom_repetitions_factor);
-
-	setZoomSnapshotsPerSec(zoom_snapshots_per_sec);
-	setZoomSaveInitial(zoom_save_initial); setZoomSaveFinal(zoom_save_final);
-	setZoomSaveVar(zoom_save_var);
+	setSaveZoomNum(save_zoom_num);
+	for (int i_save = 0; i_save < save_zoom_num; ++i_save) {
+		save_zoom[i_save] = SaveZoom();
+		save_zoom[i_save].setAllVariables(save_zoom_s[i_save]);
+	}
 
 	setForwardMap(forward_map);
 	setForwardParticles(forward_particles);
 	setForwardParticlesNum(forward_particles_num);
 	setForwardParticlesInitName(forward_particles_init_name);
 	setForwardParticlesSeed(forward_particles_seed);
-	setForwardParticlesCenterX(forward_particles_center_x);
-	setForwardParticlesCenterY(forward_particles_center_y);
-	setForwardParticlesWidthX(forward_particles_width_x);
-	setForwardParticlesWidthY(forward_particles_width_y);
+	string_to_double_array(forward_particles_init_parameter_s, forward_particles_init_parameter);
 
 	setParticles(particles);
 	setParticlesInitName(particles_init_name);
 	setParticlesSeed(particles_seed);
-	setParticlesCenterX(particles_center_x);
-	setParticlesCenterY(particles_center_y);
-	setParticlesWidthX(particles_width_x);
-	setParticlesWidthY(particles_width_y);
+	string_to_double_array(particles_init_parameter_s, particles_init_parameter);
+	setParticlesInitTime(particles_init_time);
 	setParticlesNum(particles_num);
 	setParticlesTauNum(particles_tau_num);
 	string_to_double_array(particles_tau_s, particles_tau);
@@ -333,7 +311,7 @@ void SettingsCMM::applyCommands(int argc, char *args[]) {
 
 
 // function to apply command with variable delimiter to change it
-void SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
+int SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 	// check for delimiter position
 	int pos_equal = command_full.find(delimiter);
 	if (pos_equal != std::string::npos) {
@@ -356,13 +334,18 @@ void SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		else if (command == "steps_per_sec") setStepsPerSec(std::stoi(value));
 		else if (command == "set_dt_by_steps") setSetDtBySteps(getBoolFromString(value));
 
-		else if (command == "snapshots_per_sec") setSnapshotsPerSec(std::stod(value));
-		else if (command == "save_initial") setSaveInitial(getBoolFromString(value));
-		else if (command == "save_final") setSaveFinal(getBoolFromString(value));
-		else if (command == "save_var") setSaveVar(value);
+		else if (command == "save_computational_num") {
+			setSaveComputationalNum(std::stoi(value));
+			return 1;
+		}
 
-		else if (command == "conv_init_final") setConvInitFinal(getBoolFromString(value));
-		else if (command == "conv_snapshots_per_sec") setConvSnapshotsPerSec(std::stod(value));
+//		else if (command == "snapshots_per_sec") setSnapshotsPerSec(std::stod(value));
+//		else if (command == "save_initial") setSaveInitial(getBoolFromString(value));
+//		else if (command == "save_final") setSaveFinal(getBoolFromString(value));
+//		else if (command == "save_var") setSaveVar(value);
+
+//		else if (command == "conv_init_final") setConvInitFinal(getBoolFromString(value));
+//		else if (command == "conv_snapshots_per_sec") setConvSnapshotsPerSec(std::stod(value));
 
 		else if (command == "mem_RAM_CPU_remaps") setMemRamCpuRemaps(std::stoi(value));
 		else if (command == "save_map_stack") setSaveMapStack(getBoolFromString(value));
@@ -385,48 +368,49 @@ void SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		else if (command == "freq_cut_psi") setFreqCutPsi(std::stod(value));
 		else if (command == "skip_remapping") setSkipRemapping(getBoolFromString(value));
 
-		else if (command == "sample_on_grid") setSampleOnGrid(getBoolFromString(value));
-		else if (command == "grid_sample") setGridSample(std::stoi(value));
-		else if (command == "sample_snapshots_per_sec") setSampleSnapshotsPerSec(std::stod(value));
-		else if (command == "sample_save_initial") setSampleSaveInitial(getBoolFromString(value));
-		else if (command == "sample_save_final") setSampleSaveFinal(getBoolFromString(value));
-		else if (command == "sample_save_var") setSampleSaveVar(value);
+		else if (command == "save_sample_num") {
+			setSaveComputationalNum(std::stoi(value));
+			return 2;
+		}
+//		else if (command == "sample_on_grid") setSampleOnGrid(getBoolFromString(value));
+//		else if (command == "grid_sample") setGridSample(std::stoi(value));
+//		else if (command == "sample_snapshots_per_sec") setSampleSnapshotsPerSec(std::stod(value));
+//		else if (command == "sample_save_initial") setSampleSaveInitial(getBoolFromString(value));
+//		else if (command == "sample_save_final") setSampleSaveFinal(getBoolFromString(value));
+//		else if (command == "sample_save_var") setSampleSaveVar(value);
 
 		else if (command == "scalar_name") setScalarName(value);
 		else if (command == "scalar_discrete") setScalarDiscrete(getBoolFromString(value));
 		else if (command == "scalar_discrete_grid") setScalarDiscreteGrid(stoi(value));
 		else if (command == "scalar_discrete_location") setScalarDiscreteLocation(value);
 
-		else if (command == "zoom") setZoom(getBoolFromString(value));
-		else if (command == "grid_zoom") setGridZoom(std::stoi(value));
-		else if (command == "zoom_center_x") setZoomCenterX(std::stod(value));
-		else if (command == "zoom_center_y") setZoomCenterY(std::stod(value));
-		else if (command == "zoom_width_x") setZoomWidthX(std::stod(value));
-		else if (command == "zoom_width_y") setZoomWidthY(std::stod(value));
-		else if (command == "zoom_repetitions") setZoomRepetitions(std::stoi(value));
-		else if (command == "zoom_repetitions_factor") setZoomRepetitionsFactor(std::stod(value));
-		else if (command == "zoom_snapshots_per_sec") setZoomSnapshotsPerSec(std::stod(value));
-		else if (command == "zoom_save_initial") setZoomSaveInitial(getBoolFromString(value));
-		else if (command == "zoom_save_final") setZoomSaveFinal(getBoolFromString(value));
-		else if (command == "zoom_save_var") setZoomSaveVar(value);
+		else if (command == "save_zoom_num") {
+			setSaveZoomNum(std::stoi(value));
+			return 3;
+		}
+
+//		else if (command == "zoom") setZoom(getBoolFromString(value));
+//		else if (command == "grid_zoom") setGridZoom(std::stoi(value));
+//		else if (command == "zoom_location_parameter") string_to_double_array(value, zoom_location_parameter);
+//		else if (command == "zoom_repetitions") setZoomRepetitions(std::stoi(value));
+//		else if (command == "zoom_repetitions_factor") setZoomRepetitionsFactor(std::stod(value));
+//		else if (command == "zoom_snapshots_per_sec") setZoomSnapshotsPerSec(std::stod(value));
+//		else if (command == "zoom_save_initial") setZoomSaveInitial(getBoolFromString(value));
+//		else if (command == "zoom_save_final") setZoomSaveFinal(getBoolFromString(value));
+//		else if (command == "zoom_save_var") setZoomSaveVar(value);
 
 		else if (command == "forward_map") setForwardMap(getBoolFromString(value));
 		else if (command == "forward_particles") setForwardParticles(getBoolFromString(value));
 		else if (command == "forward_particles_num") setForwardParticlesNum(std::stoi(value));
 		else if (command == "forward_particles_init_name") setForwardParticlesInitName(value);
 		else if (command == "forward_particles_seed") setForwardParticlesSeed(std::stoull(value));
-		else if (command == "forward_particles_center_x") setForwardParticlesCenterX(std::stod(value));
-		else if (command == "forward_particles_center_y") setForwardParticlesCenterY(std::stod(value));
-		else if (command == "forward_particles_width_x") setForwardParticlesWidthX(std::stod(value));
-		else if (command == "forward_particles_width_y") setForwardParticlesWidthY(std::stod(value));
+		else if (command == "forward_particles_init_parameter") string_to_double_array(value, forward_particles_init_parameter);
 
 		else if (command == "particles") setParticles(getBoolFromString(value));
 		else if (command == "particles_init_name") setParticlesInitName(value);
 		else if (command == "particles_seed") setParticlesSeed(std::stoull(value));
-		else if (command == "particles_center_x") setParticlesCenterX(std::stod(value));
-		else if (command == "particles_center_y") setParticlesCenterY(std::stod(value));
-		else if (command == "particles_width_x") setParticlesWidthX(std::stod(value));
-		else if (command == "particles_width_y") setParticlesWidthY(std::stod(value));
+		else if (command == "particles_init_parameter") string_to_double_array(value, particles_init_parameter);
+		else if (command == "particles_init_time") setParticlesInitTime(std::stod(value));
 		else if (command == "particles_num") setParticlesNum(std::stoi(value));
 		else if (command == "particles_tau_num") setParticlesTauNum(std::stoi(value));
 		else if (command == "particles_tau") string_to_double_array(value, particles_tau);
@@ -440,11 +424,17 @@ void SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		// hackery for particle convergence
 		else if (command == "particles_steps") setParticlesSteps(std::stoi(value));
 	}
+
+	return 0;
 }
 
 
 // class constructor from tfour main ingredients
 SettingsCMM::SettingsCMM(std::string sim_name, int gridCoarse, int gridFine, std::string initialCondition) {
+	// initially allocate arrays to be able to delete them later
+	save_computational = new SaveComputational[1];
+	save_sample = new SaveSample[1];
+	save_zoom = new SaveZoom[1];
 	// set presets
 	setPresets();
 	// override the four main components
@@ -459,6 +449,10 @@ SettingsCMM::SettingsCMM(std::string sim_name, int gridCoarse, int gridFine, std
 
 // class constructor to build from presets
 SettingsCMM::SettingsCMM() {
+	// initially allocate arrays to be able to delete them later
+	save_computational = new SaveComputational[1];
+	save_sample = new SaveSample[1];
+	save_zoom = new SaveZoom[1];
 	// set presets
 	setPresets();
 }
@@ -466,6 +460,10 @@ SettingsCMM::SettingsCMM() {
 
 // class constructor to take into account command line inputs
 SettingsCMM::SettingsCMM(int argc, char *args[]) {
+	// initially allocate arrays to be able to delete them later
+	save_computational = new SaveComputational[1];
+	save_sample = new SaveSample[1];
+	save_zoom = new SaveZoom[1];
 	// set presets
 	setPresets();
 	// override presets with command line arguments
@@ -473,58 +471,252 @@ SettingsCMM::SettingsCMM(int argc, char *args[]) {
 }
 
 
-// little helper function to combine parsing the bool value
-bool SettingsCMM::getBoolFromString(std::string value) {
-	if (value == "true" || value == "True" || value == "1") return true;
-	else if (value == "false" || value == "False" || value == "0") return false;
-	return false;  // in case no value is chosen
-}
-
-
 // little helper functions to be able to give in arrays
 void SettingsCMM::string_to_double_array(std::string s_array, double *array) {
-	// Attention : no parse check implemented, this is not good habit, but i didn't come up with a nice working unique thing
+	// parse check to only pass with correct surroundings
+	bool parse_check = false;
 	// erase " if surrounded by it
 	if (s_array.substr(0, 1) == "\"" || s_array.substr(s_array.length()-1, s_array.length()) == "\"") {
 		s_array.erase(0, 1); s_array.erase(s_array.length()-1, s_array.length());  // erase brackets
+		parse_check = true;
 	}
 	// erase {} if surrounded by it
 	if (s_array.substr(0, 1) == "{" || s_array.substr(s_array.length()-1, s_array.length()) == "}") {
 		s_array.erase(0, 1); s_array.erase(s_array.length()-1, s_array.length());  // erase brackets
+		parse_check = true;
 	}
-	// loop over all elements
-	int index = 0;
-	std::string::size_type pos = 0; std::string::size_type pos_new = 0;
-	do {
-		pos_new = s_array.find(",", pos );
-		std::string substring;
-		if (pos_new != std::string::npos) substring = s_array.substr(pos, pos_new);
-		else substring = s_array.substr(pos, s_array.length());
-		array[index] = std::stod(substring);
-		index++;
-		pos = pos_new + 1;
-	} while (pos_new != std::string::npos);
+	if (parse_check) {
+		// loop over all elements
+		int index = 0;
+		std::string::size_type pos = 0; std::string::size_type pos_new = 0;
+		do {
+			pos_new = s_array.find(",", pos );
+			std::string substring;
+			if (pos_new != std::string::npos) substring = s_array.substr(pos, pos_new - pos);
+			else substring = s_array.substr(pos, s_array.length());
+			array[index] = std::stod(substring);
+			index++;
+			pos = pos_new + 1;
+		} while (pos_new != std::string::npos);
+	}
 }
 void SettingsCMM::string_to_int_array(std::string s_array, int *array) {
-	// Attention : no parse check implemented, this is not good habit, but i didn't come up with a nice working unique thing
+	// parse check to only pass with correct surroundings
+	bool parse_check = false;
 	// erase " if surrounded by it
 	if (s_array.substr(0, 1) == """" || s_array.substr(s_array.length()-1, s_array.length()) == """") {
 		s_array.erase(0, 1); s_array.erase(s_array.length()-1, s_array.length());  // erase brackets
+		parse_check = true;
 	}
 	// erase {} if surrounded by it
 	if (s_array.substr(0, 1) == "{" || s_array.substr(s_array.length()-1, s_array.length()) == "}") {
 		s_array.erase(0, 1); s_array.erase(s_array.length()-1, s_array.length());  // erase brackets
+		parse_check = true;
 	}
-	// loop over all elements
-	int index = 0;
-	std::string::size_type pos = 0; std::string::size_type pos_new = 0;
-	do {
-		pos_new = s_array.find(",", pos );
-		std::string substring;
-		if (pos_new != std::string::npos) substring = s_array.substr(pos, pos_new);
-		else substring = s_array.substr(pos, s_array.length());
-		array[index] = std::stoi(substring);
-		index++;
-		pos = pos_new + 1;
-	} while (pos_new != std::string::npos);
+	if (parse_check) {
+		// loop over all elements
+		int index = 0;
+		std::string::size_type pos = 0; std::string::size_type pos_new = 0;
+		do {
+			pos_new = s_array.find(",", pos );
+			std::string substring;
+			if (pos_new != std::string::npos) substring = s_array.substr(pos, pos_new - pos);
+			else substring = s_array.substr(pos, s_array.length());
+			array[index] = std::stoi(substring);
+			index++;
+			pos = pos_new + 1;
+		} while (pos_new != std::string::npos);
+	}
+}
+
+
+void SettingsCMM::setSaveComputational(std::string command_full, std::string delimiter, int number) {
+	// check for delimiter position
+	int pos_equal = command_full.find(delimiter);
+	if (pos_equal != std::string::npos) {
+		// construct two substrings
+		std::string command = command_full.substr(0, pos_equal);
+		std::string value = command_full.substr(pos_equal+delimiter.length(), command_full.length());
+
+		save_computational[number] = SaveComputational();
+		save_computational[number].setAllVariables(value);
+	}
+}
+
+void SettingsCMM::setSaveSample(std::string command_full, std::string delimiter, int number) {
+	// check for delimiter position
+	int pos_equal = command_full.find(delimiter);
+	if (pos_equal != std::string::npos) {
+		// construct two substrings
+		std::string command = command_full.substr(0, pos_equal);
+		std::string value = command_full.substr(pos_equal+delimiter.length(), command_full.length());
+
+		save_sample[number] = SaveSample();
+		save_sample[number].setAllVariables(value);
+	}
+}
+
+void SettingsCMM::setSaveZoom(std::string command_full, std::string delimiter, int number) {
+	// check for delimiter position
+	int pos_equal = command_full.find(delimiter);
+	if (pos_equal != std::string::npos) {
+		// construct two substrings
+		std::string command = command_full.substr(0, pos_equal);
+		std::string value = command_full.substr(pos_equal+delimiter.length(), command_full.length());
+
+		save_zoom[number] = SaveZoom();
+		save_zoom[number].setAllVariables(value);
+	}
+}
+
+
+// functions for save computational to save the values we use to compute
+void SaveComputational::setAllVariables(std::string s_array) {
+	// parse check: erase " or {} if surrounded by it and continue reading values
+	if ((s_array.substr(0, 1) == "\"" && s_array.substr(s_array.length()-1, s_array.length()) == "\"") ||
+	   (s_array.substr(0, 1) == "{"  && s_array.substr(s_array.length()-1, s_array.length()) == "}")) {
+		s_array.erase(0, 1); s_array.erase(s_array.length()-1, s_array.length());  // erase brackets
+		// loop over all elements
+		int index = 0;
+		std::string::size_type pos = 0; std::string::size_type pos_new = 0;
+		do {
+			pos_new = s_array.find(",", pos);
+			std::string substring;
+			if (pos_new != std::string::npos) substring = s_array.substr(pos, pos_new - pos);
+			else substring = s_array.substr(pos, s_array.length());
+			setVariable(substring);
+			index++;
+			pos = pos_new + 1;
+		} while (pos_new != std::string::npos);
+	}
+}
+void SaveComputational::setVariable(std::string command_full) {
+	// check for delimiter position
+	int pos_equal = command_full.find("=");
+	if (pos_equal != std::string::npos) {
+		// construct two substrings
+		std::string command = command_full.substr(0, pos_equal);
+		std::string value = command_full.substr(pos_equal+1, command_full.length());
+
+		// if else for different commands
+		if (command == "is_instant") is_instant = getBoolFromString(value);
+		else if (command == "time_start") time_start = std::stod(value);
+		else if (command == "time_end") time_end = std::stod(value);
+		else if (command == "time_step") time_step = std::stod(value);
+		else if (command == "var") var = value;
+		else if (command == "conv") conv = getBoolFromString(value);
+	}
+}
+std::string SaveComputational::getVariables() {
+	std::ostringstream os;
+	os << "{is_instant=" << str_t(is_instant) << ",time_start=" << str_t(time_start);
+	if (!is_instant) { os << ",time_end=" << str_t(time_end) << ",time_step=" << str_t(time_step); }
+	os << ",var=" << var << ",conv=" << str_t(conv) << "}";
+	return os.str();
+}
+
+
+// functions for save sample to define what we want to sample and when
+void SaveSample::setAllVariables(std::string s_array) {
+	// parse check: erase " or {} if surrounded by it and continue reading values
+	if ((s_array.substr(0, 1) == "\"" && s_array.substr(s_array.length()-1, s_array.length()) == "\"") ||
+	   (s_array.substr(0, 1) == "{"  && s_array.substr(s_array.length()-1, s_array.length()) == "}")) {
+		s_array.erase(0, 1); s_array.erase(s_array.length()-1, s_array.length());  // erase brackets
+		// loop over all elements
+		int index = 0;
+		std::string::size_type pos = 0; std::string::size_type pos_new = 0;
+		do {
+			pos_new = s_array.find(",", pos );
+			std::string substring;
+			if (pos_new != std::string::npos) substring = s_array.substr(pos, pos_new - pos);
+			else substring = s_array.substr(pos, s_array.length());
+			setVariable(substring);
+			index++;
+			pos = pos_new + 1;
+		} while (pos_new != std::string::npos);
+	}
+}
+void SaveSample::setVariable(std::string command_full) {
+	// check for delimiter position
+	int pos_equal = command_full.find("=");
+	if (pos_equal != std::string::npos) {
+		// construct two substrings
+		std::string command = command_full.substr(0, pos_equal);
+		std::string value = command_full.substr(pos_equal+1, command_full.length());
+
+		// if else for different commands
+		if (command == "is_instant") is_instant = getBoolFromString(value);
+		else if (command == "time_start") time_start = std::stod(value);
+		else if (command == "time_end") time_end = std::stod(value);
+		else if (command == "time_step") time_step = std::stod(value);
+		else if (command == "var") var = value;
+		else if (command == "grid") grid = stoi(value);
+	}
+}
+std::string SaveSample::getVariables() {
+	std::ostringstream os;
+	os << "{is_instant=" << str_t(is_instant) << ",time_start=" << str_t(time_start);
+	if (!is_instant) { os << ",time_end=" << str_t(time_end) << ",time_step=" << str_t(time_step); }
+	os << ",var=" << var << ",grid=" << str_t(grid) << "}";
+	return os.str();
+}
+
+
+// functions for save sample to define what we want to sample and when
+void SaveZoom::setAllVariables(std::string s_array) {
+	// parse check: erase " or {} if surrounded by it and continue reading values
+	if ((s_array.substr(0, 1) == "\"" && s_array.substr(s_array.length()-1, s_array.length()) == "\"") ||
+	   (s_array.substr(0, 1) == "{"  && s_array.substr(s_array.length()-1, s_array.length()) == "}")) {
+		s_array.erase(0, 1); s_array.erase(s_array.length()-1, s_array.length());  // erase brackets
+		// loop over all elements
+		int index = 0;
+		std::string::size_type pos = 0; std::string::size_type pos_new = 0;
+		do {
+			pos_new = s_array.find(",", pos );
+			std::string substring;
+			if (pos_new != std::string::npos) substring = s_array.substr(pos, pos_new - pos);
+			else substring = s_array.substr(pos, s_array.length());
+			setVariable(substring);
+			index++;
+			pos = pos_new + 1;
+		} while (pos_new != std::string::npos);
+	}
+}
+void SaveZoom::setVariable(std::string command_full) {
+	// check for delimiter position
+	int pos_equal = command_full.find("=");
+	if (pos_equal != std::string::npos) {
+		// construct two substrings
+		std::string command = command_full.substr(0, pos_equal);
+		std::string value = command_full.substr(pos_equal+1, command_full.length());
+
+		// if else for different commands
+		if (command == "is_instant") is_instant = getBoolFromString(value);
+		else if (command == "time_start") time_start = std::stod(value);
+		else if (command == "time_end") time_end = std::stod(value);
+		else if (command == "time_step") time_step = std::stod(value);
+		else if (command == "var") var = value;
+		else if (command == "grid") grid = stoi(value);
+		else if (command == "pos_x") pos_x = stod(value);
+		else if (command == "pos_y") pos_y = stod(value);
+		else if (command == "width_x") width_x = stod(value);
+		else if (command == "width_y") width_y = stod(value);
+		else if (command == "rep") rep = stoi(value);
+		else if (command == "rep_fac") rep_fac = stod(value);
+	}
+}
+std::string SaveZoom::getVariables() {
+	std::ostringstream os;
+	os << "{is_instant=" << str_t(is_instant) << ",time_start=" << str_t(time_start);
+	if (!is_instant) { os << ",time_end=" << str_t(time_end) << ",time_step=" << str_t(time_step); }
+	os << ",var=" << var << ",grid=" << str_t(grid);
+	os << ",pos_x=" << str_t(pos_x) << ",pos_y=" << pos_y << ",width_x=" << str_t(width_x) << ",width_y=" << str_t(width_y);
+	os << ",rep=" << str_t(rep) << ",rep_fac=" << str_t(rep_fac) << "}";
+	return os.str();
+}
+
+bool getBoolFromString(std::string value) {
+	if (value == "true" || value == "True" || value == "1") return true;
+	else if (value == "false" || value == "False" || value == "0") return false;
+	return false;  // in case no value is chosen
 }

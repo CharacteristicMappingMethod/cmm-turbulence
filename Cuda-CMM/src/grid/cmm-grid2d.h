@@ -40,7 +40,7 @@ struct TCudaGrid2D
 		TCudaGrid2D(int NX, int NY, double *bounds);
 };
 
-void fill_grid(TCudaGrid2D Grid, int NX, int NY, double *bounds);
+void fill_grid(TCudaGrid2D *Grid, int NX, int NY, double *bounds);
 
 // class for map stack thingies, because I am always just transferring this everywhere
 class MapStack {
