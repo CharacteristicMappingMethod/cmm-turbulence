@@ -44,7 +44,7 @@ void SettingsCMM::setPresets() {
 	int verbose = 3;
 
 	// set time properties
-	double final_time = 1;  // end of computation
+	double final_time = 6;  // end of computation
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
 	int steps_per_sec = 128;  // how many steps do we want per seconds?
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
@@ -58,23 +58,25 @@ void SettingsCMM::setPresets() {
 	 * Stream function hermite: "Stream_H", "Psi_H" - not for zoom
 	 * Velocity: "Velocity", "U" - not for zoom
 	 *
-	 * Backwards map: "Map", "Map_b", "Chi", "Chi_b"
+	 * Backwards map: "Map_b", "Chi_b"
 	 * Backwards map Hermite: "Map_H", "Chi_H" - only for save
 	 *
 	 * Laplacian of vorticity: "Laplacian_W" - only for sample - is stream function?
 	 * Gradient of vorticity: "Grad_W" - only for sample
 	 *
 	 * Passive scalar: "Scalar", "Theta" - not for save_var
-	 * Particles: "Particles", "P" - only for zoom and with particles
+	 * Advected Particles: "PartA_XX" - not for sample_var, XX is the particle computation number
 	 *
 	 * Forward map: "Map_f", "Chi_f"
 	 * Forwards map Hermite: "Map_f_H", "Chi_f_H" - only for save
+	 * Forwarded Particles: "PartF_XX" - not for save_var, XX is the particle computation number
 	 */
 	// time instants or intervals at what we want to save computational data, 0 for initial and T_MAX for final
-	int save_computational_num = 3;
-	std::string save_computational_s[3] = {
+	int save_computational_num = 4;
+	std::string save_computational_s[4] = {
 			"{is_instant=1,time_start=0,var=W-U,conv=1}",  // save begin
 			"{is_instant=1,time_start="+str_t(T_MAX)+",var=W-U,conv=1}",  // save end
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_01-PartA_02,conv=0}",
 			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var= ,conv=1}"  // conv over simulation
 	};
 
@@ -122,7 +124,7 @@ void SettingsCMM::setPresets() {
 	// time instants or intervals at what we want to save computational data, 0 for initial and T_MAX for final
 	int save_sample_num = 1;
 	std::string save_sample_s[1] = {
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step="+str_t(T_MAX)+",var=W-U-Theta,grid=1024}",  // save over simulation
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=W-Theta-PartF_01-PartF_02,grid=1024}",  // save over simulation
 	};
 
 
@@ -145,8 +147,11 @@ void SettingsCMM::setPresets() {
 	 */
 	// time instants or intervalls at what we want to save computational data, 0 for initial and T_MAX for final
 	int save_zoom_num = 0;
-	std::string save_zoom_s[1] = {
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=W-P,grid=1024"
+	std::string save_zoom_s[2] = {
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=W-PartA_01,grid=1024"
+			",pos_x="+str_t(twoPI * 0.5)+",pos_y="+str_t(twoPI * 0.6)+",width_x="+str_t(twoPI * 2e-1)+",width_y"+str_t(twoPI * 2e-1)+
+			",rep="+str_t(2)+",rep_fac="+str_t(0.5)+"}",
+			"{is_instant=0,time_start=2,time_end="+str_t(T_MAX)+",time_step=1,var=W-Psi,grid=1024"
 			",pos_x="+str_t(twoPI * 0.5)+",pos_y="+str_t(twoPI * 0.6)+",width_x="+str_t(twoPI * 2e-1)+",width_y"+str_t(twoPI * 2e-1)+
 			",rep="+str_t(2)+",rep_fac="+str_t(0.5)+"}"
 	};
@@ -156,61 +161,48 @@ void SettingsCMM::setPresets() {
 	/*
 	 * Forward map settings to compute forward map for scalar particles,
 	 */
-	bool forward_map = false;  // en- or disable computing of forward map
+	bool forward_map = true;  // en- or disable computing of forward map
 
-	bool forward_particles = true;  // en- or disable computing of forward particles
-	int forward_particles_num = (int)1e4;  // number of particles
-	std::string forward_particles_init_name = "circular_ring";  // same conditions as particles
-	unsigned long long forward_particles_seed = 0ULL;
-	// array containing all parameter, this list can be extended for different init settings with more parameters, see zoom function
-	std::string forward_particles_init_parameter_s = "\"" + str_t(PI) + "," + str_t(PI)
-													+ "," + str_t(PI/2.0) + "," + str_t(PI/2.0) + "\"";
+	// forwarded particles, parameters similar to advected particles
+	int particles_forwarded_num = 2;
+	std::string particles_forwarded_s[2] = {
+		"{num=10000,seed=0,init_name=uniform,init_time=0"
+		",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI/2.0)+",init_param_4="+str_t(PI/2.0)+"}",
+		"{num=20000,seed=0,init_name=circular_ring,init_time=1"
+		",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI/2.0)+",init_param_4="+str_t(PI/2.0)+"}"
+	};
 
-
-	/*
-	 * Particle settings
-	 *  - enable or disable particles, introduce inertial particles
-	 *  - control saving intervals of particle positions
-	 *  - save some particles at every position for detailed analysis
-	 */
-	bool particles = true;  // en- or disable particles
-	int particles_num = (int)1e4;  // number of particles
 
 	/*
-	 *  Initial conditions for particle position
+	 * Particle settings for advected particles
+	 *
+	 * num - amount of particles
+	 * tau - inertial strength of particles, 0 for fluid particles
+	 * seed - seed for random number generator
+	 *
+	 * time_integration - Time integration for particles
+	 *  First order: "EulerExp"
+	 *  Second order: "AB2", "RK2"
+	 *  Third order: "RK3", "RK3Mod"
+	 *  Fourth order: "RK4", "RK4Mod"
+	 *
+	 * init_name - Initial conditions for particle position
 	 *  "uniform"					-	uniformly distributed in particular frame
 	 *  "normal", "gaussian"		-	normal / gaussian distributed around center with specific variance
 	 *  "circular_ring"				-   circular ring around specific center with particles_width as radius
 	 *  "uniform_grid"				-   uniform grid with equal amount of points in x- and y-direction in particular frame
+	 *
+	 * init_time - when should the computation for the particles start
+	 * init_param - specific parameters to control the initial condition
 	 */
-	std::string particles_init_name = "gaussian";
-
-	unsigned long long particles_seed = 0ULL;
-	// array containing all parameter, this list can be extended for different init settings with more parameters, see cmm-init.cu
-	std::string particles_init_parameter_s = "\"" + str_t(PI) + "," + str_t(PI) + "," + str_t(PI/2.0) + "," + str_t(PI/2.0) + "\"";
-	double particles_init_time = 3;  // at what time should the particle computation start?
-
-	int particles_tau_num = 1;  // how many tau_p values do we have? for now maximum is 100
-//	double Tau_p[Nb_Tau_p] = {0.0, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.125, 0.15, 0.25, 0.5, 0.75, 1, 2, 5, 13};
-	// timestep restriction : tau is coupled to dt due to stability reasons
-	std::string particles_tau_s = "\"0, 0.1, 1\"";  // escape character \ needed for "
-
-	double particles_snapshots_per_sec = -1;  // how many times do we want to save particles per sec, set <= 0 to disable
-	bool particles_save_initial = true;  // consume less data and make it possible to disable saving the initial data
-	bool particles_save_final = true;  // consume less data and make it possible to disable saving the final data
+	int particles_advected_num = 2;
+	std::string particles_advected_s[2] = {
+			"{num=10000,tau=1,seed=0,time_integration=RK3,init_name=uniform,init_time=0"
+			",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI/2.0)+",init_param_4="+str_t(PI/2.0)+"}",
+			"{num=20000,tau=0,seed=0,time_integration=RK3,init_name=circular_ring,init_time=1"
+			",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI/2.0)+",init_param_4="+str_t(PI/2.0)+"}"
+	};
 	int particles_steps = -1;  // hackery for particle convergence
-
-	bool save_fine_particles = false;  // wether or not we want to save fine particles
-	int particles_fine_num = 1000;  // number of particles where every time step the position will be saved
-	/*
-	 * Time integration for particles
-	 * First order: "EulerExp"
-	 * Second order: "AB2", "RK2"
-	 * Third order: "RK3", "RK3Mod"
-	 * Fourth order: "RK4", "RK4Mod"
-	 */
-	std::string particles_time_integration = "RK3Mod";
-	if (!particles) particles_time_integration = "Disabled";  // check to disable for lagrange settings
 
 
 	// make sure that not initialized values are set
@@ -267,28 +259,17 @@ void SettingsCMM::setPresets() {
 	}
 
 	setForwardMap(forward_map);
-	setForwardParticles(forward_particles);
-	setForwardParticlesNum(forward_particles_num);
-	setForwardParticlesInitName(forward_particles_init_name);
-	setForwardParticlesSeed(forward_particles_seed);
-	string_to_double_array(forward_particles_init_parameter_s, forward_particles_init_parameter);
+	setParticlesForwardedNum(particles_forwarded_num);
+	for (int i_particles = 0; i_particles < particles_forwarded_num; ++i_particles) {
+		particles_forwarded[i_particles] = ParticlesForwarded();
+		particles_forwarded[i_particles].setAllVariables(particles_forwarded_s[i_particles]);
+	}
 
-	setParticles(particles);
-	setParticlesInitName(particles_init_name);
-	setParticlesSeed(particles_seed);
-	string_to_double_array(particles_init_parameter_s, particles_init_parameter);
-	setParticlesInitTime(particles_init_time);
-	setParticlesNum(particles_num);
-	setParticlesTauNum(particles_tau_num);
-	string_to_double_array(particles_tau_s, particles_tau);
-
-	setParticlesSnapshotsPerSec(particles_snapshots_per_sec);
-	setParticlesSaveInitial(particles_save_initial); setParticlesSaveFinal(particles_save_final);
-
-	setSaveFineParticles(save_fine_particles);
-	setParticlesFineNum(particles_fine_num);
-
-	setParticlesTimeIntegration(particles_time_integration);
+	setParticlesAdvectedNum(particles_advected_num);
+	for (int i_particles = 0; i_particles < particles_advected_num; ++i_particles) {
+		particles_advected[i_particles] = ParticlesAdvected();
+		particles_advected[i_particles].setAllVariables(particles_advected_s[i_particles]);
+	}
 
 	setParticlesSteps(particles_steps);
 }
@@ -339,14 +320,6 @@ int SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 			return 1;
 		}
 
-//		else if (command == "snapshots_per_sec") setSnapshotsPerSec(std::stod(value));
-//		else if (command == "save_initial") setSaveInitial(getBoolFromString(value));
-//		else if (command == "save_final") setSaveFinal(getBoolFromString(value));
-//		else if (command == "save_var") setSaveVar(value);
-
-//		else if (command == "conv_init_final") setConvInitFinal(getBoolFromString(value));
-//		else if (command == "conv_snapshots_per_sec") setConvSnapshotsPerSec(std::stod(value));
-
 		else if (command == "mem_RAM_CPU_remaps") setMemRamCpuRemaps(std::stoi(value));
 		else if (command == "save_map_stack") setSaveMapStack(getBoolFromString(value));
 
@@ -372,12 +345,6 @@ int SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 			setSaveComputationalNum(std::stoi(value));
 			return 2;
 		}
-//		else if (command == "sample_on_grid") setSampleOnGrid(getBoolFromString(value));
-//		else if (command == "grid_sample") setGridSample(std::stoi(value));
-//		else if (command == "sample_snapshots_per_sec") setSampleSnapshotsPerSec(std::stod(value));
-//		else if (command == "sample_save_initial") setSampleSaveInitial(getBoolFromString(value));
-//		else if (command == "sample_save_final") setSampleSaveFinal(getBoolFromString(value));
-//		else if (command == "sample_save_var") setSampleSaveVar(value);
 
 		else if (command == "scalar_name") setScalarName(value);
 		else if (command == "scalar_discrete") setScalarDiscrete(getBoolFromString(value));
@@ -389,37 +356,17 @@ int SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 			return 3;
 		}
 
-//		else if (command == "zoom") setZoom(getBoolFromString(value));
-//		else if (command == "grid_zoom") setGridZoom(std::stoi(value));
-//		else if (command == "zoom_location_parameter") string_to_double_array(value, zoom_location_parameter);
-//		else if (command == "zoom_repetitions") setZoomRepetitions(std::stoi(value));
-//		else if (command == "zoom_repetitions_factor") setZoomRepetitionsFactor(std::stod(value));
-//		else if (command == "zoom_snapshots_per_sec") setZoomSnapshotsPerSec(std::stod(value));
-//		else if (command == "zoom_save_initial") setZoomSaveInitial(getBoolFromString(value));
-//		else if (command == "zoom_save_final") setZoomSaveFinal(getBoolFromString(value));
-//		else if (command == "zoom_save_var") setZoomSaveVar(value);
-
 		else if (command == "forward_map") setForwardMap(getBoolFromString(value));
-		else if (command == "forward_particles") setForwardParticles(getBoolFromString(value));
-		else if (command == "forward_particles_num") setForwardParticlesNum(std::stoi(value));
-		else if (command == "forward_particles_init_name") setForwardParticlesInitName(value);
-		else if (command == "forward_particles_seed") setForwardParticlesSeed(std::stoull(value));
-		else if (command == "forward_particles_init_parameter") string_to_double_array(value, forward_particles_init_parameter);
 
-		else if (command == "particles") setParticles(getBoolFromString(value));
-		else if (command == "particles_init_name") setParticlesInitName(value);
-		else if (command == "particles_seed") setParticlesSeed(std::stoull(value));
-		else if (command == "particles_init_parameter") string_to_double_array(value, particles_init_parameter);
-		else if (command == "particles_init_time") setParticlesInitTime(std::stod(value));
-		else if (command == "particles_num") setParticlesNum(std::stoi(value));
-		else if (command == "particles_tau_num") setParticlesTauNum(std::stoi(value));
-		else if (command == "particles_tau") string_to_double_array(value, particles_tau);
-		else if (command == "particles_snapshots_per_sec") setParticlesSnapshotsPerSec(std::stod(value));
-		else if (command == "particles_save_initial") setParticlesSaveInitial(getBoolFromString(value));
-		else if (command == "particles_save_final") setParticlesSaveFinal(getBoolFromString(value));
-		else if (command == "save_fine_particles") setSaveFineParticles(getBoolFromString(value));
-		else if (command == "particles_fine_num") setParticlesFineNum(std::stoi(value));
-		else if (command == "particles_time_integration") setParticlesTimeIntegration(value);
+		else if (command == "particles_forwarded_num") {
+			setParticlesForwardedNum(std::stoi(value));
+			return 5;
+		}
+
+		else if (command == "particles_advected_num") {
+			setParticlesAdvectedNum(std::stoi(value));
+			return 4;
+		}
 
 		// hackery for particle convergence
 		else if (command == "particles_steps") setParticlesSteps(std::stoi(value));
@@ -435,6 +382,8 @@ SettingsCMM::SettingsCMM(std::string sim_name, int gridCoarse, int gridFine, std
 	save_computational = new SaveComputational[1];
 	save_sample = new SaveSample[1];
 	save_zoom = new SaveZoom[1];
+	particles_advected = new ParticlesAdvected[1];
+	particles_forwarded = new ParticlesForwarded[1];
 	// set presets
 	setPresets();
 	// override the four main components
@@ -453,6 +402,8 @@ SettingsCMM::SettingsCMM() {
 	save_computational = new SaveComputational[1];
 	save_sample = new SaveSample[1];
 	save_zoom = new SaveZoom[1];
+	particles_advected = new ParticlesAdvected[1];
+	particles_forwarded = new ParticlesForwarded[1];
 	// set presets
 	setPresets();
 }
@@ -464,6 +415,8 @@ SettingsCMM::SettingsCMM(int argc, char *args[]) {
 	save_computational = new SaveComputational[1];
 	save_sample = new SaveSample[1];
 	save_zoom = new SaveZoom[1];
+	particles_advected = new ParticlesAdvected[1];
+	particles_forwarded = new ParticlesForwarded[1];
 	// set presets
 	setPresets();
 	// override presets with command line arguments
@@ -568,6 +521,33 @@ void SettingsCMM::setSaveZoom(std::string command_full, std::string delimiter, i
 		save_zoom[number].setAllVariables(value);
 	}
 }
+
+void SettingsCMM::setParticlesAdvected(std::string command_full, std::string delimiter, int number) {
+	// check for delimiter position
+	int pos_equal = command_full.find(delimiter);
+	if (pos_equal != std::string::npos) {
+		// construct two substrings
+		std::string command = command_full.substr(0, pos_equal);
+		std::string value = command_full.substr(pos_equal+delimiter.length(), command_full.length());
+
+		particles_advected[number] = ParticlesAdvected();
+		particles_advected[number].setAllVariables(value);
+	}
+}
+
+void SettingsCMM::setParticlesForwarded(std::string command_full, std::string delimiter, int number) {
+	// check for delimiter position
+	int pos_equal = command_full.find(delimiter);
+	if (pos_equal != std::string::npos) {
+		// construct two substrings
+		std::string command = command_full.substr(0, pos_equal);
+		std::string value = command_full.substr(pos_equal+delimiter.length(), command_full.length());
+
+		particles_forwarded[number] = ParticlesForwarded();
+		particles_forwarded[number].setAllVariables(value);
+	}
+}
+
 
 
 // functions for save computational to save the values we use to compute
@@ -714,6 +694,127 @@ std::string SaveZoom::getVariables() {
 	os << ",rep=" << str_t(rep) << ",rep_fac=" << str_t(rep_fac) << "}";
 	return os.str();
 }
+
+
+// functions to define advected particles which are tracked
+void ParticlesAdvected::setAllVariables(std::string s_array) {
+	// parse check: erase " or {} if surrounded by it and continue reading values
+	if ((s_array.substr(0, 1) == "\"" && s_array.substr(s_array.length()-1, s_array.length()) == "\"") ||
+	   (s_array.substr(0, 1) == "{"  && s_array.substr(s_array.length()-1, s_array.length()) == "}")) {
+		s_array.erase(0, 1); s_array.erase(s_array.length()-1, s_array.length());  // erase brackets
+		// loop over all elements
+		int index = 0;
+		std::string::size_type pos = 0; std::string::size_type pos_new = 0;
+		do {
+			pos_new = s_array.find(",", pos );
+			std::string substring;
+			if (pos_new != std::string::npos) substring = s_array.substr(pos, pos_new - pos);
+			else substring = s_array.substr(pos, s_array.length());
+			setVariable(substring);
+			index++;
+			pos = pos_new + 1;
+		} while (pos_new != std::string::npos);
+	}
+}
+void ParticlesAdvected::setVariable(std::string command_full) {
+	// check for delimiter position
+	int pos_equal = command_full.find("=");
+	if (pos_equal != std::string::npos) {
+		// construct two substrings
+		std::string command = command_full.substr(0, pos_equal);
+		std::string value = command_full.substr(pos_equal+1, command_full.length());
+
+		// if else for different commands
+		if (command == "num") num = std::stoi(value);
+		else if (command == "tau") tau = std::stod(value);
+		else if (command == "seed") seed = std::stoull(value);
+		else if (command == "time_integration") {
+			time_integration = value;
+			if (time_integration == "EulerExp") { time_integration_num = 10; }
+			else if (time_integration == "Heun") { time_integration_num = 20; }
+			else if (time_integration == "RK3") { time_integration_num = 30; }
+			else if (time_integration == "RK4") { time_integration_num = 40; }
+			else if (time_integration == "RK3Mod") { time_integration_num = 31; }
+			else if (time_integration == "RK4Mod") { time_integration_num = 41; }
+			else time_integration_num = -1;
+		}
+		else if (command == "init_name") {
+			init_name = value;
+			if(init_name == "uniform") init_num = 0;
+			else if(init_name == "normal" or init_name == "gaussian") init_num = 1;
+			else if(init_name == "circular_ring") init_num = 2;
+			else if(init_name == "uniform_grid") init_num = 3;
+			else init_num = -1;
+		}
+		else if (command == "init_time") init_time = stoi(value);
+		else if (command == "init_param_1") init_param_1 = stod(value);
+		else if (command == "init_param_2") init_param_2 = stod(value);
+		else if (command == "init_param_3") init_param_3 = stod(value);
+		else if (command == "init_param_4") init_param_4 = stod(value);
+	}
+}
+std::string ParticlesAdvected::getVariables() {
+	std::ostringstream os;
+	os << "{num=" << str_t(num) << ",tau=" << str_t(tau) << ",seed=" << str_t(seed);
+	os << ",time_integration=" << time_integration << ",init_name=" << init_name << ",init_time=" << str_t(init_time);
+	os << ",init_param_1=" << str_t(init_param_1) << ",init_param_2=" << str_t(init_param_2) << ",init_param_3=" << str_t(init_param_3) << ",init_param_4=" << str_t(init_param_4) << "}";
+	return os.str();
+}
+
+
+// functions to define advected particles which are tracked
+void ParticlesForwarded::setAllVariables(std::string s_array) {
+	// parse check: erase " or {} if surrounded by it and continue reading values
+	if ((s_array.substr(0, 1) == "\"" && s_array.substr(s_array.length()-1, s_array.length()) == "\"") ||
+	   (s_array.substr(0, 1) == "{"  && s_array.substr(s_array.length()-1, s_array.length()) == "}")) {
+		s_array.erase(0, 1); s_array.erase(s_array.length()-1, s_array.length());  // erase brackets
+		// loop over all elements
+		int index = 0;
+		std::string::size_type pos = 0; std::string::size_type pos_new = 0;
+		do {
+			pos_new = s_array.find(",", pos );
+			std::string substring;
+			if (pos_new != std::string::npos) substring = s_array.substr(pos, pos_new - pos);
+			else substring = s_array.substr(pos, s_array.length());
+			setVariable(substring);
+			index++;
+			pos = pos_new + 1;
+		} while (pos_new != std::string::npos);
+	}
+}
+void ParticlesForwarded::setVariable(std::string command_full) {
+	// check for delimiter position
+	int pos_equal = command_full.find("=");
+	if (pos_equal != std::string::npos) {
+		// construct two substrings
+		std::string command = command_full.substr(0, pos_equal);
+		std::string value = command_full.substr(pos_equal+1, command_full.length());
+
+		// if else for different commands
+		if (command == "num") num = std::stoi(value);
+		else if (command == "seed") seed = std::stoull(value);
+		else if (command == "init_name") {
+			init_name = value;
+			if(init_name == "uniform") init_num = 0;
+			else if(init_name == "normal" or init_name == "gaussian") init_num = 1;
+			else if(init_name == "circular_ring") init_num = 2;
+			else if(init_name == "uniform_grid") init_num = 3;
+			else init_num = -1;
+		}
+		else if (command == "init_time") init_time = stoi(value);
+		else if (command == "init_param_1") init_param_1 = stod(value);
+		else if (command == "init_param_2") init_param_2 = stod(value);
+		else if (command == "init_param_3") init_param_3 = stod(value);
+		else if (command == "init_param_4") init_param_4 = stod(value);
+	}
+}
+std::string ParticlesForwarded::getVariables() {
+	std::ostringstream os;
+	os << "{num=" << str_t(num) << ",seed=" << str_t(seed) << ",init_name=" << init_name << ",init_time=" << str_t(init_time);
+	os << ",init_param_1=" << str_t(init_param_1) << ",init_param_2=" << str_t(init_param_2) << ",init_param_3=" << str_t(init_param_3) << ",init_param_4=" << str_t(init_param_4) << "}";
+	return os.str();
+}
+
 
 bool getBoolFromString(std::string value) {
 	if (value == "true" || value == "True" || value == "1") return true;

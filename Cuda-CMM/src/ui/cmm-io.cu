@@ -33,6 +33,12 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax
 		mkdir(folder_name_tdata.c_str(), 0777);
 	}
 
+	// create general subfolder for particles
+	if (SettingsMain.getParticlesAdvectedNum() > 0) {
+		folder_name_tdata = folder_name + "/Particle_data";
+		mkdir(folder_name_tdata.c_str(), 0777);
+	}
+
 	// empty all monitoring data so that we can later flush every value
 	std::string monitoring_names[10] = {"/Error_incompressibility", "/Map_counter", "/Map_gaps", "/Time_s", "/Time_c",
 			"/Mesure/Time_s", "/Mesure/Energy", "/Mesure/Enstrophy", "/Mesure/Palinstrophy", "/Mesure/Max_vorticity",
@@ -72,38 +78,6 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax
 	}
 }
 
-
-// separate call for creating particle folder structure, as this is initialized later
-void create_particle_directory_structure(SettingsCMM SettingsMain) {
-	// create particle folders
-    if (SettingsMain.getParticles()) {
-    	string folder_name = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName();
-
-    	// main folder
-        string fi = folder_name + "/Particle_data";
-        mkdir(fi.c_str(), 0777);
-
-        // folder for fluid particle data
-        string fi_1 = fi + "/Fluid";
-        mkdir(fi_1.c_str(), 0777);
-        // folder for fine particle data
-        if (SettingsMain.getSaveFineParticles()) {
-			fi_1 = fi + "/Fluid_fine";
-			mkdir(fi_1.c_str(), 0777);
-        }
-
-        // folder for tau_p particles together with fine folder
-        for(int i = 1; i<SettingsMain.getParticlesTauNum(); i+=1){
-            fi_1 = fi + "/Tau=" + to_str(SettingsMain.particles_tau[i]);
-            mkdir(fi_1.c_str(), 0777);
-
-            if (SettingsMain.getSaveFineParticles()) {
-				fi_1 = fi + "/Tau=" + to_str(SettingsMain.particles_tau[i]) + "_fine";
-				mkdir(fi_1.c_str(), 0777);
-            }
-        }
-	}
-}
 
 /*******************************************************************
 *					    Writting in binary						   *
@@ -320,21 +294,60 @@ void writeTimeVariable(SettingsCMM SettingsMain, string data_name, double t_now,
  * Write particle positions
  */
 // will be with hdf5 version too at some point
-void writeParticles(SettingsCMM SettingsMain, string i_num, double *Host_particles_pos, double *Dev_particles_pos) {
-	// copy data to host
-    cudaMemcpy(Host_particles_pos, Dev_particles_pos, 2*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()*sizeof(double), cudaMemcpyDeviceToHost);
-    //cudaDeviceSynchronize();
-    writeAllRealToBinaryFile(2*SettingsMain.getParticlesNum(), Host_particles_pos, SettingsMain, "/Particle_data/Fluid/Particles_pos_" + i_num);
-    for(int i = 1; i < SettingsMain.getParticlesTauNum(); i+=1)
-        writeAllRealToBinaryFile(2*SettingsMain.getParticlesNum(), Host_particles_pos + i * 2*SettingsMain.getParticlesNum(), SettingsMain, "/Particle_data/Tau=" + to_str(SettingsMain.particles_tau[i]) + "/Particles_pos_" + i_num);
+void writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, double **Host_particles_pos, double **Dev_particles_pos) {
+	// check if we want to save at this time, combine all variables if so
+	std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
+	bool save_now = false; std::string save_var;
+	SaveComputational* save_comp = SettingsMain.getSaveComputational();
+	for (int i_save = 0; i_save < SettingsMain.getSaveComputationalNum(); ++i_save) {
+		// instants - distance to target is smaller than threshhold
+		if (save_comp[i_save].is_instant && t_now - save_comp[i_save].time_start + dt*1e-5 < dt_now && t_now - save_comp[i_save].time_start + dt*1e-5 >= 0) {
+			save_now = true; save_var = save_var + save_comp[i_save].var;
+		}
+		// intervals - modulo to steps with safety-increased targets is smaller than step
+		if (!save_comp[i_save].is_instant
+			&& fmod(t_now - save_comp[i_save].time_start + dt*1e-5, save_comp[i_save].time_step) < dt_now
+			&& t_now + dt*1e-5 >= save_comp[i_save].time_start
+			&& t_now - dt*1e-5 <= save_comp[i_save].time_end) {
+			save_now = true; save_var = save_var + save_comp[i_save].var;
+		}
+	}
+	if (save_now) {
+		// save for every PartA_ that is found
+		ParticlesAdvected* particles_advected = SettingsMain.getParticlesAdvected();
+		int pos_p = save_var.find("PartA_", 0);
+
+		// create new subfolder for current timestep, doesn't matter if we try to create it several times
+		if (pos_p != std::string::npos) {
+			std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
+			std::string sub_folder_name = "/Particle_data/Time_" + t_s_now;
+			string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
+			struct stat st = {0};
+			if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
+		}
+
+
+		while (pos_p != std::string::npos) {
+			// extract wanted particle computation index
+			int i_p = std::stoi(save_var.substr(pos_p+6, pos_p+8)) - 1;  // hardcoded, that after "PartA_" the numbers follow
+
+			// copy data to host
+			cudaMemcpy(Host_particles_pos[i_p], Dev_particles_pos[i_p], 2*particles_advected[i_p].num*sizeof(double), cudaMemcpyDeviceToHost);
+			writeAllRealToBinaryFile(2*particles_advected[i_p].num, Host_particles_pos[i_p], SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_pos_P" + to_str_0(i_p+1, 2));
+
+
+			// compute next position
+			pos_p = save_var.find("PartA_", pos_p+1);
+		}
+	}
 }
 
 void writeFineParticles(SettingsCMM SettingsMain, string i_num, double *Host_particles_fine_pos, int fine_particle_save_num) {
-	writeAllRealToBinaryFile(2*fine_particle_save_num, Host_particles_fine_pos, SettingsMain, "/Particle_data/Fluid_fine/Particles_pos_" + i_num);
-
-    for(int i = 1; i < SettingsMain.getParticlesTauNum(); i+=1) {
-		writeAllRealToBinaryFile(2*fine_particle_save_num, Host_particles_fine_pos, SettingsMain, "/Particle_data/Tau="+to_str(SettingsMain.particles_tau[i])+"_fine/Particles_pos_" + i_num);
-    }
+//	writeAllRealToBinaryFile(2*fine_particle_save_num, Host_particles_fine_pos, SettingsMain, "/Particle_data/Fluid_fine/Particles_pos_" + i_num);
+//
+//    for(int i = 1; i < SettingsMain.getParticlesTauNum(); i+=1) {
+//		writeAllRealToBinaryFile(2*fine_particle_save_num, Host_particles_fine_pos, SettingsMain, "/Particle_data/Tau="+to_str(SettingsMain.particles_tau[i])+"_fine/Particles_pos_" + i_num);
+//    }
 }
 
 
@@ -411,6 +424,14 @@ void Logger::push(string message)
 void Logger::push()
 {
 	push(buffer);
+}
+
+
+std::string to_str_0 (int t, int width)
+{
+  ostringstream os;
+  os << std::setfill('0') << std::setw(width) << t;
+  return os.str ();
 }
 
 

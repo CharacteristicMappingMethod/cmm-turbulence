@@ -31,7 +31,6 @@ using namespace std;
 
 // general structure
 void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax);
-void create_particle_directory_structure(SettingsCMM SettingsMain);
 
 // fundamental save functions
 void writeAllRealToBinaryFile(int Len, double *var, SettingsCMM SettingsMain, string data_name);
@@ -46,7 +45,7 @@ void writeTimeStep(SettingsCMM SettingsMain, double t_now, double dt_now, double
 void writeTimeVariable(SettingsCMM SettingsMain, string data_name, double t_now, double *Host_save, double *Dev_save, long int size_N, long int N);
 void writeTimeVariable(SettingsCMM SettingsMain, string data_name, double t_now, double *Host_save, double *Dev_save, long int size_N, long int N, int offset);
 
-void writeParticles(SettingsCMM SettingsMain, string i_num, double *Host_particles_pos, double *Dev_particles_pos);
+void writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, double **Host_particles_pos, double **Dev_particles_pos);
 void writeFineParticles(SettingsCMM SettingsMain, string i_num, double *Host_particles_fine_pos, int fine_particle_save_num);
 
 void writeMapStack(SettingsCMM SettingsMain, MapStack Map_Stack);
@@ -83,6 +82,9 @@ template<typename Type> string to_str (const Type & t, int prec)
   os << t;
   return os.str ();
 }
+// little function to print integer with leading zeros
+std::string to_str_0 (int t, int width);
+
 // little function to format array datatype to string
 template<typename Type> string array_to_str (const Type & array, const int length)
 {

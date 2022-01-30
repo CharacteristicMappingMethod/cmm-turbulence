@@ -60,6 +60,41 @@ public:
 };
 
 
+// class to define the computations for particles being advected
+class ParticlesAdvected {
+
+public:
+	// attributes, not modern style but i was too lazy to include getters and setters
+	int num;
+	double tau;
+	unsigned long long seed;
+	std::string time_integration; int time_integration_num;
+	std::string init_name; int init_num;
+	double init_time, init_param_1, init_param_2, init_param_3, init_param_4;
+
+	void setAllVariables(std::string value);
+	void setVariable(std::string value);
+	std::string getVariables();
+};
+
+
+// class to define the computations for particles being forwarded
+class ParticlesForwarded {
+
+public:
+	// attributes, not modern style but i was too lazy to include getters and setters
+	int num;
+	unsigned long long seed;
+	std::string init_name; int init_num;
+	double init_time; int init_map;  // map needed to know from which map we advect
+	double init_param_1, init_param_2, init_param_3, init_param_4;
+
+	void setAllVariables(std::string value);
+	void setVariable(std::string value);
+	std::string getVariables();
+};
+
+
 class SettingsCMM {
 
 private:
@@ -100,25 +135,18 @@ private:
 	int save_zoom_num;
 	SaveZoom* save_zoom;
 	// forward map
-	bool forward_map, forward_particles; int forward_particles_num;
-	std::string forward_particles_init_name; int forward_particles_init_num;
-	unsigned long long forward_particles_seed;
+	bool forward_map;
+	int particles_forwarded_num;
+	ParticlesForwarded* particles_forwarded;
 	// particles
-	bool particles, save_fine_particles;
-	std::string particles_init_name; int particles_init_num;
-	unsigned long long particles_seed;
-	double particles_init_time;
-	int particles_tau_num;
-	bool particles_save_initial, particles_save_final;
-	int particles_num, particles_fine_num;
-	double particles_snapshots_per_sec;
-	std::string particles_time_integration; int particles_time_integration_num;
+	int particles_advected_num;
+	ParticlesAdvected* particles_advected;
 
 	int particles_steps;
 
 public:
 	// arrays are hard to deal with methods in c++, so i make them public, 100 is taken just to have enough space
-	double forward_particles_init_parameter[100], particles_tau[100], particles_init_parameter[100];
+	double forward_particles_init_parameter[100];
 
 	// main functions
 	SettingsCMM(std::string sim_name, int gridCoarse, int gridFine, std::string initialCondition);
@@ -134,6 +162,8 @@ public:
 	void setSaveComputational(std::string command_full, std::string delimiter, int number);
 	void setSaveSample(std::string command_full, std::string delimiter, int number);
 	void setSaveZoom(std::string command_full, std::string delimiter, int number);
+	void setParticlesAdvected(std::string command_full, std::string delimiter, int number);
+	void setParticlesForwarded(std::string command_full, std::string delimiter, int number);
 	// work with arrays
 	void string_to_int_array(std::string s_array, int *array);
 	void string_to_double_array(std::string s_array, double *array);
@@ -318,81 +348,23 @@ public:
 	bool getForwardMap() const { return forward_map; }
 	void setForwardMap(bool forwardMap) { forward_map = forwardMap; }
 
-	bool getForwardParticles() const { return particles; }
-	void setForwardParticles(bool forwardParticles) { forward_particles = forwardParticles; }
-	int getForwardParticlesNum() const { return forward_particles_num; }
-	void setForwardParticlesNum(int forwardParticlesNum) { forward_particles_num = forwardParticlesNum; }
-
-	std::string getForwardParticlesInitName() const { return forward_particles_init_name; }
-	void setForwardParticlesInitName(std::string forwardParticlesInitName) {
-		forward_particles_init_name = forwardParticlesInitName;
-		// tied to num, for faster handling
-		if(forwardParticlesInitName == "uniform") forward_particles_init_num = 0;
-		else if(forwardParticlesInitName == "normal" or forwardParticlesInitName == "gaussian") forward_particles_init_num = 1;
-		else if(forwardParticlesInitName == "circular_ring") forward_particles_init_num = 2;
-		else if(forwardParticlesInitName == "uniform_grid") forward_particles_init_num = 3;
-		else forward_particles_init_num = -1;
+	int getParticlesForwardedNum() const { return particles_forwarded_num; }
+	void setParticlesForwardedNum(int particlesForwardedNum) {
+		particles_forwarded_num = particlesForwardedNum;
+		delete [] particles_forwarded;
+		particles_forwarded = new ParticlesForwarded[particles_forwarded_num];
 	}
-	int getForwardParticlesInitNum() const { return forward_particles_init_num; }
-
-	unsigned long long getForwardParticlesSeed() const { return forward_particles_seed; }
-	void setForwardParticlesSeed(unsigned long long forwardParticlesSeed) { forward_particles_seed = forwardParticlesSeed; }
+	ParticlesForwarded* getParticlesForwarded() const { return particles_forwarded; }
 
 
 	// particles
-	bool getParticles() const { return particles; }
-	void setParticles(bool Particles) { particles = Particles; }
-	int getParticlesNum() const { return particles_num; }
-	void setParticlesNum(int particlesNum) { particles_num = particlesNum; }
-
-	std::string getParticlesInitName() const { return particles_init_name; }
-	void setParticlesInitName(std::string particlesInitName) {
-		particles_init_name = particlesInitName;
-		// tied to num, for faster handling
-		if(particlesInitName == "uniform") particles_init_num = 0;
-		else if(particlesInitName == "normal" or particlesInitName == "gaussian") particles_init_num = 1;
-		else if(particlesInitName == "circular_ring") particles_init_num = 2;
-		else if(particlesInitName == "uniform_grid") particles_init_num = 3;
-		else particles_init_num = -1;
+	int getParticlesAdvectedNum() const { return particles_advected_num; }
+	void setParticlesAdvectedNum(int particlesAdvectedNum) {
+		particles_advected_num = particlesAdvectedNum;
+		delete [] particles_advected;
+		particles_advected = new ParticlesAdvected[particles_advected_num];
 	}
-	int getParticlesInitNum() const { return particles_init_num; }
-
-	unsigned long long getParticlesSeed() const { return particles_seed; }
-	void setParticlesSeed(unsigned long long particlesSeed) { particles_seed = particlesSeed; }
-
-	double getParticlesInitTime() const { return particles_init_time; }
-	void setParticlesInitTime(double particlesInitTime) { particles_init_time = particlesInitTime; }
-
-	int getParticlesTauNum() const { return particles_tau_num; }
-	void setParticlesTauNum(int particlesTauNum) { particles_tau_num = particlesTauNum; }
-
-	double getParticlesSnapshotsPerSec() const { return particles_snapshots_per_sec; }
-	void setParticlesSnapshotsPerSec(double particlesSnapshotsPerSec) { particles_snapshots_per_sec = particlesSnapshotsPerSec; }
-
-	bool getParticlesSaveInitial() const { return particles_save_initial; }
-	void setParticlesSaveInitial(bool particlesSaveInitial) { particles_save_initial = particlesSaveInitial; }
-	bool getParticlesSaveFinal() const { return particles_save_final; }
-	void setParticlesSaveFinal(bool particlesSaveFinal) { particles_save_final = particlesSaveFinal; }
-
-	// fine particles
-	bool getSaveFineParticles() const { return save_fine_particles; }
-	void setSaveFineParticles(bool saveFineParticles) { save_fine_particles = saveFineParticles; }
-	int getParticlesFineNum() const { return particles_fine_num; }
-	void setParticlesFineNum(int particlesFineNum) { particles_fine_num = particlesFineNum; }
-
-	// particle time integration
-	std::string getParticlesTimeIntegration() const { return particles_time_integration; }
-	void setParticlesTimeIntegration(std::string pTimeIntegration) {
-		particles_time_integration = pTimeIntegration;
-		if (pTimeIntegration == "EulerExp") { particles_time_integration_num = 10; if (getLagrangeOrder() < 2) lagrange_order = 2; }
-		else if (pTimeIntegration == "Heun") { particles_time_integration_num = 20; if (getLagrangeOrder() < 2) lagrange_order = 2; }
-		else if (pTimeIntegration == "RK3") { particles_time_integration_num = 30; if (getLagrangeOrder() < 3) lagrange_order = 3; }
-		else if (pTimeIntegration == "RK4") { particles_time_integration_num = 40; if (getLagrangeOrder() < 4) lagrange_order = 4; }
-		else if (pTimeIntegration == "RK3Mod") { particles_time_integration_num = 31; if (getLagrangeOrder() < 3) lagrange_order = 3; }
-		else if (pTimeIntegration == "RK4Mod") { particles_time_integration_num = 41; if (getLagrangeOrder() < 4) lagrange_order = 4; }
-		else particles_time_integration_num = -1;
-	}
-	int getParticlesTimeIntegrationNum() const { return particles_time_integration_num; }
+	ParticlesAdvected* getParticlesAdvected() const { return particles_advected; }
 
 	int getParticlesSteps() const { return particles_steps; }
 	void setParticlesSteps(int particlesSteps) { particles_steps = particlesSteps; }

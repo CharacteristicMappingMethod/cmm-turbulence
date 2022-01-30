@@ -277,30 +277,39 @@ __device__ double d_init_scalar(double x, double y, int scalar_num) {
 *			Initial conditions for particles					   *
 *******************************************************************/
 
-__host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain, int particle_thread, int particle_block, double* domain_bounds, int particle_type) {
+__host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain, int particle_thread, int particle_block,
+		double* domain_bounds, int particle_type, int i_p) {
 
 	// unpack all parameters according to type
 	long long int seed;
 	int init_num; int num;
-	double* init_parameter;  // parameter array
+	double init_parameter[4];  // parameter array
 
 	switch (particle_type) {
 		case 0:  // advected particles
 		{
-			seed = SettingsMain.getParticlesSeed();
-			init_num = SettingsMain.getParticlesInitNum();
-			num = SettingsMain.getParticlesNum();
+			ParticlesAdvected* particles_advected = SettingsMain.getParticlesAdvected();
+			seed = particles_advected[i_p].seed;
+			init_num = particles_advected[i_p].init_num;
+			num = particles_advected[i_p].num;
 
-			init_parameter = SettingsMain.particles_init_parameter;
+			init_parameter[0] = particles_advected[i_p].init_param_1;
+			init_parameter[1] = particles_advected[i_p].init_param_2;
+			init_parameter[2] = particles_advected[i_p].init_param_3;
+			init_parameter[3] = particles_advected[i_p].init_param_4;
 			break;
 		}
 		case 1:  // forward particles
 		{
-			seed = SettingsMain.getForwardParticlesSeed();
-			init_num = SettingsMain.getForwardParticlesInitNum();
-			num = SettingsMain.getForwardParticlesNum();
+			ParticlesForwarded* particles_forwarded = SettingsMain.getParticlesForwarded();
+			seed = particles_forwarded[i_p].seed;
+			init_num = particles_forwarded[i_p].init_num;
+			num = particles_forwarded[i_p].num;
 
-			init_parameter = SettingsMain.forward_particles_init_parameter;
+			init_parameter[0] = particles_forwarded[i_p].init_param_1;
+			init_parameter[1] = particles_forwarded[i_p].init_param_2;
+			init_parameter[2] = particles_forwarded[i_p].init_param_3;
+			init_parameter[3] = particles_forwarded[i_p].init_param_4;
 			break;
 		}
 	}

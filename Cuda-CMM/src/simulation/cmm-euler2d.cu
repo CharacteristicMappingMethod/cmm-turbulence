@@ -62,7 +62,16 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	if (SettingsMain.getSetDtBySteps()) dt = 1.0 / steps_per_sec;  // direct setting of timestep
 	else dt = 1.0 / std::max(NX_coarse, NY_coarse) / grid_by_time;  // setting of timestep by grid and factor
 	
-	// reset lagrange order
+	// reset lagrange order, check first for particles
+	ParticlesAdvected* particles_advected = SettingsMain.getParticlesAdvected();
+	for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
+		switch (particles_advected[i_p].time_integration_num) {
+			case 10: { break; }  // l_order >= 1 !
+			case 20: { if (SettingsMain.getLagrangeOrder() < 2) SettingsMain.setLagrangeOrder(2); break; }
+			case 30: case 31: { if (SettingsMain.getLagrangeOrder() < 2) SettingsMain.setLagrangeOrder(3); break; }
+			case 40: case 41: { if (SettingsMain.getLagrangeOrder() < 2) SettingsMain.setLagrangeOrder(4); break; }
+		}
+	}
 	if (SettingsMain.getLagrangeOverride() != -1) SettingsMain.setLagrangeOrder(SettingsMain.getLagrangeOverride());
 	
 	// shared parameters
@@ -239,18 +248,24 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
 		size_max_c = std::max(size_max_c, 2*Grid_sample[i_save].sizeNfft);
 		size_max_c = std::max(size_max_c, 2*Grid_sample[i_save].sizeNReal);  // is basically redundant, but lets take it anyways
-		if (SettingsMain.getForwardMap() and SettingsMain.getForwardParticles()) {
+		if (SettingsMain.getForwardMap() and SettingsMain.getParticlesForwarded()) {
 			// we need to save and transfer new particle positions somehow, in addition to map
-			long int stacked_size = 2*(Grid_sample[i_save].sizeNReal+SettingsMain.getForwardParticlesNum()*sizeof(double));
+			long int stacked_size = 2*(Grid_sample[i_save].sizeNReal*sizeof(double));
+			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
+				stacked_size += 2*SettingsMain.getParticlesForwarded()[i_p].num*sizeof(double);
+			}
 			size_max_c = std::max(size_max_c, stacked_size);
 		}
 	}
 	for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); ++i_save) {
 		size_max_c = std::max(size_max_c, 3*Grid_zoom[i_save].sizeNReal);
 //		if (SettingsMain.getZoomSavePsi()) size_max_c = std::max(size_max_c, 4*Grid_zoom.sizeNReal);
-		if (SettingsMain.getForwardMap() and SettingsMain.getForwardParticles()) {
+		if (SettingsMain.getForwardMap() and SettingsMain.getParticlesForwarded()) {
 			// we need to save and transfer new particle positions somehow, in addition to map
-			long int stacked_size = 2*(Grid_zoom[i_save].sizeNReal+SettingsMain.getForwardParticlesNum()*sizeof(double));
+			long int stacked_size = 2*(Grid_zoom[i_save].sizeNReal*sizeof(double));
+			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
+				stacked_size += 2*SettingsMain.getParticlesForwarded()[i_p].num*sizeof(double);
+			}
 			size_max_c = std::max(size_max_c, stacked_size);
 		}
 	}
@@ -403,21 +418,26 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 	// initialize forward particles position, will stay constant over time though so a dynamic approach could be chosen later too
 	// however, the particles should not take up too much memory, so I guess it's okay
-	int forward_particles_thread, forward_particles_block;  // cuda kernel settings, are constant
-	double *Host_forward_particles_pos ,*Dev_forward_particles_pos;  // position of particles
-	if (SettingsMain.getForwardMap() and SettingsMain.getForwardParticles()) {
-		// initialize all memory
-		forward_particles_thread =  256;  // threads for particles, seems good like that
-		forward_particles_block = ceil(SettingsMain.getForwardParticlesNum() / (double)forward_particles_thread);  // fit all particles
-		// cpu memory
-		Host_forward_particles_pos = new double[2*SettingsMain.getForwardParticlesNum()];
-		mb_used_RAM_CPU += 2*SettingsMain.getForwardParticlesNum()*sizeof(double) / 1e6;
-		// gpu memory
-		cudaMalloc((void**) &Dev_forward_particles_pos, 2*SettingsMain.getForwardParticlesNum()*sizeof(double));
-		mb_used_RAM_GPU += 4*SettingsMain.getForwardParticlesNum()*sizeof(double) / 1e6;
+	int forward_particles_thread = 256;
+	int *forward_particles_block = new int[SettingsMain.getParticlesForwardedNum()];  // cuda kernel settings, are constant
+	double **Host_forward_particles_pos = new double*[SettingsMain.getParticlesForwardedNum()];  // position of particles
+	double **Dev_forward_particles_pos = new double*[SettingsMain.getParticlesForwardedNum()];
+	ParticlesForwarded* particles_forwarded = SettingsMain.getParticlesForwarded();
+	if (SettingsMain.getForwardMap()) {
+		for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
+			forward_particles_block[i_p] = ceil(particles_forwarded[i_p].num / (double)forward_particles_thread);  // fit all particles
 
-		// initialize particle position with 1 as forward particle type for parameters
-		init_particles(Dev_forward_particles_pos, SettingsMain, forward_particles_thread, forward_particles_block, bounds, 1);
+			// cpu memory
+			Host_forward_particles_pos[i_p] = new double[2*particles_forwarded[i_p].num];
+			mb_used_RAM_CPU += 2*particles_forwarded[i_p].num*sizeof(double) / 1e6;
+
+			// gpu memory
+			cudaMalloc((void**) &Dev_forward_particles_pos[i_p], 2*particles_forwarded[i_p].num*sizeof(double));
+			mb_used_RAM_GPU += 2*particles_forwarded[i_p].num*sizeof(double) / 1e6;
+
+			// initialize particle position with 1 as forward particle type for parameters
+			init_particles(Dev_forward_particles_pos[i_p], SettingsMain, forward_particles_thread, forward_particles_block[i_p], bounds, 1, i_p);
+		}
 	}
 
 
@@ -425,55 +445,36 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	*							 Particles							   *
 	*******************************************************************/
 	// all variables have to be defined outside
-	int particle_thread, particle_block;  // cuda kernel settings, are constant
-	double *Host_particles_pos ,*Dev_particles_pos;  // position of particles
-	double *Host_particles_vel ,*Dev_particles_vel;  // velocity of particles
-	int particles_fine_old; double particles_fine_max;
-	double *Host_particles_fine_pos;
-	// now set the variables if we have particles
-	if (SettingsMain.getParticles()) {
-		// initialize all memory
-		particle_thread =  256;  // threads for particles, seems good like that
-		particle_block = ceil(SettingsMain.getParticlesNum() / (double)particle_thread);  // fit all particles
+	int particle_thread = 256;
+	int *particle_block = new int[SettingsMain.getParticlesAdvectedNum()];  // cuda kernel settings, are constant
+	double **Host_particles_pos = new double*[SettingsMain.getParticlesAdvectedNum()];  // position of particles
+	double **Dev_particles_pos = new double*[SettingsMain.getParticlesAdvectedNum()];
+	double **Host_particles_vel = new double*[SettingsMain.getParticlesAdvectedNum()];  // velocity of particles
+	double **Dev_particles_vel = new double*[SettingsMain.getParticlesAdvectedNum()];
+//	int particles_fine_old; double particles_fine_max;
+//	double *Host_particles_fine_pos;
+
+	for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
+		particle_block[i_p] = ceil(particles_advected[i_p].num / (double)particle_thread);  // fit all particles
+
 		// cpu memory
-		Host_particles_pos = new double[2*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()];
-		Host_particles_vel = new double[2*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()];
+		Host_particles_pos[i_p] = new double[2*particles_advected[i_p].num];
+		Host_particles_vel[i_p] = new double[2*particles_advected[i_p].num*(particles_advected[i_p].tau != 0) + (particles_advected[i_p].tau == 0)];
+		mb_used_RAM_CPU += 2*(1+particles_advected[i_p].tau != 0)*particles_advected[i_p].num*sizeof(double) / 1e6;
+
 		// gpu memory
-		mb_used_RAM_CPU += 4*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()*sizeof(double) / 1e6;
-		cudaMalloc((void**) &Dev_particles_pos, 2*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()*sizeof(double));
-		cudaMalloc((void**) &Dev_particles_vel, 2*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()*sizeof(double));
-		mb_used_RAM_GPU += 4*SettingsMain.getParticlesNum()*SettingsMain.getParticlesTauNum()*sizeof(double) / 1e6;
+		cudaMalloc((void**) &Dev_particles_pos[i_p], 2*particles_advected[i_p].num*sizeof(double));
+		cudaMalloc((void**) &Dev_particles_vel[i_p], (2*particles_advected[i_p].num*(particles_advected[i_p].tau != 0) + (particles_advected[i_p].tau == 0))*sizeof(double));
+		mb_used_RAM_GPU += 2*(1+particles_advected[i_p].tau != 0)*particles_advected[i_p].num*sizeof(double) / 1e6;
 
 		// initialize particle position with 0 as advected particle type for parameters
-		init_particles(Dev_particles_pos, SettingsMain, particle_thread, particle_block, bounds, 0);
+		init_particles(Dev_particles_pos[i_p], SettingsMain, particle_thread, particle_block[i_p], bounds, 0, i_p);
 
-		// copy all starting positions onto the other tau values
-		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p+=1)
-			cudaMemcpy(Dev_particles_pos + 2*SettingsMain.getParticlesNum()*index_tau_p, Dev_particles_pos,
-					2*SettingsMain.getParticlesNum()*sizeof(double), cudaMemcpyDeviceToDevice);
-
-		// particles where every time step the position will be saved
-		if (SettingsMain.getParticlesSnapshotsPerSec() > 0) {
-
-			if (SettingsMain.getSaveFineParticles()) {
-				SettingsMain.setParticlesFineNum(std::min(SettingsMain.getParticlesFineNum(), SettingsMain.getParticlesNum()));
-
-				// how many fine particles do we estimate max
-				particles_fine_max = 2.0/(double)SettingsMain.getParticlesSnapshotsPerSec()/dt;  // normal case
-				// allocate ram memory for this
-				Host_particles_fine_pos = new double[(int)(2*particles_fine_max*SettingsMain.getParticlesTauNum()*SettingsMain.getParticlesFineNum())];
-			}
-		}
-
-		create_particle_directory_structure(SettingsMain);
-
+		// print some output to the Console
 		if (SettingsMain.getVerbose() >= 1) {
-			message = "Number of particles = " + to_str(SettingsMain.getParticlesNum());
+			message = "Particles set P"+ to_str_0(i_p+1, 2) +" : Num = " + to_str(particles_advected[i_p].num, 8)
+							+    " \t Tau = " + to_str(particles_advected[i_p].tau, 8);
 			std::cout<<message+"\n"; logger.push(message);
-			if (SettingsMain.getParticlesSnapshotsPerSec() > 0 && SettingsMain.getSaveFineParticles()) {
-				message = "Number of fine particles = " + to_str(SettingsMain.getParticlesFineNum());
-				std::cout<<message+"\n"; logger.push(message);
-			}
 		}
 	}
 
@@ -703,20 +704,16 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
     cudaDeviceSynchronize();
 
-    // now lets get the particles in
-    if (SettingsMain.getParticles()) {
-
-		// velocity initialization for inertial particles
-		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p++){
-			Particle_advect_inertia_init<<<particle_block, particle_thread>>>(SettingsMain.getParticlesNum(), dt,
-					Dev_particles_pos + 2*SettingsMain.getParticlesNum()*index_tau_p, Dev_particles_vel + 2*SettingsMain.getParticlesNum()*index_tau_p,
-					Dev_Psi_real, Grid_psi);
-		}
-
-		if (SettingsMain.getParticlesSaveInitial()) {
-			writeParticles(SettingsMain, "0", Host_particles_pos, Dev_particles_pos);
-		}
+    // initialize velocity for inertial particles
+    for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
+    	if (particles_advected[i_p].tau != 0) {
+    		Particle_advect_inertia_init<<<particle_block[i_p], particle_thread>>>(particles_advected[i_p].num,
+    							Dev_particles_pos[i_p], Dev_particles_vel[i_p],
+    							Dev_Psi_real, Grid_psi);
+    	}
 	}
+    // save particle position if interested in that
+    writeParticles(SettingsMain, 0.0, dt, dt, Host_particles_pos, Dev_particles_pos);
 
 	// zoom if wanted, has to be done after particle initialization, maybe a bit useless at first instance
 	Zoom(SettingsMain, 0.0, dt, dt,
@@ -853,7 +850,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		*				If exceeded: Safe map on CPU RAM
 		*							 Initialize variables
 		*******************************************************************/
-	    double monitor_map[5];
+	    double monitor_map[5]; bool forwarded_init = false;
 	    monitor_map[0] = incompressibility_check(Grid_fine, Grid_coarse, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1);
 //		monitor_map[0] = incompressibility_check(Grid_coarse, Grid_coarse, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1);
 
@@ -862,10 +859,18 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 					Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, (cufftDoubleReal*)Dev_Temp_C1);
 
 			monitor_map[1] = incompressibility_check(Grid_coarse, Grid_forward, Dev_ChiX_f, Dev_ChiY_f, (cufftDoubleReal*)Dev_Temp_C1);
+
+			// check if we are at a starting position for forwarded particles
+			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
+				if (t_vec[loop_ctr_l+1] - particles_forwarded[i_p].init_time + dt*1e-5 < dt_vec[loop_ctr_l+1] && t_vec[loop_ctr_l+1] - particles_forwarded[i_p].init_time + dt*1e-5 >= 0) {
+					forwarded_init = true;
+					particles_forwarded[i_p].init_map = Map_Stack.map_stack_ctr + 1;
+				}
+			}
 		}
 
 		// resetting map and adding to stack if resetting condition is met
-		if( monitor_map[0] > SettingsMain.getIncompThreshold() && !SettingsMain.getSkipRemapping()) {
+		if((monitor_map[0] > SettingsMain.getIncompThreshold() && !SettingsMain.getSkipRemapping()) || forwarded_init) {
 
 			//		if( err_incomp_b[loop_ctr] > SettingsMain.getIncompThreshold() && !SettingsMain.getSkipRemapping()) {
 			if(Map_Stack.map_stack_ctr > Map_Stack.cpu_map_num*Map_Stack.Nb_array_RAM)
@@ -932,20 +937,8 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		/*
 		 * Particles advection after velocity update to profit from nice avaiable accelerated schemes
 		 */
-		// Particles advection after velocity update to profit from nice avaiable schemes
-	    if (SettingsMain.getParticles()) {
-
-	    	particles_advect(SettingsMain, Grid_psi, Dev_particles_pos, Dev_particles_vel, Dev_Psi_real,
-	    			t_vec, dt_vec, loop_ctr, particle_block, particle_thread);
-
-			// copy fine particle positions
-			if (SettingsMain.getParticlesSnapshotsPerSec() > 0 && SettingsMain.getSaveFineParticles()) {
-				for(int i_tau_p = 1; i_tau_p < SettingsMain.getParticlesTauNum(); i_tau_p++){
-					cudaMemcpy(Host_particles_fine_pos + 2*((loop_ctr-particles_fine_old)*SettingsMain.getParticlesTauNum()+i_tau_p)*SettingsMain.getParticlesFineNum(),
-							Dev_particles_pos + 2*SettingsMain.getParticlesNum()*i_tau_p, 2*SettingsMain.getParticlesTauNum()*SettingsMain.getParticlesFineNum()*sizeof(double), cudaMemcpyDeviceToHost);
-				}
-			}
-	    }
+    	particles_advect(SettingsMain, Grid_psi, Dev_particles_pos, Dev_particles_vel, Dev_Psi_real,
+    			t_vec, dt_vec, loop_ctr, particle_block, particle_thread);
 
 
 			/*******************************************************************
@@ -980,25 +973,8 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			std::cout<<message+"\n"; logger.push(message);
 		}
 
-		if (SettingsMain.getParticles()*SettingsMain.getParticlesSnapshotsPerSec() > 0) {
-			if( fmod(t_vec[loop_ctr_l+1]+dt*1e-5, 1.0/(double)SettingsMain.getParticlesSnapshotsPerSec()) < dt_vec[loop_ctr_l+1] ) {
-				if (SettingsMain.getVerbose() >= 2) {
-					message = "Saving particles : T = " + to_str(t_vec[loop_ctr_l+1]) + " \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
-					std::cout<<message+"\n"; logger.push(message);
-				}
-
-				// save particle positions
-				if (SettingsMain.getParticles()) {
-					writeParticles(SettingsMain, to_str(t_vec[loop_ctr_l+1]), Host_particles_pos, Dev_particles_pos);
-
-					// if wanted, save fine particles, 1 file for all positions
-					if (SettingsMain.getSaveFineParticles()) {
-						writeFineParticles(SettingsMain, to_str(t_vec[loop_ctr_l+1]), Host_particles_fine_pos, (loop_ctr - particles_fine_old + 1)*SettingsMain.getParticlesTauNum()*SettingsMain.getParticlesFineNum());
-						particles_fine_old = loop_ctr+1;
-					}
-				}
-			}
-		}
+	    // save particle position if interested in that
+	    writeParticles(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Host_particles_pos, Dev_particles_pos);
 		
 		// zoom if wanted
 		Zoom(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt,
@@ -1023,7 +999,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		if(error != 0)
 		{
 			if (SettingsMain.getVerbose() >= 0) {
-				message = "Exited early : Last Cuda Error = " + to_str(error); std::cout<<message+"\n"; logger.push(message);
+				message = "Exited early : Last Cuda Error = " + to_str(cudaGetErrorName(cudaGetLastError())); std::cout<<message+"\n"; logger.push(message);
 			}
 			exit(0);
 			break;
@@ -1081,52 +1057,51 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		}
 
 		// initialize particle position
-		init_particles(Dev_particles_pos, SettingsMain, particle_thread, particle_block, bounds, 0);
+		for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
 
-		// copy all starting positions onto the other tau values
-		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p++)
-			cudaMemcpy(Dev_particles_pos + 2*SettingsMain.getParticlesNum()*index_tau_p, Dev_particles_pos,
-					2*SettingsMain.getParticlesNum()*sizeof(double), cudaMemcpyDeviceToDevice);
+			init_particles(Dev_particles_pos[i_p], SettingsMain, particle_thread, particle_block[i_p], bounds, 0, i_p);
 
-		for(int index_tau_p = 1; index_tau_p < SettingsMain.getParticlesTauNum(); index_tau_p+=1){
-			Particle_advect_inertia_init<<<particle_block, particle_thread>>>(SettingsMain.getParticlesNum(), dt,
-					Dev_particles_pos + 2*SettingsMain.getParticlesNum()*index_tau_p,
-					Dev_particles_vel + 2*SettingsMain.getParticlesNum()*index_tau_p, Dev_Psi_real, Grid_psi);
+			// initialize particle velocity for inertial particles
+	    	if (particles_advected[i_p].tau != 0) {
+	    		Particle_advect_inertia_init<<<particle_block[i_p], particle_thread>>>(particles_advected[i_p].num,
+	    							Dev_particles_pos[i_p], Dev_particles_vel[i_p],
+	    							Dev_Psi_real, Grid_psi);
+	    	}
+
+			auto begin_P = std::chrono::high_resolution_clock::now();
+			if (SettingsMain.getVerbose() >= 2) {
+				message = "Starting extra particle loop: \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(begin_P - begin).count()/1e6);
+				std::cout<<message+"\n"; logger.push(message);
+			}
+
+			// main loop until time 1
+			double dt_p = 1.0/(double)SettingsMain.getParticlesSteps();
+			// initialize vectors for dt and t
+			double t_p_vec[5] = {0, dt_p, 2*dt_p, 3*dt_p, 4*dt_p};
+			double dt_p_vec[5] = {dt_p, dt_p, dt_p, dt_p, dt_p};
+			for (int loop_ctr_p = 0; loop_ctr_p < SettingsMain.getParticlesSteps(); ++loop_ctr_p) {
+				// particles advection
+				particles_advect(SettingsMain, Grid_psi, Dev_particles_pos, Dev_particles_vel, Dev_Psi_real,
+						t_p_vec, dt_p_vec, 0, particle_block, particle_thread, i_p);
+			}
+
+			// force synchronize after loop to wait until everything is finished
+			cudaDeviceSynchronize();
+
+			auto end_P = std::chrono::high_resolution_clock::now();
+			if (SettingsMain.getVerbose() >= 2) {
+				message = "Finished extra particle loop: \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(end_P - begin).count()/1e6);
+				std::cout<<message+"\n"; logger.push(message);
+			}
+
+			double time_p[1] = { std::chrono::duration_cast<std::chrono::microseconds>(end_P - begin_P).count()/1e6 };
+			writeAllRealToBinaryFile(1, time_p, SettingsMain, "/Monitoring_data/Time_P" + to_str_0(i_p, 2));
+
+			// save final position
+			// copy data to host
+			cudaMemcpy(Host_particles_pos[i_p], Dev_particles_pos[i_p], 2*particles_advected[i_p].num*sizeof(double), cudaMemcpyDeviceToHost);
+			writeAllRealToBinaryFile(2*particles_advected[i_p].num, Host_particles_pos[i_p], SettingsMain, "/Particle_data/Time_C1/Particles_pos_P" + to_str_0(i_p, 2));
 		}
-		// save inital position to check if they are qual
-		writeParticles(SettingsMain, "C0", Host_particles_pos, Dev_particles_pos);
-
-		auto begin_P = std::chrono::high_resolution_clock::now();
-		if (SettingsMain.getVerbose() >= 2) {
-			message = "Starting extra particle loop : Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(begin_P - begin).count()/1e6);
-			std::cout<<message+"\n"; logger.push(message);
-		}
-
-		// main loop until time 1
-		double dt_p = 1.0/(double)SettingsMain.getParticlesSteps();
-		// initialize vectors for dt and t
-		double t_p_vec[5] = {0, dt_p, 2*dt_p, 3*dt_p, 4*dt_p};
-		double dt_p_vec[5] = {dt_p, dt_p, dt_p, dt_p, dt_p};
-		for (int loop_ctr_p = 0; loop_ctr_p < SettingsMain.getParticlesSteps(); ++loop_ctr_p) {
-			// particles advection
-	    	particles_advect(SettingsMain, Grid_psi, Dev_particles_pos, Dev_particles_vel, Dev_Psi_real,
-	    			t_p_vec, dt_p_vec, 0, particle_block, particle_thread);
-		}
-
-		// force synchronize after loop to wait until everything is finished
-		cudaDeviceSynchronize();
-
-		auto end_P = std::chrono::high_resolution_clock::now();
-		if (SettingsMain.getVerbose() >= 2) {
-			message = "Finished extra particle loop : Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(end_P - begin).count()/1e6);
-			std::cout<<message+"\n"; logger.push(message);
-		}
-
-		double time_p[1] = { std::chrono::duration_cast<std::chrono::microseconds>(end_P - begin_P).count()/1e6 };
-		writeAllRealToBinaryFile(1, time_p, SettingsMain, "/P_time");
-
-		// save final position
-		writeParticles(SettingsMain, "C1", Host_particles_pos, Dev_particles_pos);
 	}
 
 	
@@ -1160,10 +1135,8 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		std::cout<<message+"\n"; logger.push(message);
 	}
 
-	// save particles
-	if (SettingsMain.getParticles() && SettingsMain.getParticlesSaveFinal()) {
-		writeParticles(SettingsMain, "final", Host_particles_pos, Dev_particles_pos);
-	}
+    // save particle position if interested in that
+    writeParticles(SettingsMain, T_MAX-dt, 1e300, dt, Host_particles_pos, Dev_particles_pos);
 
 	// zoom if wanted
 	Zoom(SettingsMain, T_MAX-dt, 1e300, dt,
@@ -1225,13 +1198,18 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	}
 	cudaFree(fft_work_area);
 
-	if (SettingsMain.getParticles()) {
-	// Particles variables
-	    delete [] Host_particles_pos;
-	    delete [] Host_particles_vel;
-	    delete [] Host_particles_fine_pos;
-	    cudaFree(Dev_particles_pos);
-        cudaFree(Dev_particles_vel);
+	for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
+		delete [] Host_particles_pos[i_p];
+	    delete [] Host_particles_vel[i_p];
+	    cudaFree(Dev_particles_pos[i_p]);
+        cudaFree(Dev_particles_vel[i_p]);
+	}
+
+	if (SettingsMain.getForwardMap()) {
+		for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
+			delete [] Host_forward_particles_pos[i_p];
+		    cudaFree(Dev_forward_particles_pos[i_p]);
+		}
 	}
 
 	// delete monitoring values
@@ -1243,8 +1221,6 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		double diff = std::chrono::duration_cast<std::chrono::microseconds>(step - begin).count()/1e6;
 		writeAppendToBinaryFile(1, &diff, SettingsMain, "/Monitoring_data/Time_c");
     }
-    // save timing to file
-//	writeAllRealToBinaryFile(loop_ctr+2, time_values, SettingsMain, "/Monitoring_data/Timing_Values");
 
 	// introduce part to console
 	if (SettingsMain.getVerbose() >= 1) {

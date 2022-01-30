@@ -29,7 +29,7 @@ __global__ void k_rescale(int Nb_particle, double particles_center_x, double par
 
 
 // initialize inertial particles with fluid velocity
-__global__ void Particle_advect_inertia_init(int Nb_particle, double dt, double *particles_pos, double *particles_vel, double *psi, TCudaGrid2D Grid){
+__global__ void Particle_advect_inertia_init(int Nb_particle, double *particles_pos, double *particles_vel, double *psi, TCudaGrid2D Grid){
 
 	int i = (blockDim.x * blockIdx.x + threadIdx.x);  // (thread_num_max * block_num + thread_num) - gives position
 
@@ -42,8 +42,8 @@ __global__ void Particle_advect_inertia_init(int Nb_particle, double dt, double 
 }
 
 
-void particles_advect(SettingsCMM SettingsMain, TCudaGrid2D Grid_psi, double *particles_pos, double *particles_vel,
-		double *psi, double *t, double *dt, int loop_ctr, int particles_block, int particles_thread) {
+void particles_advect(SettingsCMM SettingsMain, TCudaGrid2D Grid_psi, double **particles_pos, double **particles_vel,
+		double *psi, double *t, double *dt, int loop_ctr, int *particles_block, int particles_thread) {
 	// compute lagrange coefficients from dt vector for timesteps n+dt and n+dt/2, this makes them dynamic
 	double h_L12[4];  // constant memory for lagrange coefficient to be computed only once
 	int loop_ctr_l = loop_ctr + SettingsMain.getLagrangeOrder()-1;  // dt and t are shifted because of initial previous steps
@@ -55,13 +55,44 @@ void particles_advect(SettingsCMM SettingsMain, TCudaGrid2D Grid_psi, double *pa
 	// copy to constant memory
 	cudaMemcpyToSymbol(d_Lp12, h_L12, sizeof(double)*4);
 
-	Particle_advect<<<particles_block, particles_thread>>>(SettingsMain.getParticlesNum(), dt[loop_ctr_l + 1], particles_pos, psi,
-			Grid_psi, SettingsMain.getParticlesTimeIntegrationNum(), SettingsMain.getLagrangeOrder());
-	// loop for all tau p
-	for(int i_tau_p = 1; i_tau_p < SettingsMain.getParticlesTauNum(); i_tau_p++){
-		Particle_advect_inertia<<<particles_block, particles_thread>>>(SettingsMain.getParticlesNum(), dt[loop_ctr_l + 1],
-				particles_pos + 2*SettingsMain.getParticlesNum()*i_tau_p, particles_vel + 2*SettingsMain.getParticlesNum()*i_tau_p, psi,
-				Grid_psi, SettingsMain.particles_tau[i_tau_p], SettingsMain.getParticlesTimeIntegrationNum(), SettingsMain.getLagrangeOrder());
+	ParticlesAdvected* particles_advected = SettingsMain.getParticlesAdvected();
+	for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
+		if (t[loop_ctr_l+1] + 1e-5*dt[loop_ctr_l+1] >= particles_advected[i_p].init_time && particles_advected[i_p].tau == 0) {
+			Particle_advect<<<particles_block[i_p], particles_thread>>>(particles_advected[i_p].num, dt[loop_ctr_l + 1], particles_pos[i_p], psi,
+						Grid_psi, particles_advected[i_p].time_integration_num, SettingsMain.getLagrangeOrder());
+		}
+		else if (t[loop_ctr_l+1] + 1e-5*dt[loop_ctr_l+1] >= particles_advected[i_p].init_time && particles_advected[i_p].tau != 0) {
+			Particle_advect_inertia<<<particles_block[i_p], particles_thread>>>(particles_advected[i_p].num, dt[loop_ctr_l + 1],
+					particles_pos[i_p], particles_vel[i_p], psi,
+					Grid_psi, particles_advected[i_p].tau, particles_advected[i_p].time_integration_num, SettingsMain.getLagrangeOrder());
+		}
+	}
+}
+
+
+// function with only one set to decouple the timing measurements
+void particles_advect(SettingsCMM SettingsMain, TCudaGrid2D Grid_psi, double **particles_pos, double **particles_vel,
+		double *psi, double *t, double *dt, int loop_ctr, int* particles_block, int particles_thread, int i_p) {
+	// compute lagrange coefficients from dt vector for timesteps n+dt and n+dt/2, this makes them dynamic
+	double h_L12[4];  // constant memory for lagrange coefficient to be computed only once
+	int loop_ctr_l = loop_ctr + SettingsMain.getLagrangeOrder()-1;  // dt and t are shifted because of initial previous steps
+	for (int i_p = 0; i_p < SettingsMain.getLagrangeOrder(); ++i_p) {
+		// position loop_ctr_l+1, because velocity was already computed
+		h_L12[i_p] = get_L_coefficient(t, t[loop_ctr_l] + dt[loop_ctr_l+1]/2.0, loop_ctr_l+1, i_p, SettingsMain.getLagrangeOrder());
+	}
+
+	// copy to constant memory
+	cudaMemcpyToSymbol(d_Lp12, h_L12, sizeof(double)*4);
+
+	ParticlesAdvected* particles_advected = SettingsMain.getParticlesAdvected();
+	if (particles_advected[i_p].tau == 0) {
+		Particle_advect<<<particles_block[i_p], particles_thread>>>(particles_advected[i_p].num, dt[loop_ctr_l + 1], particles_pos[i_p], psi,
+					Grid_psi, particles_advected[i_p].time_integration_num, SettingsMain.getLagrangeOrder());
+	}
+	else {
+		Particle_advect_inertia<<<particles_block[i_p], particles_thread>>>(particles_advected[i_p].num, dt[loop_ctr_l + 1],
+				particles_pos[i_p], particles_vel[i_p], psi,
+				Grid_psi, particles_advected[i_p].tau, particles_advected[i_p].time_integration_num, SettingsMain.getLagrangeOrder());
 	}
 }
 
