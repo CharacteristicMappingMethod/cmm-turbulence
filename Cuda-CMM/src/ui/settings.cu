@@ -44,7 +44,7 @@ void SettingsCMM::setPresets() {
 	int verbose = 3;
 
 	// set time properties
-	double final_time = 6;  // end of computation
+	double final_time = 3;  // end of computation
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
 	int steps_per_sec = 128;  // how many steps do we want per seconds?
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
@@ -493,6 +493,7 @@ void SettingsCMM::setSaveComputational(std::string command_full, std::string del
 
 		save_computational[number] = SaveComputational();
 		save_computational[number].setAllVariables(value);
+		std::cout << "Comp read in: " << value << "\n";
 	}
 }
 
@@ -532,6 +533,8 @@ void SettingsCMM::setParticlesAdvected(std::string command_full, std::string del
 
 		particles_advected[number] = ParticlesAdvected();
 		particles_advected[number].setAllVariables(value);
+
+		std::cout << "PartA read in: " << value << "\n";
 	}
 }
 

@@ -163,26 +163,31 @@ void load_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 						int set_save = SettingsMain.setVariable(file_line, delimiter);
 						if (set_save == 1) {
 							for (int i_save = 0; i_save < SettingsMain.getSaveComputationalNum(); ++i_save) {
+								getline(file, file_line);
 								SettingsMain.setSaveComputational(file_line, delimiter, i_save);
 							}
 						}
 						else if (set_save == 2) {
 							for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
+								getline(file, file_line);
 								SettingsMain.setSaveSample(file_line, delimiter, i_save);
 							}
 						}
 						else if (set_save == 3) {
 							for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); ++i_save) {
+								getline(file, file_line);
 								SettingsMain.setSaveZoom(file_line, delimiter, i_save);
 							}
 						}
 						else if (set_save == 4) {
 							for (int i_save = 0; i_save < SettingsMain.getParticlesAdvectedNum(); ++i_save) {
+								getline(file, file_line);
 								SettingsMain.setParticlesAdvected(file_line, delimiter, i_save);
 							}
 						}
 						else if (set_save == 5) {
 							for (int i_save = 0; i_save < SettingsMain.getParticlesForwardedNum(); ++i_save) {
+								getline(file, file_line);
 								SettingsMain.setParticlesForwarded(file_line, delimiter, i_save);
 							}
 						}
