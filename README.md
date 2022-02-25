@@ -1,6 +1,6 @@
 # CMM Turbulence
 
-Code for the characteristic mapping method in 2D with particle flow written in C++ (C) using Nvidia CUDA on Linux.
+Code for the characteristic mapping method in 2D with particle flow, written in C++ (C) using Nvidia CUDA on Linux.
 
 Even though computational resources grow rapidly, the extremely fine scales in fluid and plasma turbulence remain beyond reach using existing numerical methods. A combination of computational power and ingenious physical insights is usually needed to go beyond the brute force limit. We propose here to develop a novel numerical method, a fully Adaptive Characteristic Mapping Method (ACMM) for evolving the flow map, which yields exponential resolution in linear time. First results for the two-dimensional (2D) incompressible Euler equations show the extremely high resolution capabilities of the scheme obtained by decomposing the flow map and appropriate remapping. (ANR CM2E)
 
@@ -9,7 +9,7 @@ Even though computational resources grow rapidly, the extremely fine scales in f
 The code is managed under GNU General Public License v3.0. Everyone is permitted to copy and distribute verbatim copies of this license document, but changing it is not allowed. Further details can be found in the LICENSE.md file.
 
 The original version of the Cuda code has been developed by Badal Yadav at McGill University, Montreal, Canada.
-Further work on the code has been done by Thibault Oujia, Nicolas Saber and Julius Bergmann.
+Further work on the code has been done by Thibault Oujia, Nicolas Saber and Julius Bergmann at I2M, Aix-Marseille Université, France.
 
 # Prerequesites
 
@@ -59,21 +59,18 @@ Setup a Post-folder for all python post-processing?
 
 # Literature references and Research project
 
-The code is used and developed in regard to the ongoing ANR project "CM2E" (http://lmfa.ec-lyon.fr/spip.php?article1807).
+The open access code has been developed in the context of the ongoing ANR project "CM2E" (http://lmfa.ec-lyon.fr/spip.php?article1807) and is used in this framework.
+It is based on the origianl version of the cuda code, developed by Badal Yadav at McGill. 
 Further literature describing the method and features:
 
-Badal Yadav.
-Characteristic mapping method for incompressible Euler equations.
-Master’s thesis, McGill University, Canada, 2015.
+Badal Yadav. Characteristic mapping method for incompressible Euler equations.
+Master thesis, McGill University, Canada, 2015.
 
-X.Y. Yin, O. Mercier, B. Yadav, K. Schneider and J.-C. Nave. 
-A Characteristic Mapping Method for the two-dimensional incompressible Euler equations. 
+X.Y. Yin, O. Mercier, B. Yadav, K. Schneider and J.-C. Nave. A Characteristic Mapping Method for the two-dimensional incompressible Euler equations. 
 J. Comput. Phys., 424, 109781, 2021.
 
-X.Y. Yin, K. Schneider, and J.-C. Nave.
-A characteristic mapping method for the three-dimensional incompressible Euler equations.
+X.Y. Yin, K. Schneider, and J.-C. Nave. A characteristic mapping method for the three-dimensional incompressible Euler equations.
 arxiv.org/abs/2107.03504, 2021b.
 
-Nicolas Saber.
-Two-dimensional Characteristic Mapping Method with inertial particles on GPU using CUDA.
-Master’s thesis, Aix-Marseille University, France, 2021.
+Nicolas Saber. Two-dimensional Characteristic Mapping Method with inertial particles on GPU using CUDA.
+Master thesis, Aix-Marseille University, France, 2021.
