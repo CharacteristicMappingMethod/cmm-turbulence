@@ -60,7 +60,7 @@ Setup a Post-folder for all python post-processing?
 # Literature references and Research project
 
 The open access code has been developed in the context of the ongoing ANR project "CM2E" (http://lmfa.ec-lyon.fr/spip.php?article1807) and is used in this framework.
-It is based on the origianl version of the cuda code, developed by Badal Yadav at McGill. 
+It is based on the original version of the cuda code, developed by Badal Yadav at McGill University, Canada. 
 Further literature describing the method and features:
 
 Badal Yadav. Characteristic mapping method for incompressible Euler equations.
