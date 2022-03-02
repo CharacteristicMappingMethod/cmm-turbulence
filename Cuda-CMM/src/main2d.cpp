@@ -1,26 +1,56 @@
-#include "simulation/cudasimulation2d.h"
-#include "simulation/cudaeuler2d.h"
-#include "simulation/settings.h"
-#include "grid/cudagrid2d.h"
-
-
+#include "simulation/cmm-euler2d.h"
+#include "ui/settings.h"
+#include "ui/cmm-param.h"
 
 
 
 /******************************************************************************************************************************
 *	
-* 	The original version of the Cuda code has been developed by Badal Yadav at Mc Gill U, Montreal, Canada.
+*	CMM Turbulence
+*
+*
+*   Code for the characteristic mapping method in 2D with particle flow written in C++ (C) using Nvidia CUDA on Linux.
+*
+*   The code is managed under GNU General Public License v3.0. Everyone is permitted to copy
+*   and distribute verbatim copies of this license document, but changing it is not allowed.
+*
+*   Documentation and further information can be taken from the GitHub page, located at:
+*   https://github.com/Arcadia197/cmm-turbulence
+*
+*
+*	Code contributions:
+*
+*	Badal Yadav
+*	Original version of the cuda code, developed t Mc Gill U, Montreal, Canada.
+*
+*	Thibault Oujia
+*	Many first changes and revisions of the code
+*
+*	Nicolas Saber
+*	Implementation of finite size particles
+*
+*	Julius Bergmann
+*	Restructuring of the code and setup on GitHub
+*
 * 
-* 	Ref : 
-* 	X.Y. Yin, O. Mercier, B. Yadav, K. Schneider and J.-C. Nave. 
-* 	A Characteristic Mapping Method for the two-dimensional incompressible Euler equations. 
-* 	J. Comput. Phys., 424, 109781, 2021.
+* 	Literature Reference :
+* 	The code is used and developed in regard to the ongoing ANR project "CM2E" (http://lmfa.ec-lyon.fr/spip.php?article1807).
 * 	
-* 	
-* 	
-* 	Main extension of the code was done by Thibault Oujia, Nicolas Saber and Julius Bergmann
-* 	
-* 	
+* 	Badal Yadav.
+* 	Characteristic mapping method for incompressible Euler equations.
+* 	Master’s thesis, McGill University, Canada, 2015.
+*
+*   X.Y. Yin, O. Mercier, B. Yadav, K. Schneider and J.-C. Nave.
+*   A Characteristic Mapping Method for the two-dimensional incompressible Euler equations.
+*   J. Comput. Phys., 424, 109781, 2021.
+*
+*   X.Y. Yin, K. Schneider, and J.-C. Nave.
+*   A characteristic mapping method for the three-dimensional incompressible Euler equations.
+*   arxiv.org/abs/2107.03504, 2021b.
+*
+*   Nicolas Saber.
+*   Two-dimensional Characteristic Mapping Method with inertial particles on GPU using CUDA.
+*   Master’s thesis, Aix-Marseille University, France, 2021.
 * 		
 ******************************************************************************************************************************/
 
@@ -31,11 +61,30 @@ int main(int argc, char *args[])
 {
 
 	// build settings and apply commands
-	SettingsCMM SettingsMain(argc, args);
+	SettingsCMM SettingsMain;
+
+	// deal with specific arguments
+	for( int count = 0; count < argc; count++ ) {
+		// construct string for command
+		std::string command_full = args[count];
+
+		int pos_equal = command_full.find("=");
+		if (pos_equal != std::string::npos) {
+			// construct two substrings
+			std::string command = command_full.substr(0, pos_equal);
+			std::string value = command_full.substr(pos_equal+1, command_full.length());
+
+			// load parameter file
+			if (command == "param_file") load_param_file(SettingsMain, value);
+		}
+	}
+
+	// values from command line are set after loadig parameter files - command line arguments should have highest priority
+	SettingsMain.applyCommands(argc, args);
 
 	// main function
 	cuda_euler_2d(SettingsMain);
-	
+
 	//Zoom_load_frame("vortex_shear_1000_4", grid_scale, fine_grid_scale, "final");
 	
 	return 0;
@@ -61,6 +110,9 @@ int main(int argc, char *args[])
  *
  * new compiler, good timeline but wrong times
  * /usr/local/cuda/bin/nsys-ui
+ *
+ * newest compiler, but i have to understand it
+ * sudo /usr/local/cuda/bin/ncu-ui
  *
  * device memory usage information
  * nvidia-smi
@@ -88,12 +140,6 @@ int main(int argc, char *args[])
 // set cuda api_failures stop
 // where
 
-
-
-
-
-
-// sudo nvvp ./SimulationCuda2d.out
 
 
 // https://docs.nvidia.com/nsight-systems/UserGuide/index.html
