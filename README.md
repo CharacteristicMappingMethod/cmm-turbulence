@@ -78,8 +78,8 @@ arxiv.org/abs/2107.03504, 2021b.
 Nicolas Saber, Two-dimensional Characteristic Mapping Method with inertial particles on GPU using CUDA.
 Master thesis, Aix-Marseille University, France, 2021.
 
-O. Mercier, X.Y. Yin, J.-C. Nave, The Characteristic Mapping Method for the linear advection of arbitrary sets.
+O. Mercier, X.Y. Yin, and J.-C. Nave, The Characteristic Mapping Method for the linear advection of arbitrary sets.
 doi.org/10.1137/18M1234424, J. Sci. Comput. 42,3, 2013.
 
-Nave et al., A gradient-augmented level set method with an optimally local, coherent advection scheme,
+J.-C. Nave, R.R. Rosalis, and B. Seibold, A gradient-augmented level set method with an optimally local, coherent advection scheme,
 doi.org/10.1016/j.jcp.2010.01.029, J. Comput. Phys 229, 2010.
