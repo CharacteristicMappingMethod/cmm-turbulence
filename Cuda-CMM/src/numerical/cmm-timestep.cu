@@ -1,3 +1,16 @@
+/******************************************************************************************************************************
+*
+*	This script is part of the code for the characteristic mapping method in 2D with particle flow
+*	written in C++ (C) using Nvidia CUDA on Linux.
+*
+*   The code is managed under GNU General Public License v3.0. Everyone is permitted to copy
+*   and distribute verbatim copies of this license document, but changing it is not allowed.
+*
+*   Documentation and further information can be taken from the GitHub page, located at:
+*   https://github.com/Arcadia197/cmm-turbulence
+*
+******************************************************************************************************************************/
+
 #include "cmm-timestep.h"
 
 #include "../numerical/cmm-hermite.h"

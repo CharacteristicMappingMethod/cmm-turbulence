@@ -1,9 +1,3 @@
-#include "simulation/cmm-euler2d.h"
-#include "ui/settings.h"
-#include "ui/cmm-param.h"
-
-
-
 /******************************************************************************************************************************
 *	
 *	CMM Turbulence
@@ -30,30 +24,41 @@
 *	Implementation of finite size particles
 *
 *	Julius Bergmann
-*	Restructuring of the code and setup on GitHub
+*	Full restructuring of the code and setup on GitHub
 *
 * 
-* 	Literature Reference :
+* 	Main Literature Reference :
 * 	The code is used and developed in regard to the ongoing ANR project "CM2E" (http://lmfa.ec-lyon.fr/spip.php?article1807).
 * 	
-* 	Badal Yadav.
-* 	Characteristic mapping method for incompressible Euler equations.
-* 	Master’s thesis, McGill University, Canada, 2015.
+* 	Badal Yadav
+* 	Characteristic mapping method for incompressible Euler equations
+* 	Master thesis, McGill University, Canada, 2015.
 *
-*   X.Y. Yin, O. Mercier, B. Yadav, K. Schneider and J.-C. Nave.
-*   A Characteristic Mapping Method for the two-dimensional incompressible Euler equations.
-*   J. Comput. Phys., 424, 109781, 2021.
+*	X.Y. Yin, O. Mercier, B. Yadav, K. Schneider and J.-C. Nave
+*	A Characteristic Mapping Method for the two-dimensional incompressible Euler equations
+*	doi.org/10.1016/j.jcp.2020.109781, J. Comput. Phys., 424, 109781, 2021.
 *
-*   X.Y. Yin, K. Schneider, and J.-C. Nave.
-*   A characteristic mapping method for the three-dimensional incompressible Euler equations.
-*   arxiv.org/abs/2107.03504, 2021b.
+*	X.Y. Yin, K. Schneider, and J.-C. Nave
+*	A characteristic mapping method for the three-dimensional incompressible Euler equations
+*	arxiv.org/abs/2107.03504, 2021b.
 *
-*   Nicolas Saber.
-*   Two-dimensional Characteristic Mapping Method with inertial particles on GPU using CUDA.
-*   Master’s thesis, Aix-Marseille University, France, 2021.
+*	Nicolas Saber
+*	Two-dimensional Characteristic Mapping Method with inertial particles on GPU using CUDA
+*	Master thesis, Aix-Marseille University, France, 2021.
+*
+*	O. Mercier, X.Y. Yin, J.-C. Nave
+*	The Characteristic Mapping Method for the linear advection of arbitrary sets
+*	doi.org/10.1137/18M1234424, J. Sci. Comput. 42,3, 2013.
+*
+*	J.-C. Nave, R.R. Rosalis, and B. Seibold
+*	A gradient-augmented level set method with an optimally local, coherent advection scheme
+*	doi.org/10.1016/j.jcp.2010.01.029, J. Comput. Phys 229, 2010.
 * 		
 ******************************************************************************************************************************/
 
+#include "simulation/cmm-euler2d.h"
+#include "ui/settings.h"
+#include "ui/cmm-param.h"
 
 
 //Main function
