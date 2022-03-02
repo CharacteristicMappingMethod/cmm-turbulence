@@ -45,7 +45,9 @@ void writeTimeStep(SettingsCMM SettingsMain, double t_now, double dt_now, double
 void writeTimeVariable(SettingsCMM SettingsMain, string data_name, double t_now, double *Host_save, double *Dev_save, long int size_N, long int N);
 void writeTimeVariable(SettingsCMM SettingsMain, string data_name, double t_now, double *Host_save, double *Dev_save, long int size_N, long int N, int offset);
 
-void writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, double **Host_particles_pos, double **Dev_particles_pos);
+void writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
+		double **Host_particles, double **Dev_particles_pos, double **Dev_particles_vel,
+		TCudaGrid2D Grid_psi, double *Dev_psi, double *Dev_Temp, int* fluid_particles_blocks, int fluid_particles_threads);
 void writeFineParticles(SettingsCMM SettingsMain, string i_num, double *Host_particles_fine_pos, int fine_particle_save_num);
 
 void writeMapStack(SettingsCMM SettingsMain, MapStack Map_Stack);

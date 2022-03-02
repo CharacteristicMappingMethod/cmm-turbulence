@@ -97,7 +97,7 @@ __global__ void k_h_sample_map(double *ChiX, double *ChiY, double *ChiX_s, doubl
 }
 
 // sample from set of input points
-__global__ void k_h_sample_points_map(TCudaGrid2D Grid_map, double *ChiX, double *ChiY, double* Dev_particles_pos_in, double* Dev_particles_pos_out, int particle_num)
+__global__ void k_h_sample_points_map(TCudaGrid2D Grid_map, TCudaGrid2D Grid, double *ChiX, double *ChiY, double* Dev_particles_pos_in, double* Dev_particles_pos_out, int particle_num)
 {
 	//index
 	int i = (blockDim.x * blockIdx.x + threadIdx.x);  // (thread_num_max * block_num + thread_num) - gives position
@@ -107,13 +107,14 @@ __global__ void k_h_sample_points_map(TCudaGrid2D Grid_map, double *ChiX, double
 		return;
 
 	double in_x = Dev_particles_pos_in[2*i], in_y = Dev_particles_pos_in[2*i+1];
+	double LX = Grid_map.bounds[1] - Grid_map.bounds[0]; double LY = Grid_map.bounds[3] - Grid_map.bounds[2];
 	double out_x, out_y;
 	// sample from hermite if position is inside map bounds
-	if (in_x > Grid_map.bounds[0] and in_x < Grid_map.bounds[1] and in_y > Grid_map.bounds[2] and in_y < Grid_map.bounds[3]) {
+	if (in_x > Grid.bounds[0] and in_x < Grid.bounds[1] and in_y > Grid.bounds[2] and in_y < Grid.bounds[3]) {
 		device_diffeo_interpolate_2D(ChiX, ChiY, in_x, in_y, &out_x, &out_y, Grid_map);
 
-		Dev_particles_pos_out[2*i  ] = out_x;
-		Dev_particles_pos_out[2*i+1] = out_y;
+		Dev_particles_pos_out[2*i  ] = out_x - floor(out_x/LX)*LX;
+		Dev_particles_pos_out[2*i+1] = out_y - floor(out_y/LY)*LY;
 	}
 	else  // in case not in bounds, we cannot translate the maps and set the values to NaN
 	{
@@ -139,6 +140,29 @@ __global__ void k_h_sample(double *val, double *val_s, TCudaGrid2D Grid, TCudaGr
 	double y = Grid_s.bounds[2] + iY*Grid_s.hy;
 
 	val_s[In] = device_hermite_interpolate_2D(val, x, y, Grid);
+}
+
+ // sample from hermite given specific input points
+__global__ void k_h_sample_points_dxdy(TCudaGrid2D Grid_map, TCudaGrid2D Grid, double *val_h, double* Dev_particles_pos_in, double* Dev_particles_pos_out, int particle_num)
+{
+	//index
+	int i = (blockDim.x * blockIdx.x + threadIdx.x);  // (thread_num_max * block_num + thread_num) - gives position
+
+	// return if position is larger than particle size
+	if (i >= particle_num)
+		return;
+
+	double in_x = Dev_particles_pos_in[2*i], in_y = Dev_particles_pos_in[2*i+1];
+	double LX = Grid_map.bounds[1] - Grid_map.bounds[0]; double LY = Grid_map.bounds[3] - Grid_map.bounds[2];
+	// sample from hermite if position is inside map bounds
+	if (in_x > Grid.bounds[0] and in_x < Grid.bounds[1] and in_y > Grid.bounds[2] and in_y < Grid.bounds[3]) {
+		Dev_particles_pos_out[2*i  ] = device_hermite_interpolate_dx_2D(val_h, in_x, in_y, Grid_map);
+		Dev_particles_pos_out[2*i+1] = device_hermite_interpolate_dy_2D(val_h, in_x, in_y, Grid_map);
+	}
+	else  // in case not in bounds, we cannot translate the maps and set the values to NaN
+	{
+		Dev_particles_pos_out[2*i  ] = Dev_particles_pos_out[2*i+1] = 0.0/0.0;
+	}
 }
 
 
@@ -539,13 +563,13 @@ __global__ void k_h_sample_map_compact(double *ChiX, double *ChiY, double *x_y, 
 	//position
 	double x = Grid.bounds[0] + iX*Grid.hx;
 	double y = Grid.bounds[2] + iY*Grid.hy;
+	double LX = Grid.bounds[1] - Grid.bounds[0]; double LY = Grid.bounds[3] - Grid.bounds[2];
 
 	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, Grid_map);
 
 	// save in two points in array
-	x_y[2*In  ] = x;
-	x_y[2*In+1] = y;
-
+	x_y[2*In  ] = x - floor(x / LX) * LX;
+	x_y[2*In+1] = y - floor(y / LY) * LY;
 }
 // apply intermediate maps to compacted map, basically only samples in stacked form
 __global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
@@ -559,9 +583,11 @@ __global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, doub
 
 	int In = iY*Grid.NX + iX;
 
-	//for(int k = stack_length - 1; k >= 0; k--)
-	device_diffeo_interpolate_2D(ChiX_stack, ChiY_stack, x_y[2*In], x_y[2*In+1], &x_y[2*In], &x_y[2*In+1], Grid_map);
-
+	double points[2];
+	double LX = Grid_map.bounds[1] - Grid_map.bounds[0]; double LY = Grid_map.bounds[3] - Grid_map.bounds[2];
+	device_diffeo_interpolate_2D(ChiX_stack, ChiY_stack, x_y[2*In], x_y[2*In+1], &points[0], &points[1], Grid_map);
+	x_y[2*In] = points[0] - floor(points[0]/LX)*LX;
+	x_y[2*In+1] = points[1] - floor(points[1]/LY)*LY;
 }
 // sample from initial condition
 __global__ void k_h_sample_from_init(double *Val_out, double *x_y, TCudaGrid2D Grid, TCudaGrid2D Grid_discrete, int init_var_num, int init_num, double *Val_initial_discrete, bool initial_discrete)

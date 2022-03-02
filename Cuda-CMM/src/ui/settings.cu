@@ -19,15 +19,17 @@ void SettingsCMM::setPresets() {
 	 *  Initial conditions for vorticity
 	 *  "4_nodes" 				-	flow containing exactly 4 fourier modes with two vortices
 	 *  "quadropole"			-	???
-	 *  "two_vortices"			-	???
-	 *  "three_vortices"		-	???
+	 *  "one_vortex"			-	one vortex in center, stationary flow for investigations
+	 *  "two_vortices"			-	two vortices of same sign which merge after a while
+	 *  "three_vortices"		-	two vortices of same sign with one of opposing sign for more complex dynamics
 	 *  "single_shear_layer"	-	shear layer problem forming helmholtz-instabilities, merging into two vortices which then merges into one big vortex
 	 *  "tanh_shear_layer"		-	shear layer with tanh boundary
-	 *  "turbulence_gaussienne"	-	gaussian blobs - version made by thibault
-	 *  "gaussian_blobs"		-	gaussian blobs in order - version made by julius
+	 *  "turbulence_gaussienne"	-	gaussian blobs in checkerboard - version made by thibault
+	 *  "gaussian_blobs"		-	gaussian blobs in checkerboard - version made by julius
 	 *  "shielded_vortex"		-	vortex core with ring of negative vorticity around it
+	 *  "two_cosine"			-	stationary setup of two cosine vortices
 	 */
-	std::string initial_condition = "tanh_shear_layer";
+	std::string initial_condition = "two_cosine";
 
 	// possibility to compute from discrete initial condition
 	bool initial_discrete = false;
@@ -44,10 +46,10 @@ void SettingsCMM::setPresets() {
 	int verbose = 3;
 
 	// set time properties
-	double final_time = 3;  // end of computation
-	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
-	int steps_per_sec = 128;  // how many steps do we want per seconds?
+	double final_time = 200;  // end of computation
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
+	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
+	int steps_per_sec = 32;  // how many steps do we want per seconds?
 	// dt will be set in cudaeuler, so that all changes can be applied there
 
 	/*
@@ -66,18 +68,26 @@ void SettingsCMM::setPresets() {
 	 *
 	 * Passive scalar: "Scalar", "Theta" - not for save_var
 	 * Advected Particles: "PartA_XX" - not for sample_var, XX is the particle computation number
+	 * Advected Particles velocity: "PartA_Vel_XX" - only for save_var, XX is the particle computation number
 	 *
 	 * Forward map: "Map_f", "Chi_f"
 	 * Forwards map Hermite: "Map_f_H", "Chi_f_H" - only for save
 	 * Forwarded Particles: "PartF_XX" - not for save_var, XX is the particle computation number
 	 */
 	// time instants or intervals at what we want to save computational data, 0 for initial and T_MAX for final
-	int save_computational_num = 4;
-	std::string save_computational_s[4] = {
+	int save_computational_num = 11;
+	std::string save_computational_s[11] = {
 			"{is_instant=1,time_start=0,var=W-U,conv=1}",  // save begin
 			"{is_instant=1,time_start="+str_t(T_MAX)+",var=W-U,conv=1}",  // save end
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_01-PartA_02,conv=0}",
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var= ,conv=1}"  // conv over simulation
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=0.5,var= ,conv=1}",  // conv over simulation
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_01,conv=0}",
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_02,conv=0}",
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_03,conv=0}",
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_04,conv=0}",
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_05,conv=0}",
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_06,conv=0}",
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_07,conv=0}",
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_08,conv=0}"
 	};
 
 
@@ -95,8 +105,8 @@ void SettingsCMM::setPresets() {
 	// set specific settings
 	/*
 	 * Time integration
-	 * First order: "EulerExp"
-	 * Second order: "AB2", "RK2"
+	 * First order: "EulerExp" (or "RK1")
+	 * Second order: "AB2", "RK2" (or "Heun")
 	 * Third order: "RK3", "RK3Mod"
 	 * Fourth order: "RK4", "RK4Mod"
 	 */
@@ -122,9 +132,10 @@ void SettingsCMM::setPresets() {
 	double freq_cut_psi = (double)(grid_coarse)/4.0;  // take into account, that frequencies are symmetric around N/2
 
 	// time instants or intervals at what we want to save computational data, 0 for initial and T_MAX for final
-	int save_sample_num = 1;
-	std::string save_sample_s[1] = {
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=W-Theta-PartF_01-PartF_02,grid=1024}",  // save over simulation
+	int save_sample_num = 2;
+	std::string save_sample_s[2] = {
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=4,var=W-Theta,grid=1024}",  // save over simulation
+			"{is_instant=0,time_start=0,time_end=4,time_step=1,var=Chi_b-W,grid=1024}"  // save map
 	};
 
 
@@ -149,10 +160,10 @@ void SettingsCMM::setPresets() {
 	int save_zoom_num = 0;
 	std::string save_zoom_s[2] = {
 			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=W-PartA_01,grid=1024"
-			",pos_x="+str_t(twoPI * 0.5)+",pos_y="+str_t(twoPI * 0.6)+",width_x="+str_t(twoPI * 2e-1)+",width_y"+str_t(twoPI * 2e-1)+
+			",pos_x="+str_t(twoPI * 0.5)+",pos_y="+str_t(twoPI * 0.6)+",width_x="+str_t(twoPI * 2e-1)+",width_y="+str_t(twoPI * 2e-1)+
 			",rep="+str_t(2)+",rep_fac="+str_t(0.5)+"}",
 			"{is_instant=0,time_start=2,time_end="+str_t(T_MAX)+",time_step=1,var=W-Psi,grid=1024"
-			",pos_x="+str_t(twoPI * 0.5)+",pos_y="+str_t(twoPI * 0.6)+",width_x="+str_t(twoPI * 2e-1)+",width_y"+str_t(twoPI * 2e-1)+
+			",pos_x="+str_t(twoPI * 0.5)+",pos_y="+str_t(twoPI * 0.6)+",width_x="+str_t(twoPI * 2e-1)+",width_y="+str_t(twoPI * 2e-1)+
 			",rep="+str_t(2)+",rep_fac="+str_t(0.5)+"}"
 	};
 
@@ -161,13 +172,13 @@ void SettingsCMM::setPresets() {
 	/*
 	 * Forward map settings to compute forward map for scalar particles,
 	 */
-	bool forward_map = true;  // en- or disable computing of forward map
+	bool forward_map = false;  // en- or disable computing of forward map
 
 	// forwarded particles, parameters similar to advected particles
-	int particles_forwarded_num = 2;
+	int particles_forwarded_num = 0;
 	std::string particles_forwarded_s[2] = {
-		"{num=10000,seed=0,init_name=uniform,init_time=0"
-		",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI/2.0)+",init_param_4="+str_t(PI/2.0)+"}",
+		"{num=1000000,seed=0,init_name=uniform,init_time=0"
+		",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI*2.0)+",init_param_4="+str_t(PI*2.0)+"}",
 		"{num=20000,seed=0,init_name=circular_ring,init_time=1"
 		",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI/2.0)+",init_param_4="+str_t(PI/2.0)+"}"
 	};
@@ -193,14 +204,27 @@ void SettingsCMM::setPresets() {
 	 *  "uniform_grid"				-   uniform grid with equal amount of points in x- and y-direction in particular frame
 	 *
 	 * init_time - when should the computation for the particles start
+	 * init_vel - if the inertial particles velocity should be set after the velocity or to zero
 	 * init_param - specific parameters to control the initial condition
 	 */
-	int particles_advected_num = 2;
-	std::string particles_advected_s[2] = {
-			"{num=10000,tau=1,seed=0,time_integration=RK3,init_name=uniform,init_time=0"
-			",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI/2.0)+",init_param_4="+str_t(PI/2.0)+"}",
-			"{num=20000,tau=0,seed=0,time_integration=RK3,init_name=circular_ring,init_time=1"
-			",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI/2.0)+",init_param_4="+str_t(PI/2.0)+"}"
+	int particles_advected_num = 8;
+	std::string particles_advected_s[8] = {
+			"{num=100000,tau=0,seed=0,time_integration=RK3,init_name=uniform,init_time=0,init_vel=0"
+			",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI*2.0)+",init_param_4="+str_t(PI*2.0)+"}",
+			"{num=100000,tau=0.1,seed=0,time_integration=RK3,init_name=uniform,init_time=0,init_vel=0"
+			",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI*2.0)+",init_param_4="+str_t(PI*2.0)+"}",
+			"{num=100000,tau=0.2,seed=0,time_integration=RK3,init_name=uniform,init_time=0,init_vel=0"
+			",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI*2.0)+",init_param_4="+str_t(PI*2.0)+"}",
+			"{num=100000,tau=0.5,seed=0,time_integration=RK3,init_name=uniform,init_time=0,init_vel=0"
+			",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI*2.0)+",init_param_4="+str_t(PI*2.0)+"}",
+			"{num=100000,tau=1,seed=0,time_integration=RK3,init_name=uniform,init_time=0,init_vel=0"
+			",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI*2.0)+",init_param_4="+str_t(PI*2.0)+"}",
+			"{num=100000,tau=1.5,seed=0,time_integration=RK3,init_name=uniform,init_time=0,init_vel=0"
+			",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI*2.0)+",init_param_4="+str_t(PI*2.0)+"}",
+			"{num=100000,tau=2.5,seed=0,time_integration=RK3,init_name=uniform,init_time=0,init_vel=0"
+			",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI*2.0)+",init_param_4="+str_t(PI*2.0)+"}",
+			"{num=100000,tau=5,seed=0,time_integration=RK3,init_name=uniform,init_time=0,init_vel=0"
+			",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI*2.0)+",init_param_4="+str_t(PI*2.0)+"}"
 	};
 	int particles_steps = -1;  // hackery for particle convergence
 
@@ -342,7 +366,7 @@ int SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		else if (command == "skip_remapping") setSkipRemapping(getBoolFromString(value));
 
 		else if (command == "save_sample_num") {
-			setSaveComputationalNum(std::stoi(value));
+			setSaveSampleNum(std::stoi(value));
 			return 2;
 		}
 
@@ -493,7 +517,6 @@ void SettingsCMM::setSaveComputational(std::string command_full, std::string del
 
 		save_computational[number] = SaveComputational();
 		save_computational[number].setAllVariables(value);
-		std::cout << "Comp read in: " << value << "\n";
 	}
 }
 
@@ -734,7 +757,9 @@ void ParticlesAdvected::setVariable(std::string command_full) {
 		else if (command == "time_integration") {
 			time_integration = value;
 			if (time_integration == "EulerExp") { time_integration_num = 10; }
+			else if (time_integration == "RK1") { time_integration_num = 10; }
 			else if (time_integration == "Heun") { time_integration_num = 20; }
+			else if (time_integration == "RK2") { time_integration_num = 20; }
 			else if (time_integration == "RK3") { time_integration_num = 30; }
 			else if (time_integration == "RK4") { time_integration_num = 40; }
 			else if (time_integration == "RK3Mod") { time_integration_num = 31; }
@@ -749,7 +774,8 @@ void ParticlesAdvected::setVariable(std::string command_full) {
 			else if(init_name == "uniform_grid") init_num = 3;
 			else init_num = -1;
 		}
-		else if (command == "init_time") init_time = stoi(value);
+		else if (command == "init_time") init_time = stod(value);
+		else if (command == "init_vel") init_vel = getBoolFromString(value);
 		else if (command == "init_param_1") init_param_1 = stod(value);
 		else if (command == "init_param_2") init_param_2 = stod(value);
 		else if (command == "init_param_3") init_param_3 = stod(value);
@@ -759,7 +785,7 @@ void ParticlesAdvected::setVariable(std::string command_full) {
 std::string ParticlesAdvected::getVariables() {
 	std::ostringstream os;
 	os << "{num=" << str_t(num) << ",tau=" << str_t(tau) << ",seed=" << str_t(seed);
-	os << ",time_integration=" << time_integration << ",init_name=" << init_name << ",init_time=" << str_t(init_time);
+	os << ",time_integration=" << time_integration << ",init_name=" << init_name << ",init_time=" << str_t(init_time) << ",init_vel=" << str_t(init_vel);
 	os << ",init_param_1=" << str_t(init_param_1) << ",init_param_2=" << str_t(init_param_2) << ",init_param_3=" << str_t(init_param_3) << ",init_param_4=" << str_t(init_param_4) << "}";
 	return os.str();
 }
@@ -804,7 +830,7 @@ void ParticlesForwarded::setVariable(std::string command_full) {
 			else if(init_name == "uniform_grid") init_num = 3;
 			else init_num = -1;
 		}
-		else if (command == "init_time") init_time = stoi(value);
+		else if (command == "init_time") init_time = stod(value);
 		else if (command == "init_param_1") init_param_1 = stod(value);
 		else if (command == "init_param_2") init_param_2 = stod(value);
 		else if (command == "init_param_3") init_param_3 = stod(value);

@@ -17,6 +17,8 @@
 // parallel reduce
 #include <thrust/transform_reduce.h>
 #include <thrust/reduce.h>
+#include <thrust/fill.h>  // fill elements into device vector
+#include <thrust/execution_policy.h>  // for fill
 #include <thrust/functional.h>
 #include <thrust/device_ptr.h>
 #include "../numerical/cmm-mesure.h"
@@ -269,6 +271,10 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			size_max_c = std::max(size_max_c, stacked_size);
 		}
 	}
+	// take care of fluid particles in order to save the velocity later if needed, normally shouldn't add restrictions
+	for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
+		size_max_c = std::max(size_max_c, (long int)(2*SettingsMain.getParticlesAdvected()[i_p].num*sizeof(double)));
+	}
 	// for now three thrash variables are needed for cufft with hermites
 	cufftDoubleComplex *Dev_Temp_C1;
 	cudaMalloc((void**)&Dev_Temp_C1, size_max_c);
@@ -447,9 +453,8 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	// all variables have to be defined outside
 	int particle_thread = 256;
 	int *particle_block = new int[SettingsMain.getParticlesAdvectedNum()];  // cuda kernel settings, are constant
-	double **Host_particles_pos = new double*[SettingsMain.getParticlesAdvectedNum()];  // position of particles
+	double **Host_particles = new double*[SettingsMain.getParticlesAdvectedNum()];  // position of particles
 	double **Dev_particles_pos = new double*[SettingsMain.getParticlesAdvectedNum()];
-	double **Host_particles_vel = new double*[SettingsMain.getParticlesAdvectedNum()];  // velocity of particles
 	double **Dev_particles_vel = new double*[SettingsMain.getParticlesAdvectedNum()];
 //	int particles_fine_old; double particles_fine_max;
 //	double *Host_particles_fine_pos;
@@ -458,8 +463,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		particle_block[i_p] = ceil(particles_advected[i_p].num / (double)particle_thread);  // fit all particles
 
 		// cpu memory
-		Host_particles_pos[i_p] = new double[2*particles_advected[i_p].num];
-		Host_particles_vel[i_p] = new double[2*particles_advected[i_p].num*(particles_advected[i_p].tau != 0) + (particles_advected[i_p].tau == 0)];
+		Host_particles[i_p] = new double[2*particles_advected[i_p].num];
 		mb_used_RAM_CPU += 2*(1+particles_advected[i_p].tau != 0)*particles_advected[i_p].num*sizeof(double) / 1e6;
 
 		// gpu memory
@@ -707,20 +711,25 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
     // initialize velocity for inertial particles
     for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
     	if (particles_advected[i_p].tau != 0) {
-    		Particle_advect_inertia_init<<<particle_block[i_p], particle_thread>>>(particles_advected[i_p].num,
-    							Dev_particles_pos[i_p], Dev_particles_vel[i_p],
-    							Dev_Psi_real, Grid_psi);
+    		// set after current velocity
+    		if (particles_advected[i_p].init_vel) {
+				Particle_advect_inertia_init<<<particle_block[i_p], particle_thread>>>(particles_advected[i_p].num,
+									Dev_particles_pos[i_p], Dev_particles_vel[i_p],
+									Dev_Psi_real, Grid_psi);
+    		}
+    		// set to zero
+    		else { cudaMemset(Dev_particles_vel[i_p], 0.0, 2*particles_advected[i_p].num*sizeof(double)); }
     	}
 	}
     // save particle position if interested in that
-    writeParticles(SettingsMain, 0.0, dt, dt, Host_particles_pos, Dev_particles_pos);
+    writeParticles(SettingsMain, 0.0, dt, dt, Host_particles, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
 
 	// zoom if wanted, has to be done after particle initialization, maybe a bit useless at first instance
 	Zoom(SettingsMain, 0.0, dt, dt,
 			Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
-			Host_particles_pos, Dev_particles_pos,
+			Host_particles, Dev_particles_pos,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 			Host_save);
 
@@ -940,6 +949,21 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
     	particles_advect(SettingsMain, Grid_psi, Dev_particles_pos, Dev_particles_vel, Dev_Psi_real,
     			t_vec, dt_vec, loop_ctr, particle_block, particle_thread);
 
+    	// check if starting position for particles was reached with this step and reinitialize inertial velocity to avoid stability issues
+    	ParticlesAdvected* particles_advected = SettingsMain.getParticlesAdvected();
+    	for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
+			if (particles_advected[i_p].tau != 0 && t_vec[loop_ctr_l] - particles_advected[i_p].init_time + dt*1e-5 < 0 && t_vec[loop_ctr_l + 1] - particles_advected[i_p].init_time + dt*1e-5 > 0) {
+	    		// set after current velocity
+	    		if (particles_advected[i_p].init_vel) {
+					Particle_advect_inertia_init<<<particle_block[i_p], particle_thread>>>(particles_advected[i_p].num,
+										Dev_particles_pos[i_p], Dev_particles_vel[i_p],
+										Dev_Psi_real, Grid_psi);
+	    		}
+	    		// set to zero
+	    		else { cudaMemset(Dev_particles_vel[i_p], 0, 2*particles_advected[i_p].num*sizeof(double)); }
+    		}
+    	}
+
 
 			/*******************************************************************
 			*							 Save snap shot						   *
@@ -974,14 +998,14 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		}
 
 	    // save particle position if interested in that
-	    writeParticles(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Host_particles_pos, Dev_particles_pos);
+	    writeParticles(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Host_particles, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
 		
 		// zoom if wanted
 		Zoom(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt,
 				Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 				(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
-				Host_particles_pos, Dev_particles_pos,
+				Host_particles, Dev_particles_pos,
 				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 				Host_save);
 
@@ -995,11 +1019,11 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		//loop counters are increased at the end
 		loop_ctr ++;
 
-		int error = cudaGetLastError();
+		cudaError_t error = cudaGetLastError();
 		if(error != 0)
 		{
 			if (SettingsMain.getVerbose() >= 0) {
-				message = "Exited early : Last Cuda Error = " + to_str(cudaGetErrorName(cudaGetLastError())); std::cout<<message+"\n"; logger.push(message);
+				message = "Exited early : Last Cuda Error = " + to_str(cudaGetErrorName(error)); std::cout<<message+"\n"; logger.push(message);
 			}
 			exit(0);
 			break;
@@ -1051,6 +1075,10 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	// hackery: new loop for particles to test convergence without map influence
 	if (SettingsMain.getParticlesSteps() != -1) {
 
+		// make folder for particle time
+		string folder_name = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/Particle_data/Time_C1";
+		mkdir(folder_name.c_str(), 0777);
+
 		// copy velocity to old values to be uniform and constant in time
 		for (int i_lagrange = 1; i_lagrange < SettingsMain.getLagrangeOrder(); i_lagrange++) {
 			cudaMemcpyAsync(Dev_Psi_real + 4*Grid_psi.N*i_lagrange, Dev_Psi_real, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice, streams[i_lagrange]);
@@ -1068,17 +1096,16 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	    							Dev_Psi_real, Grid_psi);
 	    	}
 
-			auto begin_P = std::chrono::high_resolution_clock::now();
-			if (SettingsMain.getVerbose() >= 2) {
-				message = "Starting extra particle loop: \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(begin_P - begin).count()/1e6);
-				std::cout<<message+"\n"; logger.push(message);
-			}
-
-			// main loop until time 1
 			double dt_p = 1.0/(double)SettingsMain.getParticlesSteps();
 			// initialize vectors for dt and t
 			double t_p_vec[5] = {0, dt_p, 2*dt_p, 3*dt_p, 4*dt_p};
 			double dt_p_vec[5] = {dt_p, dt_p, dt_p, dt_p, dt_p};
+			// main loop until time 1
+			auto begin_P = std::chrono::high_resolution_clock::now();
+			if (SettingsMain.getVerbose() >= 2) {
+				message = "Starting extra particle loop P" + to_str_0(i_p, 2) + ": \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(begin_P - begin).count()/1e6);
+				std::cout<<message+"\n"; logger.push(message);
+			}
 			for (int loop_ctr_p = 0; loop_ctr_p < SettingsMain.getParticlesSteps(); ++loop_ctr_p) {
 				// particles advection
 				particles_advect(SettingsMain, Grid_psi, Dev_particles_pos, Dev_particles_vel, Dev_Psi_real,
@@ -1090,7 +1117,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 			auto end_P = std::chrono::high_resolution_clock::now();
 			if (SettingsMain.getVerbose() >= 2) {
-				message = "Finished extra particle loop: \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(end_P - begin).count()/1e6);
+				message = "Finished extra particle loop P" + to_str_0(i_p, 2) + ": \t Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(end_P - begin).count()/1e6);
 				std::cout<<message+"\n"; logger.push(message);
 			}
 
@@ -1099,8 +1126,8 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 			// save final position
 			// copy data to host
-			cudaMemcpy(Host_particles_pos[i_p], Dev_particles_pos[i_p], 2*particles_advected[i_p].num*sizeof(double), cudaMemcpyDeviceToHost);
-			writeAllRealToBinaryFile(2*particles_advected[i_p].num, Host_particles_pos[i_p], SettingsMain, "/Particle_data/Time_C1/Particles_pos_P" + to_str_0(i_p, 2));
+			cudaMemcpy(Host_particles[i_p], Dev_particles_pos[i_p], 2*particles_advected[i_p].num*sizeof(double), cudaMemcpyDeviceToHost);
+			writeAllRealToBinaryFile(2*particles_advected[i_p].num, Host_particles[i_p], SettingsMain, "/Particle_data/Time_C1/Particles_pos_P" + to_str_0(i_p, 2));
 		}
 	}
 
@@ -1136,14 +1163,14 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	}
 
     // save particle position if interested in that
-    writeParticles(SettingsMain, T_MAX-dt, 1e300, dt, Host_particles_pos, Dev_particles_pos);
+    writeParticles(SettingsMain, T_MAX-dt, 1e300, dt, Host_particles, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
 
 	// zoom if wanted
 	Zoom(SettingsMain, T_MAX-dt, 1e300, dt,
 			Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
-			Host_particles_pos, Dev_particles_pos,
+			Host_particles, Dev_particles_pos,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 			Host_save);
 
@@ -1199,8 +1226,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	cudaFree(fft_work_area);
 
 	for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
-		delete [] Host_particles_pos[i_p];
-	    delete [] Host_particles_vel[i_p];
+		delete [] Host_particles[i_p];
 	    cudaFree(Dev_particles_pos[i_p]);
         cudaFree(Dev_particles_vel[i_p]);
 	}

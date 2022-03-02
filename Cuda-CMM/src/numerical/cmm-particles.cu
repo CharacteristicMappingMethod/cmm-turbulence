@@ -24,7 +24,7 @@ __global__ void k_rescale(int Nb_particle, double particles_center_x, double par
 	part_pos_old[1] = particles_center_y + particles_width_y * (particles_pos[2*i+1] - 0.5);
 
 	particles_pos[2*i]   = part_pos_old[0] - floor(part_pos_old[0]/LX)*LX;
-	particles_pos[2*i+1] = part_pos_old[1] - floor(part_pos_old[1]/LY)*LX;
+	particles_pos[2*i+1] = part_pos_old[1] - floor(part_pos_old[1]/LY)*LY;
 }
 
 

@@ -53,7 +53,14 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 				return ret;
 			break;
 		}
-		case 2:  // two vortices
+		case 2:  // one vortex - stationary case for investigations
+		{
+			double fac = 1;  // factor to increase strength
+			double sigma = twoPI*0.125;  // scaling in width
+			return fac / (twoPI*sigma*sigma) * exp(-((x-PI)*(x-PI) + (y-PI)*(y-PI))/(2*sigma*sigma));
+			break;
+		}
+		case 3:  // two vortices
 		{
 			double ret = 0;
 			for(int iy = -1; iy <= 1; iy++)
@@ -65,7 +72,7 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 			return ret;
 			break;
 		}
-		case 3:  // three vortices
+		case 4:  // three vortices
 		{
 			//three vortices
 			double ret = 0;
@@ -85,7 +92,7 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 			return ret;
 			break;
 		}
-		case 4:  // single_shear_layer
+		case 5:  // single_shear_layer
 		{
 			double delta = 50;  // thickness of shear layer
 			double delta2 = 0.01;  // strength of instability
@@ -93,12 +100,12 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 			return (1 + delta2*cos(2*x)) * exp(-delta*(y-PI)*(y-PI));
 			break;
 		}
-		case 5:  // tanh_shear_layer with more parameters by julius and using a tanh velocity profile
+		case 6:  // tanh_shear_layer with more parameters by julius and using a tanh velocity profile
 		{
 			double fac = 5;  // Factor to set freestream velocity
 
 			double inst_strength = 0.01;  // strength of instability
-			double inst_freq = 4;  // frequency of instability / how many swirls
+			double inst_freq = 2;  // frequency of instability / how many swirls
 			double shear_delta = 14 * inst_freq / twoPI;  // thickness of shear layer, physically connected, twoPi as domainsize
 
 			// (1 + sin-perturbation) * sech^2(thickness*x)
@@ -106,7 +113,7 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 															         / (exp(-shear_delta*(y-PI))+exp(shear_delta*(y-PI)));
 			break;
 		}
-		case 6:  // turbulence_gaussienne by thibault, similar to clercx2000 / keetels2008
+		case 7:  // turbulence_gaussienne by thibault, similar to clercx2000 / keetels2008
 		{
 			x -= floor(x/twoPI)*twoPI;
 			y -= floor(y/twoPI)*twoPI;
@@ -148,7 +155,7 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 			return ret - 0.008857380480028442;
 			break;
 		}
-		case 7:  // ordered gaussienne blobs by julius, similar to clercx2000 / keetels2008
+		case 8:  // ordered gaussienne blobs by julius, similar to clercx2000 / keetels2008
 		{
 			x -= floor(x/twoPI)*twoPI;
 			y -= floor(y/twoPI)*twoPI;
@@ -183,7 +190,7 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 
 		// u(x,y)= - y 1/(nu^2 t^2) exp(-(x^2+y^2)/(4 nu t))
 		// v(x,y)= + x 1/(nu^2 t^2) exp(-(x^2+y^2)/(4 nu t))
-		case 8:  // shielded vortex
+		case 9:  // shielded vortex
 		{
 			double nu = 2e-1;
 			double nu_fac = 1 / (2*nu*nu);  // 1 / (2*nu*nu*nu)
@@ -197,7 +204,7 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 			return nu_fac * (nu_center - x_r*x_r - y_r*y_r) * exp(-(x_r*x_r + y_r*y_r)/nu_scale);
 			break;
 		}
-		default:  //default case goes to stationary
+		case 10:  // two_cosine as stationary case
 		{
 			x -= floor(x/twoPI)*twoPI;
 			y -= floor(y/twoPI)*twoPI;
@@ -205,6 +212,8 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 			return cos(x)*cos(y);
 			break;
 		}
+		default:
+			return 0;
 	}
 
 }

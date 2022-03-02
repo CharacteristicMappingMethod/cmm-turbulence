@@ -189,7 +189,7 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 		double *pos_out_counter = fluid_particles_pos_out;
 		for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
 			if ((particles_forwarded[i_p].init_map != 0 && particles_forwarded[i_p].init_time != 0) || particles_forwarded[i_p].init_time == 0) {
-				k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, ChiX, ChiY,
+				k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
 						fluid_particles_pos_in[i_p], pos_out_counter, particles_forwarded[i_p].num);
 			}
 			// particles cannot be traced back, just give back the particle positions
@@ -213,7 +213,7 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
 				// check if this map is applied too
 				if ((i_map >= particles_forwarded[i_p].init_map && particles_forwarded[i_p].init_time != 0 && particles_forwarded[i_p].init_map != 0) || particles_forwarded[i_p].init_time == 0) {
-					k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, ChiX, ChiY,
+					k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
 							pos_out_counter, pos_out_counter, particles_forwarded[i_p].num);
 				}
 				// shift pointer
@@ -235,7 +235,7 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
 				// apply first map
 				if (particles_forwarded[i_p].init_time == 0) {
-					k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
+					k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
 							fluid_particles_pos_in[i_p], pos_out_counter, particles_forwarded[i_p].num);
 				}
 				// copy initially as we do not start at t=0
@@ -256,7 +256,7 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 				for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
 					// apply first map
 					if ((i_map >= particles_forwarded[i_p].init_map && particles_forwarded[i_p].init_time != 0) || particles_forwarded[i_p].init_time == 0) {
-						k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
+						k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
 								pos_out_counter, pos_out_counter, particles_forwarded[i_p].num);
 					}
 					// shift pointer
@@ -270,7 +270,7 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
 				// apply first map
 				if ((particles_forwarded[i_p].init_map != 0 && particles_forwarded[i_p].init_time != 0) || particles_forwarded[i_p].init_time == 0) {
-					k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, ChiX, ChiY,
+					k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
 							pos_out_counter, pos_out_counter, particles_forwarded[i_p].num);
 				}
 				// shift pointer
@@ -285,7 +285,7 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 			ParticlesForwarded *particles_forwarded = SettingsMain.getParticlesForwarded();
 			double *pos_out_counter = fluid_particles_pos_out;
 			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
-				k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, ChiX, ChiY,
+				k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
 						fluid_particles_pos_in[i_p], pos_out_counter, particles_forwarded[i_p].num);
 
 				pos_out_counter += 2*particles_forwarded[i_p].num;
@@ -847,31 +847,27 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 
 				// safe particles in zoomframe if wanted
 				ParticlesAdvected* particles_advected = SettingsMain.getParticlesAdvected();
-				int pos_p = 0;
-				while (pos_p != std::string::npos) {
-					pos_p = save_var.find("Part_", pos_p);
-					if (pos_p != std::string::npos) {
-						// extract wanted particle computation index
-						int p_num = std::stoi(save_var.substr(pos_p+5, pos_p+7));
-
+				for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
+					// particle position first
+					if (save_var.find("PartA_" + to_str_0(i_p+1, 2)) != std::string::npos) {
 						// copy particles to host
-						cudaMemcpy(Host_particles_pos[p_num], Dev_particles_pos[p_num], 2*particles_advected[p_num].num*sizeof(double), cudaMemcpyDeviceToHost);
-						double* part_pos = Host_particles_pos[p_num];
+						cudaMemcpy(Host_particles_pos[i_p], Dev_particles_pos[i_p], 2*particles_advected[i_p].num*sizeof(double), cudaMemcpyDeviceToHost);
+						double* part_pos = Host_particles_pos[i_p];
 
 						int part_counter = 0;
-						for (int i_p = 0; i_p < particles_advected[p_num].num; i_p++) {
+						for (int i_pn = 0; i_pn < particles_advected[i_pn].num; i_pn++) {
 							// check if particle in frame and then save it inside itself
-							if (part_pos[2*i_p  ] > x_min and part_pos[2*i_p  ] < x_max and
-								part_pos[2*i_p+1] > y_min and part_pos[2*i_p+1] < y_max) {
+							if (part_pos[2*i_pn  ] > x_min and part_pos[2*i_pn  ] < x_max and
+								part_pos[2*i_pn+1] > y_min and part_pos[2*i_pn+1] < y_max) {
 								// transcribe particle
-								part_pos[2*part_counter  ] = part_pos[2*i_p  ];
-								part_pos[2*part_counter+1] = part_pos[2*i_p+1];
+								part_pos[2*part_counter  ] = part_pos[2*i_pn  ];
+								part_pos[2*part_counter+1] = part_pos[2*i_pn+1];
 								// increment counter
 								part_counter++;
 							}
 						}
 						// save particles
-					    writeAllRealToBinaryFile(2*part_counter, Host_particles_pos[p_num], SettingsMain, sub_folder_name+"/Particles_advected_pos_P" + to_str_0(p_num, 2));
+						writeAllRealToBinaryFile(2*part_counter, Host_particles_pos[i_p], SettingsMain, sub_folder_name+"/Particles_advected_pos_P" + to_str_0(i_p, 2));
 					}
 				}
 

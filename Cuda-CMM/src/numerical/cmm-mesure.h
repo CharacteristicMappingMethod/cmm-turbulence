@@ -6,11 +6,6 @@
 
 #include <math.h>
 
-// parallel reduce
-#include <thrust/transform_reduce.h>
-#include <thrust/functional.h>
-#include <thrust/device_ptr.h>
-
 
 void Compute_Energy(double &E, double *psi, TCudaGrid2D Grid);
 void Compute_Enstrophy(double &E, double *W, TCudaGrid2D Grid);

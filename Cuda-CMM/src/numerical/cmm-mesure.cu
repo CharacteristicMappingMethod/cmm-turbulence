@@ -1,5 +1,10 @@
 #include "../numerical/cmm-mesure.h"
 
+// parallel reduce
+#include <thrust/transform_reduce.h>
+#include <thrust/functional.h>
+#include <thrust/device_ptr.h>
+
 
 void Compute_Energy(double &E, double *psi, TCudaGrid2D Grid){
 	// parallel reduction using thrust

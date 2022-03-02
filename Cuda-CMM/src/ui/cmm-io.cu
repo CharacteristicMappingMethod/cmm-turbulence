@@ -1,5 +1,7 @@
 #include "cmm-io.h"
 
+#include "../simulation/cmm-simulation-kernel.h"
+
 
 /*******************************************************************
 *				     Creation of storage files					   *
@@ -34,7 +36,7 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax
 	}
 
 	// create general subfolder for particles
-	if (SettingsMain.getParticlesAdvectedNum() > 0) {
+	if (SettingsMain.getParticlesAdvectedNum() > 0 || SettingsMain.getParticlesForwardedNum() > 0) {
 		folder_name_tdata = folder_name + "/Particle_data";
 		mkdir(folder_name_tdata.c_str(), 0777);
 	}
@@ -183,12 +185,18 @@ void writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid2D Grid
 		}
 
 		if (save_now) {
-			// create new subfolder for current timestep
-			std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
-			std::string sub_folder_name = "/Time_data/Time_" + t_s_now;
-			std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
-			struct stat st = {0};
-			if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
+			std::string sub_folder_name;
+			if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos or
+					save_var.find("Stream") != std::string::npos or save_var.find("Psi") != std::string::npos or
+					save_var.find("Map") != std::string::npos or save_var.find("Chi") != std::string::npos or
+					save_var.find("Velocity") != std::string::npos or save_var.find("U") != std::string::npos) {
+				// create new subfolder for current timestep
+				std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
+				sub_folder_name = "/Time_data/Time_" + t_s_now;
+				std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
+				struct stat st = {0};
+				if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
+			}
 
 			// Vorticity on coarse grid : W_coarse
 			if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos) {
@@ -220,7 +228,7 @@ void writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid2D Grid
 			}
 
 			// Backwards map on coarse grid in Hermite or single version : Chi_coarse
-			if (save_var.find("Map") != std::string::npos or save_var.find("Chi") != std::string::npos) {
+			if (save_var.find("Map_b") != std::string::npos or save_var.find("Chi_b") != std::string::npos) {
 				// Map in x direction on coarse grid : ChiX
 				cudaMemcpy(Host_save, Dev_ChiX, Grid_coarse.sizeNReal, cudaMemcpyDeviceToHost);
 				writeAllRealToBinaryFile(Grid_coarse.N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiX_coarse");
@@ -294,7 +302,9 @@ void writeTimeVariable(SettingsCMM SettingsMain, string data_name, double t_now,
  * Write particle positions
  */
 // will be with hdf5 version too at some point
-void writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, double **Host_particles_pos, double **Dev_particles_pos) {
+void writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
+		double **Host_particles, double **Dev_particles_pos, double **Dev_particles_vel,
+		TCudaGrid2D Grid_psi, double *Dev_psi, double *Dev_Temp, int* fluid_particles_blocks, int fluid_particles_threads) {
 	// check if we want to save at this time, combine all variables if so
 	std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
 	bool save_now = false; std::string save_var;
@@ -318,7 +328,7 @@ void writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, doubl
 		int pos_p = save_var.find("PartA_", 0);
 
 		// create new subfolder for current timestep, doesn't matter if we try to create it several times
-		if (pos_p != std::string::npos) {
+		if (save_var.find("PartA_", 0) != std::string::npos and save_var.find("PartAVel_", 0) != std::string::npos) {
 			std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
 			std::string sub_folder_name = "/Particle_data/Time_" + t_s_now;
 			string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
@@ -326,19 +336,53 @@ void writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, doubl
 			if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
 		}
 
-
-		while (pos_p != std::string::npos) {
-			// extract wanted particle computation index
-			int i_p = std::stoi(save_var.substr(pos_p+6, pos_p+8)) - 1;  // hardcoded, that after "PartA_" the numbers follow
-
-			// copy data to host
-			cudaMemcpy(Host_particles_pos[i_p], Dev_particles_pos[i_p], 2*particles_advected[i_p].num*sizeof(double), cudaMemcpyDeviceToHost);
-			writeAllRealToBinaryFile(2*particles_advected[i_p].num, Host_particles_pos[i_p], SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_pos_P" + to_str_0(i_p+1, 2));
-
-
-			// compute next position
-			pos_p = save_var.find("PartA_", pos_p+1);
+		for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
+			// particle position first
+			if (save_var.find("PartA_" + to_str_0(i_p+1, 2)) != std::string::npos) {
+				// create particles folder if necessary
+				std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
+				std::string sub_folder_name = "/Particle_data/Time_" + t_s_now;
+				string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
+				struct stat st = {0};
+				if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
+				// copy data to host and save
+				cudaMemcpy(Host_particles[i_p], Dev_particles_pos[i_p], 2*particles_advected[i_p].num*sizeof(double), cudaMemcpyDeviceToHost);
+				writeAllRealToBinaryFile(2*particles_advected[i_p].num, Host_particles[i_p], SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_pos_P" + to_str_0(i_p+1, 2));
+			}
+			// particle velocity now
+			if (save_var.find("PartA_Vel_" + to_str_0(i_p+1, 2)) != std::string::npos) {
+				// create particles folder if necessary
+				std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
+				std::string sub_folder_name = "/Particle_data/Time_" + t_s_now;
+				string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
+				struct stat st = {0};
+				if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
+				// copy data to host and save - but only if tau != 0
+				if (particles_advected[i_p].tau != 0) {
+					cudaMemcpy(Host_particles[i_p], Dev_particles_vel[i_p], 2*particles_advected[i_p].num*sizeof(double), cudaMemcpyDeviceToHost);
+					writeAllRealToBinaryFile(2*particles_advected[i_p].num, Host_particles[i_p], SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2));
+				}
+				// sample velocity values from current stream function
+				else {
+					k_h_sample_points_dxdy<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(Grid_psi, Grid_psi, Dev_psi, Dev_particles_pos[i_p], Dev_Temp, particles_advected[i_p].num);
+					cudaMemcpy(Host_particles[i_p], Dev_Temp, 2*particles_advected[i_p].num*sizeof(double), cudaMemcpyDeviceToHost);
+					writeAllRealToBinaryFile(2*particles_advected[i_p].num, Host_particles[i_p], SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2));
+				}
+			}
 		}
+
+//		while (pos_p != std::string::npos) {
+//			// extract wanted particle computation index
+//			int i_p = std::stoi(save_var.substr(pos_p+6, pos_p+8)) - 1;  // hardcoded, that after "PartA_" the numbers follow
+//
+//			// copy data to host
+//			cudaMemcpy(Host_particles_pos[i_p], Dev_particles_pos[i_p], 2*particles_advected[i_p].num*sizeof(double), cudaMemcpyDeviceToHost);
+//			writeAllRealToBinaryFile(2*particles_advected[i_p].num, Host_particles_pos[i_p], SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_pos_P" + to_str_0(i_p+1, 2));
+//
+//
+//			// compute next position
+//			pos_p = save_var.find("PartA_", pos_p+1);
+//		}
 	}
 }
 

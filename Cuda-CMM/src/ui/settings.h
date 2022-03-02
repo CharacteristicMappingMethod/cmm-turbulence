@@ -69,7 +69,7 @@ public:
 	double tau;
 	unsigned long long seed;
 	std::string time_integration; int time_integration_num;
-	std::string init_name; int init_num;
+	std::string init_name; int init_num; bool init_vel;
 	double init_time, init_param_1, init_param_2, init_param_3, init_param_4;
 
 	void setAllVariables(std::string value);
@@ -219,14 +219,19 @@ public:
 		// tied to num, for faster handling
 		if(initialCondition == "4_nodes") initial_condition_num = 0;
 		else if(initialCondition == "quadropole") initial_condition_num = 1;
-		else if(initialCondition == "two_votices") initial_condition_num = 2;
-		else if(initialCondition == "three_vortices") initial_condition_num = 3;
-		else if(initialCondition == "single_shear_layer") initial_condition_num = 4;
-		else if(initialCondition == "tanh_shear_layer") initial_condition_num = 5;
-		else if(initialCondition == "turbulence_gaussienne") initial_condition_num = 6;
-		else if(initialCondition == "gaussian_blobs") initial_condition_num = 7;
-		else if(initialCondition == "shielded_vortex") initial_condition_num = 8;
-		else initial_condition_num = -1;
+		else if(initialCondition == "one_vortex") initial_condition_num = 2;
+		else if(initialCondition == "two_votices") initial_condition_num = 3;
+		else if(initialCondition == "three_vortices") initial_condition_num = 4;
+		else if(initialCondition == "single_shear_layer") initial_condition_num = 5;
+		else if(initialCondition == "tanh_shear_layer") initial_condition_num = 6;
+		else if(initialCondition == "turbulence_gaussienne") initial_condition_num = 7;
+		else if(initialCondition == "gaussian_blobs") initial_condition_num = 8;
+		else if(initialCondition == "shielded_vortex") initial_condition_num = 9;
+		else if(initialCondition == "two_cosine") initial_condition_num = 10;
+		else {
+			initial_condition = "zero";  // make clear, that setting the initial condition failed
+			initial_condition_num = -1;
+		}
 	}
 	int getInitialConditionNum() const { return initial_condition_num; }
 	bool getInitialDiscrete() const { return initial_discrete; }
@@ -279,6 +284,8 @@ public:
 	void setTimeIntegration(std::string timeIntegration) {
 		time_integration = timeIntegration;
 		if (timeIntegration == "EulerExp") { time_integration_num = 10; if (getLagrangeOrder() < 1) lagrange_order = 1; }
+		else if (timeIntegration == "RK1") { time_integration_num = 10; if (getLagrangeOrder() < 1) lagrange_order = 1; }
+		else if (timeIntegration == "Heun") { time_integration_num = 21; if (getLagrangeOrder() < 2) lagrange_order = 2; }
 		else if (timeIntegration == "RK2") { time_integration_num = 21; if (getLagrangeOrder() < 2) lagrange_order = 2; }
 		else if (timeIntegration == "AB2") { time_integration_num = 20; if (getLagrangeOrder() < 2) lagrange_order = 2; }
 		else if (timeIntegration == "RK3") { time_integration_num = 30; if (getLagrangeOrder() < 3) lagrange_order = 3; }

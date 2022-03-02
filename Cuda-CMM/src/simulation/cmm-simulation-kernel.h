@@ -16,8 +16,9 @@ __global__ void k_swap_h(double *Val1, double *Val2, TCudaGrid2D Grid);
 
 // sampling kernels
 __global__ void k_h_sample_map(double *ChiX, double *ChiY, double *ChiX_s, double *ChiY_s, TCudaGrid2D Grid_map, TCudaGrid2D Grid);
-__global__ void k_h_sample_points_map(TCudaGrid2D Grid_map, double *ChiX, double *ChiY, double* Dev_particles_pos_in, double* Dev_particles_pos_out, int particles_num);
+__global__ void k_h_sample_points_map(TCudaGrid2D Grid_map, TCudaGrid2D Grid, double *ChiX, double *ChiY, double* Dev_particles_pos_in, double* Dev_particles_pos_out, int particles_num);
 __global__ void k_h_sample(double *val, double *val_s, TCudaGrid2D Grid, TCudaGrid2D Grid_s);
+__global__ void k_h_sample_points_dxdy(TCudaGrid2D Grid_map, TCudaGrid2D Grid, double *val_h, double* Dev_particles_pos_in, double* Dev_particles_pos_out, int particle_num);
 
 // checking kernels
 __global__ void k_incompressibility_check(TCudaGrid2D Grid_fine, TCudaGrid2D Grid_map,
