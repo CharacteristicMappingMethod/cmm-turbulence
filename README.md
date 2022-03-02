@@ -23,9 +23,9 @@ This code is developed to be built and run on Linux machines. In addition, an in
 
    Checking core settings:
 
-   - Check grid_coarse, grid_fine, grid_psi and grid_ in 'Cuda-CMM/src/simulation/settings.cu' to work with your GPU memory, the estimated memory usage while be output when running the code and can further be tested while the code is running with the command 'nvidia-smi'.
+   - Check grid_coarse, grid_fine, grid_psi and grid_vorticity in 'Cuda-CMM/src/simulation/settings.cu' to work with your GPU memory, the estimated memory usage is outputed usually in the console and log file when running the code and can further be tested while the code is running with the command 'nvidia-smi'.
    - Change mem_RAM_CPU_remaps in 'Cuda-CMM/src/simulation/settings.cu' to match your CPU memory in MB. This value can be chosen arbitrarily high in comparison to your machines CPU RAM and will ultimately decide how many remappings can be done and saved.
-   - Set the initial condition in 'Cuda-CMM/src/simulation/settings.cu'.
+   - Set the initial condition in 'Cuda-CMM/src/simulation/settings.cu', parameter file or console input.
 
    Makefile:
    - set the CUDA_PATH variable to match your cuda install location, default is located under '/usr/local/cuda'
@@ -34,30 +34,31 @@ This code is developed to be built and run on Linux machines. In addition, an in
      check for errors, if not listed, please provide them as an issue along with the given error stack.
    
 3) Running the code:
-   - Run the code in a shell by executing 'Cuda-CMM/SimulationCuda2d.out'.
+   - Run the code in a shell by executing the file 'Cuda-CMM/SimulationCuda2d.out'.
    - Variables can be set at command line level by adding pairs in the form of 'COMMAND=VALUE', the name of the commands correspond to the actual variable name in the settings file. A huge variety of information regarding the meaning and values can be found in the setPresets-function in 'Cuda-CMM/src/simulation/settings.cu'.
+   - Further settings can be automized using parameter files. Those can be read in adding 'param_file=LOC_TO_FILE' to the console command
+   - The examples folder provides a usefull guide on how to setup simulation and what settings can be adapted.
    - Cuda errors are quite common, any furher error however should be reported as an issue along with the error stack.
 
 # Restrictions on code for different machines
 
-Difference between cluster and machine computations:
-The code is highly dependent on the GPU memory. This limits the usage on personal machines.
+The code is highly dependent on the GPU memory. This limits the usage on personal machines. a grid-size of ~1024 is suitable for testing conditions with around 1GB of GPU RAM. Further computer clusters with modern graphics card as the Nvidia Titan Tesla V100S GPU with 32GB of GPU RAM can compute sizes up to 2048 for the coarse-grid and 16384 for the fine-grid.
+However, the amount of CPU RAM is also important to compute a high number of sub-maps. Using 190GB of CPU RAM can lead to 2700 sub-maps for a 1024 coarse-grid or 670 for a 2048 coarse-grid.
 
 # Other notices
 
 Known errors and bugs:
 When changing many values in 'Cuda-CMM/src/simulation/settings.cu' or 'Cuda-CMM/src/simulation/settings.h', the compiler will sometimes output the message:
+
 terminate called after throwing an instance of 'std::bad_alloc'
-  what():  std::bad_alloc
+
 This problem can be solved by rebuilding the whole code with 'make rebuild'.
 
 # Code structure
 
-The main loop of the code is located in 'Cuda-CMM/src/simulation/cudaeuler2d.cu'.
+All source code is provided within the 'Cuda-CMM/src'-folder. This contains a folder 'Cuda-CMM/src/numerical' with all the numerical code being largely independent of the actual problem,  'Cuda-CMM/src/simulation' dealing with all CMM and Euler equation specific functions and kernels and 'Cuda-CMM/src/ui' dealing with all the file structures and user inputs.
 
-Maybe some comments on what parts should be changeable and which are mainly set
-
-Setup a Post-folder for all python post-processing?
+The three most important files are 'Cuda-CMM/src/simulation/cmm-euler-2d.cu' containing the main loop of the code, 'Cuda-CMM/src/ui/settings.cu' dealing with all setting related information and 'Cuda-CMM/src/simulation/cmm-init.cu' containing all initial conditions.
 
 # Literature references and Research project
 
