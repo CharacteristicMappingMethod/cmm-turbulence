@@ -10,6 +10,7 @@ The code is managed under GNU General Public License v3.0. Everyone is permitted
 
 The original version of the Cuda code has been developed by Badal Yadav at McGill University, Montreal, Canada.
 Further work on the code has been done by Thibault Oujia, Nicolas Saber and Julius Bergmann at I2M, Aix-Marseille Université, France.
+Their work has been supervised by Prof. Jean-Christophe Nave (McGill U) and Prof. Kai Schneider (Aix-Marseille U), respectively.
 
 # Prerequesites
 
