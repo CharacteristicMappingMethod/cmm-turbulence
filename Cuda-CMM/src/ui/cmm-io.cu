@@ -190,9 +190,10 @@ void writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid2D Grid
 			}
 			// intervals - modulo to steps with safety-increased targets is smaller than step
 			if (!save_comp[i_save].is_instant
-				&& fmod(t_now - save_comp[i_save].time_start + dt*1e-5, save_comp[i_save].time_step) < dt_now
+				&& ((fmod(t_now - save_comp[i_save].time_start + dt*1e-5, save_comp[i_save].time_step) < dt_now
 				&& t_now + dt*1e-5 >= save_comp[i_save].time_start
-				&& t_now - dt*1e-5 <= save_comp[i_save].time_end) {
+				&& t_now - dt*1e-5 <= save_comp[i_save].time_end)
+				|| t_now == save_comp[i_save].time_end)) {
 				save_now = true; save_var = save_var + save_comp[i_save].var;
 			}
 		}

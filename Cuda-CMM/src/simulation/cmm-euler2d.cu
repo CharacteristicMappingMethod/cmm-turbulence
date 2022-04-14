@@ -83,8 +83,8 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		switch (particles_advected[i_p].time_integration_num) {
 			case 10: { break; }  // l_order >= 1 !
 			case 20: { if (SettingsMain.getLagrangeOrder() < 2) SettingsMain.setLagrangeOrder(2); break; }
-			case 30: case 31: { if (SettingsMain.getLagrangeOrder() < 2) SettingsMain.setLagrangeOrder(3); break; }
-			case 40: case 41: { if (SettingsMain.getLagrangeOrder() < 2) SettingsMain.setLagrangeOrder(4); break; }
+			case 30: case 31: { if (SettingsMain.getLagrangeOrder() < 3) SettingsMain.setLagrangeOrder(3); break; }
+			case 40: case 41: { if (SettingsMain.getLagrangeOrder() < 4) SettingsMain.setLagrangeOrder(4); break; }
 		}
 	}
 	if (SettingsMain.getLagrangeOverride() != -1) SettingsMain.setLagrangeOrder(SettingsMain.getLagrangeOverride());
@@ -1150,12 +1150,12 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	*******************************************************************/
 
 	// save function to save variables, combined so we always save in the same way and location
-	writeTimeStep(SettingsMain, T_MAX-dt, 1e300, dt, Grid_fine, Grid_coarse, Grid_psi,
+	writeTimeStep(SettingsMain, T_MAX, dt, dt, Grid_fine, Grid_coarse, Grid_psi,
 			Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
 
 	// compute conservation if wanted
-	message = compute_conservation_targets(SettingsMain, T_MAX-dt, 1e300, dt, Grid_fine, Grid_coarse, Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
+	message = compute_conservation_targets(SettingsMain, T_MAX, dt, dt, Grid_fine, Grid_coarse, Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
 			cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 			Dev_Temp_C1);
 	// output computational mesure status to console
@@ -1164,7 +1164,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	}
 
 	// sample if wanted
-	message = sample_compute_and_write(SettingsMain, T_MAX-dt, 1e300, dt,
+	message = sample_compute_and_write(SettingsMain, T_MAX, dt, dt,
 			Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Host_save, Dev_Temp_2,
 			cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
@@ -1176,10 +1176,10 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	}
 
     // save particle position if interested in that
-    writeParticles(SettingsMain, T_MAX-dt, 1e300, dt, Host_particles, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
+    writeParticles(SettingsMain, T_MAX, dt, dt, Host_particles, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
 
 	// zoom if wanted
-	Zoom(SettingsMain, T_MAX-dt, 1e300, dt,
+	Zoom(SettingsMain, T_MAX, dt, dt,
 			Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
