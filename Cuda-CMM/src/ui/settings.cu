@@ -45,9 +45,9 @@ void SettingsCMM::setPresets() {
 	std::string initial_condition = "4_nodes";
 
 	// possibility to compute from discrete initial condition
-	bool initial_discrete = false;
-	int initial_discrete_grid = 512;  // variable gridsize for discrete initial grid
-	std::string initial_discrete_location = "data/debug_4_nodes_C512_F2048_t32_T200/Time_data/Time_0/Vorticity_W_coarse.data";  // path to discrete file, relative from workspace
+	bool initial_discrete = true;
+	int initial_discrete_grid = 2048;  // variable gridsize for discrete initial grid
+	std::string initial_discrete_location = "data/final-state-anticythere-1_gaussian_blobs_C1024_F8192_t3.07e+03_T500/Time_data/Time_270/Vorticity_W_4096.data";  // path to discrete file, relative from workspace
 
 	/*
 	 * Console output verbose intensity
