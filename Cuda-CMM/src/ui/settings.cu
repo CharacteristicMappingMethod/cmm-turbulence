@@ -45,7 +45,7 @@ void SettingsCMM::setPresets() {
 	std::string initial_condition = "4_nodes";
 
 	// possibility to compute from discrete initial condition
-	bool initial_discrete = true;
+	bool initial_discrete = false;
 	int initial_discrete_grid = 2048;  // variable gridsize for discrete initial grid
 	std::string initial_discrete_location = "data/final-state-anticythere-1_gaussian_blobs_C1024_F8192_t3.07e+03_T500/Time_data/Time_270/Vorticity_W_4096.data";  // path to discrete file, relative from workspace
 
@@ -146,10 +146,13 @@ void SettingsCMM::setPresets() {
 	double freq_cut_psi = (double)(grid_coarse)/4.0;  // take into account, that frequencies are symmetric around N/2
 
 	// time instants or intervals at what we want to save computational data, 0 for initial and T_MAX for final
-	int save_sample_num = 1;
-	std::string save_sample_s[2] = {
+	int save_sample_num = 5;
+	std::string save_sample_s[5] = {
 			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=W,grid=512}",  // save over simulation
-			"{is_instant=0,time_start=0,time_end=4,time_step=1,var=Chi_b-W,grid=1024}"  // save map
+			"{is_instant=1,time_start=0,var=Chi_b-W,grid=1024}",  // save map
+			"{is_instant=1,time_start=0,var=W,grid=128}",  // save map
+			"{is_instant=1,time_start=0,var=W,grid=64}",  // save map
+			"{is_instant=2,time_start=0,var=W,grid=32}"  // save map
 	};
 
 

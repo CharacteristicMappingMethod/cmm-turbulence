@@ -370,7 +370,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		double *Host_W_initial;
 		Host_W_initial = new double[Grid_discrete.N];
 		cudaMalloc((void**)&Dev_W_H_initial, 3*Grid_discrete.sizeNReal + Grid_discrete.sizeNfft);
-		Dev_W_H_initial += 2*Grid_psi.Nfft - Grid_psi.N;  // shift to hide beginning buffer
+		Dev_W_H_initial += 2*Grid_discrete.Nfft - Grid_discrete.N;  // shift to hide beginning buffer
 		mb_used_RAM_GPU += (3*Grid_discrete.sizeNReal + Grid_discrete.sizeNfft) / 1e6;
 		
 		// read in values and copy to device
