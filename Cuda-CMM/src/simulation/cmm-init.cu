@@ -426,3 +426,17 @@ __global__ void k_part_init_uniform_grid(double* Dev_particles_pos, int particle
 	Dev_particles_pos[2*i]   = square_center_x + square_radius_x * (-1 + 2*(i % length)/(double)length);
 	Dev_particles_pos[2*i+1] = square_center_y + square_radius_y * (-1 + 2*(i / length)/(double)length);
 }
+
+
+// kernel to compute initial positions for vortex sheets center line? I'm not sure if thats whats wanted though
+__global__ void k_part_init_sheets(double* Dev_particles_pos, int particle_num,
+		double offset_x, double offset_y, double empty_x, double empty_y) {
+	int i = (blockDim.x * blockIdx.x + threadIdx.x);  // (thread_num_max * block_num + thread_num) - gives position
+
+	// return if position is larger than particle size
+	if (i >= particle_num)
+		return;
+
+	Dev_particles_pos[2*i]   = sin(i/(double)particle_num*twoPI) + offset_x;
+	Dev_particles_pos[2*i+1] = i/(double)particle_num*twoPI + offset_y;
+}
