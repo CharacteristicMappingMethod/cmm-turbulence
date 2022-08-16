@@ -41,13 +41,14 @@ void SettingsCMM::setPresets() {
 	 *  "gaussian_blobs"		-	gaussian blobs in checkerboard - version made by julius
 	 *  "shielded_vortex"		-	vortex core with ring of negative vorticity around it
 	 *  "two_cosine"			-	stationary setup of two cosine vortices
+	 *  "vortex_sheets"			-	vortex sheets used for singularity studies
 	 */
-	std::string initial_condition = "two_cosine";
+	std::string initial_condition = "vortex_sheets";
 
 	// possibility to compute from discrete initial condition
 	bool initial_discrete = false;
 	int initial_discrete_grid = 2048;  // variable gridsize for discrete initial grid
-	std::string initial_discrete_location = "src/Initial_W_discret/Vorticity_W_2048.data";  // path to discrete file, relative from workspace
+	std::string initial_discrete_location = "data/final-state-anticythere-1_gaussian_blobs_C1024_F8192_t3.07e+03_T500/Time_data/Time_270/Vorticity_W_4096.data";  // path to discrete file, relative from workspace
 
 	/*
 	 * Console output verbose intensity
@@ -59,10 +60,10 @@ void SettingsCMM::setPresets() {
 	int verbose = 3;
 
 	// set time properties
-	double final_time = 200;  // end of computation
+	double final_time = 5;  // end of computation
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
-	int steps_per_sec = 32;  // how many steps do we want per seconds?
+	int steps_per_sec = 256;  // how many steps do we want per seconds?
 	// dt will be set in cudaeuler, so that all changes can be applied there
 
 	/*
@@ -74,22 +75,22 @@ void SettingsCMM::setPresets() {
 	 * Velocity: "Velocity", "U" - not for zoom
 	 *
 	 * Backwards map: "Map_b", "Chi_b"
-	 * Backwards map Hermite: "Map_H", "Chi_H" - only for save
+	 * Backwards map Hermite: "Map_H", "Chi_H" - only for computational
 	 *
 	 * Laplacian of vorticity: "Laplacian_W" - only for sample - is stream function?
 	 * Gradient of vorticity: "Grad_W" - only for sample
 	 *
-	 * Passive scalar: "Scalar", "Theta" - not for save_var
+	 * Passive scalar: "Scalar", "Theta" - not for computational_var
 	 * Advected Particles: "PartA_XX" - not for sample_var, XX is the particle computation number
-	 * Advected Particles velocity: "PartA_Vel_XX" - only for save_var, XX is the particle computation number
+	 * Advected Particles velocity: "PartA_Vel_XX" - only for computational_var, XX is the particle computation number
 	 *
 	 * Forward map: "Map_f", "Chi_f"
-	 * Forwards map Hermite: "Map_f_H", "Chi_f_H" - only for save
-	 * Forwarded Particles: "PartF_XX" - not for save_var, XX is the particle computation number
+	 * Forwards map Hermite: "Map_f_H", "Chi_f_H" - only for computational
+	 * Forwarded Particles: "PartF_XX" - not for computational_var, XX is the particle computation number
 	 */
 	// time instants or intervals at what we want to save computational data, 0 for initial and T_MAX for final
-	int save_computational_num = 11;
-	std::string save_computational_s[11] = {
+	int save_computational_num = 3;
+	std::string save_computational_s[12] = {
 			"{is_instant=1,time_start=0,var=W-U,conv=1}",  // save begin
 			"{is_instant=1,time_start="+str_t(T_MAX)+",var=W-U,conv=1}",  // save end
 			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=0.5,var= ,conv=1}",  // conv over simulation
@@ -100,7 +101,8 @@ void SettingsCMM::setPresets() {
 			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_05,conv=0}",
 			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_06,conv=0}",
 			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_07,conv=0}",
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_08,conv=0}"
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_08,conv=0}",
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_Vel_01,conv=0}"
 	};
 
 
@@ -108,7 +110,7 @@ void SettingsCMM::setPresets() {
 	double incomp_threshhold = 1e-4;  // the maximum allowance of map to deviate from grad_chi begin 1
 	double map_epsilon = 1e-3;  // distance used for foot points for GALS map advection
 //	double map_epsilon = 6.283185307179/512.0;  // distance used for foot points for GALS map advection
-	// skip remapping, usefull for convergence tests
+	// skip remapping, useful for convergence tests
 	bool skip_remapping = false;
 
 	// set memory properties
@@ -145,10 +147,9 @@ void SettingsCMM::setPresets() {
 	double freq_cut_psi = (double)(grid_coarse)/4.0;  // take into account, that frequencies are symmetric around N/2
 
 	// time instants or intervals at what we want to save computational data, 0 for initial and T_MAX for final
-	int save_sample_num = 2;
-	std::string save_sample_s[2] = {
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=4,var=W-Theta,grid=1024}",  // save over simulation
-			"{is_instant=0,time_start=0,time_end=4,time_step=1,var=Chi_b-W,grid=1024}"  // save map
+	int save_sample_num = 1;
+	std::string save_sample_s[1] = {
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=W,grid=1024}"  // save over simulation
 	};
 
 
@@ -220,7 +221,7 @@ void SettingsCMM::setPresets() {
 	 * init_vel - if the inertial particles velocity should be set after the velocity or to zero
 	 * init_param - specific parameters to control the initial condition
 	 */
-	int particles_advected_num = 8;
+	int particles_advected_num = 0;
 	std::string particles_advected_s[8] = {
 			"{num=100000,tau=0,seed=0,time_integration=RK3,init_name=uniform,init_time=0,init_vel=0"
 			",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI*2.0)+",init_param_4="+str_t(PI*2.0)+"}",

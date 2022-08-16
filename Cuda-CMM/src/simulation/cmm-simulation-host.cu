@@ -469,14 +469,15 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 	SaveComputational* save_comp = SettingsMain.getSaveComputational();
 	for (int i_save = 0; i_save < SettingsMain.getSaveComputationalNum(); ++i_save) {
 		// instants - distance to target is smaller than threshhold
-		if (save_comp[i_save].is_instant && t_now - save_comp[i_save].time_start + dt*1e-5 < dt_now && t_now - save_comp[i_save].time_start + dt*1e-5 >= 0) {
+		if (save_comp[i_save].is_instant && t_now - save_comp[i_save].time_start + dt*1e-5 < dt_now && t_now - save_comp[i_save].time_start + dt*1e-5 >= 0 && save_comp[i_save].conv) {
 			save_now = true;
 		}
 		// intervals - modulo to steps with safety-increased targets is smaller than step
-		if (!save_comp[i_save].is_instant && save_comp[i_save].conv
-			&& fmod(t_now - save_comp[i_save].time_start + dt*1e-5, save_comp[i_save].time_step) < dt_now
+		if (!save_comp[i_save].is_instant
+			&& ((fmod(t_now - save_comp[i_save].time_start + dt*1e-5, save_comp[i_save].time_step) < dt_now
 			&& t_now + dt*1e-5 >= save_comp[i_save].time_start
-			&& t_now - dt*1e-5 <= save_comp[i_save].time_end) {
+			&& t_now - dt*1e-5 <= save_comp[i_save].time_end)
+			|| t_now == save_comp[i_save].time_end)) {
 			save_now = true;
 		}
 	}
@@ -539,9 +540,10 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 		}
 		// intervals - modulo to steps with safety-increased targets is smaller than step
 		if (!save_sample[i_save].is_instant
-			&& fmod(t_now - save_sample[i_save].time_start + dt*1e-5, save_sample[i_save].time_step) < dt_now
+			&& ((fmod(t_now - save_sample[i_save].time_start + dt*1e-5, save_sample[i_save].time_step) < dt_now
 			&& t_now + dt*1e-5 >= save_sample[i_save].time_start
-			&& t_now - dt*1e-5 <= save_sample[i_save].time_end) {
+			&& t_now - dt*1e-5 <= save_sample[i_save].time_end)
+			|| t_now == save_sample[i_save].time_end)) {
 			save_now = true;
 		}
 
@@ -723,9 +725,10 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 		}
 		// intervals - modulo to steps with safety-increased targets is smaller than step
 		if (!save_zoom[i_save].is_instant
-			&& fmod(t_now - save_zoom[i_save].time_start + dt*1e-5, save_zoom[i_save].time_step) < dt_now
+			&& ((fmod(t_now - save_zoom[i_save].time_start + dt*1e-5, save_zoom[i_save].time_step) < dt_now
 			&& t_now + dt*1e-5 >= save_zoom[i_save].time_start
-			&& t_now - dt*1e-5 <= save_zoom[i_save].time_end) {
+			&& t_now - dt*1e-5 <= save_zoom[i_save].time_end)
+			|| t_now == save_zoom[i_save].time_end)) {
 			save_now = true;
 		}
 
