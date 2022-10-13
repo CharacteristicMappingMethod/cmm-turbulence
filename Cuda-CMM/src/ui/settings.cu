@@ -786,6 +786,7 @@ void ParticlesAdvected::setVariable(std::string command_full) {
 			else if(init_name == "normal" or init_name == "gaussian") init_num = 1;
 			else if(init_name == "circular_ring") init_num = 2;
 			else if(init_name == "uniform_grid") init_num = 3;
+			else if(init_name == "sine_sheets") init_num = 4;
 			else init_num = -1;
 		}
 		else if (command == "init_time") init_time = stod(value);
@@ -842,6 +843,7 @@ void ParticlesForwarded::setVariable(std::string command_full) {
 			else if(init_name == "normal" or init_name == "gaussian") init_num = 1;
 			else if(init_name == "circular_ring") init_num = 2;
 			else if(init_name == "uniform_grid") init_num = 3;
+			else if(init_name == "sine_sheets") init_num = 4;
 			else init_num = -1;
 		}
 		else if (command == "init_time") init_time = stod(value);
