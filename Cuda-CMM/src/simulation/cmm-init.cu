@@ -231,7 +231,7 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 			double Re = 5e3;
 			double delta_Re = 1/sqrt(Re);  // rewritte for delta to reduce confusion
 			// compute distance from center
-			return exp(- (y-PI - sin(x)/2) * (y-PI - sin(x)/2) / (2 * delta_Re * delta_Re)) / sqrt(2*PI) / delta_Re;
+			return exp(- (y-PI - sin(x)/2.0) * (y-PI - sin(x)/2.0) / (2 * delta_Re * delta_Re)) / sqrt(2*PI) / delta_Re;
 		}
 		default:
 			return 0;
@@ -445,5 +445,5 @@ __global__ void k_part_init_sine_sheets(double* Dev_particles_pos, int particle_
 		return;
 
 	Dev_particles_pos[2*i]   = i/(double)particle_num*twoPI + offset_x;
-	Dev_particles_pos[2*i+1] = sin(i/(double)particle_num*twoPI) + offset_y;
+	Dev_particles_pos[2*i+1] = sin(i/(double)particle_num*twoPI)/2.0 + offset_y;
 }
