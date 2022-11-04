@@ -228,7 +228,7 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 		// omega = exp(-(y - phi(x))^2 / (2 delta^2)) / (sqrt(2 pi) delta^2) with phi(x) sin(x)/2
 		case 11:  // vortex sheets similar to caflisch
 		{
-			double Re = 5e3;
+			double Re = 5e4;
 			double delta_Re = 1/sqrt(Re);  // rewritte for delta to reduce confusion
 			// compute distance from center
 			return exp(- (y-PI - sin(x)/2.0) * (y-PI - sin(x)/2.0) / (2 * delta_Re * delta_Re)) / sqrt(2*PI) / delta_Re;

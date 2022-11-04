@@ -895,40 +895,44 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		// resetting map and adding to stack if resetting condition is met
 		if((monitor_map[0] > SettingsMain.getIncompThreshold() && !SettingsMain.getSkipRemapping()) || forwarded_init) {
 
+			bool stack_saturated = false;
 			//		if( err_incomp_b[loop_ctr] > SettingsMain.getIncompThreshold() && !SettingsMain.getSkipRemapping()) {
 			if(Map_Stack.map_stack_ctr > Map_Stack.cpu_map_num*Map_Stack.Nb_array_RAM)
 			{
 				if (SettingsMain.getVerbose() >= 0) {
 					message = "Stack Saturated : Exiting"; std::cout<<message+"\n"; logger.push(message);
 				}
-				break;
-			}
-			
-			if (SettingsMain.getVerbose() >= 2) {
-				message = "Refining Map : Step = " + to_str(loop_ctr) + " \t Maps = " + to_str(Map_Stack.map_stack_ctr) + " ; "
-						+ to_str(Map_Stack.map_stack_ctr/Map_Stack.cpu_map_num) + " \t Gap = " + to_str(loop_ctr - old_ctr);
-				std::cout<<message+"\n"; logger.push(message);
-			}
-			old_ctr = loop_ctr;
-			
-			//adjusting initial conditions, compute vorticity hermite
-			translate_initial_condition_through_map_stack(Grid_fine, Grid_discrete, Map_Stack, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real,
-					cufft_plan_fine_D2Z, cufft_plan_fine_Z2D, Dev_Temp_C1,
-					Dev_W_H_initial, SettingsMain.getInitialConditionNum(), SettingsMain.getInitialDiscrete());
-			
-			if ((Map_Stack.map_stack_ctr%Map_Stack.cpu_map_num) == 0 && SettingsMain.getVerbose() >= 2){
-				message = "Starting to use map stack array number " + to_str(Map_Stack.map_stack_ctr/Map_Stack.cpu_map_num);
-				std::cout<<message+"\n"; logger.push(message);
+				stack_saturated = true;
+				loop_ctr = iterMax;
 			}
 
-			Map_Stack.copy_map_to_host(Dev_ChiX, Dev_ChiY);
-			
-			//resetting map
-			k_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
+			if (!stack_saturated) {
+				if (SettingsMain.getVerbose() >= 2) {
+					message = "Refining Map : Step = " + to_str(loop_ctr) + " \t Maps = " + to_str(Map_Stack.map_stack_ctr) + " ; "
+							+ to_str(Map_Stack.map_stack_ctr/Map_Stack.cpu_map_num) + " \t Gap = " + to_str(loop_ctr - old_ctr);
+					std::cout<<message+"\n"; logger.push(message);
+				}
+				old_ctr = loop_ctr;
 
-			if (SettingsMain.getForwardMap()) {
-				Map_Stack_f.copy_map_to_host(Dev_ChiX_f, Dev_ChiY_f);
-				k_init_diffeo<<<Grid_forward.blocksPerGrid, Grid_forward.threadsPerBlock>>>(Dev_ChiX_f, Dev_ChiY_f, Grid_forward);
+				//adjusting initial conditions, compute vorticity hermite
+				translate_initial_condition_through_map_stack(Grid_fine, Grid_discrete, Map_Stack, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real,
+						cufft_plan_fine_D2Z, cufft_plan_fine_Z2D, Dev_Temp_C1,
+						Dev_W_H_initial, SettingsMain.getInitialConditionNum(), SettingsMain.getInitialDiscrete());
+
+				if ((Map_Stack.map_stack_ctr%Map_Stack.cpu_map_num) == 0 && SettingsMain.getVerbose() >= 2){
+					message = "Starting to use map stack array number " + to_str(Map_Stack.map_stack_ctr/Map_Stack.cpu_map_num);
+					std::cout<<message+"\n"; logger.push(message);
+				}
+
+				Map_Stack.copy_map_to_host(Dev_ChiX, Dev_ChiY);
+
+				//resetting map
+				k_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
+
+				if (SettingsMain.getForwardMap()) {
+					Map_Stack_f.copy_map_to_host(Dev_ChiX_f, Dev_ChiY_f);
+					k_init_diffeo<<<Grid_forward.blocksPerGrid, Grid_forward.threadsPerBlock>>>(Dev_ChiX_f, Dev_ChiY_f, Grid_forward);
+				}
 			}
 		}
 		// save map invetigative details
