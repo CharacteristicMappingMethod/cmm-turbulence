@@ -22,7 +22,6 @@
 *		script with all different timestep methods
 *			_b stands for backwards
 *******************************************************************/
-
 // first order euler explicit - lagr int for backwards
 __device__ void euler_exp(double *psi, double *x_in, double *x_out, TCudaGrid2D Grid, double dt) {
 	double u[2]; // velocity placeholders, set after largest l_order

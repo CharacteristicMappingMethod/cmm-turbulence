@@ -378,7 +378,7 @@ void writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, doubl
 				}
 				// sample velocity values from current stream function
 				else {
-					k_h_sample_points_dxdy<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(Grid_psi, Grid_psi, Dev_psi, Dev_particles_pos[i_p], Dev_Temp, particles_advected[i_p].num);
+					k_h_sample_points_dxdy<double><<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(Grid_psi, Grid_psi, Dev_psi, Dev_particles_pos[i_p], Dev_Temp, particles_advected[i_p].num);
 					cudaMemcpy(Host_particles[i_p], Dev_Temp, 2*particles_advected[i_p].num*sizeof(double), cudaMemcpyDeviceToHost);
 					writeAllRealToBinaryFile(2*particles_advected[i_p].num, Host_particles[i_p], SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2));
 				}

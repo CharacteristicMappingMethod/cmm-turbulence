@@ -562,10 +562,10 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	}
 		
 	//initialization of flow map as normal grid for forward and backward map
-	k_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
+	k_init_diffeo<double><<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
 
 	if (SettingsMain.getForwardMap()) {
-		k_init_diffeo<<<Grid_forward.blocksPerGrid, Grid_forward.threadsPerBlock>>>(Dev_ChiX_f, Dev_ChiY_f, Grid_forward);
+		k_init_diffeo<double><<<Grid_forward.blocksPerGrid, Grid_forward.threadsPerBlock>>>(Dev_ChiX_f, Dev_ChiY_f, Grid_forward);
 	}
 
 	//setting initial conditions for vorticity by translating with initial grid
@@ -579,7 +579,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
 
 	// compute coarse vorticity as a simulation variable, is needed for entrophy and palinstrophy
-	k_apply_map_and_sample_from_hermite<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
+	k_apply_map_and_sample_from_hermite<double><<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
 			Dev_W_coarse, Dev_W_H_fine_real, Grid_coarse, Grid_coarse, Grid_fine, 0, false);
 
 
@@ -674,20 +674,20 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 			// to switch direction, we have to reverse psi arrangement too
 			// outer elements - always have to be reversed / swapped
-			k_swap_h<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>(Dev_Psi_real, Dev_Psi_real + 4*Grid_psi.N*(i_order-(i_order==lagrange_order_init)), Grid_psi);
+			k_swap_h<double><<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>(Dev_Psi_real, Dev_Psi_real + 4*Grid_psi.N*(i_order-(i_order==lagrange_order_init)), Grid_psi);
 			// inner elements - swapped only for order = 4
 			if (i_order-(i_order==lagrange_order_init) >= 3) {
-				k_swap_h<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>(Dev_Psi_real + 4*Grid_psi.N, Dev_Psi_real + 2*4*Grid_psi.N, Grid_psi);
+				k_swap_h<double><<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>(Dev_Psi_real + 4*Grid_psi.N, Dev_Psi_real + 2*4*Grid_psi.N, Grid_psi);
 			}
 
 			// reset map for next init direction
-			k_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
+			k_init_diffeo<double><<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
 		}
 
 		// reset everything for normal loop
 		SettingsMain.setTimeIntegration(time_integration_init);
 		SettingsMain.setLagrangeOrder(lagrange_order_init);
-		k_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
+		k_init_diffeo<double><<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
 	}
 
 
@@ -833,9 +833,11 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		 */
 	    // by grid itself - only useful for very large grid sizes (has to be investigated), not recommended
 	    if (SettingsMain.getMapUpdateGrid()) {
-	    advect_using_stream_hermite_grid(SettingsMain, Grid_coarse, Grid_psi, Dev_ChiX, Dev_ChiY,
-	    		(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C1 + 4*Grid_coarse.N,
-				Dev_Psi_real, t_vec, dt_vec, loop_ctr, -1);
+	    	message = "MapUpdateGrid was removed : Exiting"; std::cout<<message+"\n"; logger.push(message);
+	    	loop_ctr = iterMax;
+//			advect_using_stream_hermite_grid(SettingsMain, Grid_coarse, Grid_psi, Dev_ChiX, Dev_ChiY,
+//					(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C1 + 4*Grid_coarse.N,
+//					Dev_Psi_real, t_vec, dt_vec, loop_ctr, -1);
 	    }
 	    // by footpoints
 	    else {
@@ -850,9 +852,11 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	    if (SettingsMain.getForwardMap()) {
 		    // by grid itself - only useful for very large grid sizes (has to be investigated), not recommended
 		    if (SettingsMain.getMapUpdateGrid()) {
-		    advect_using_stream_hermite_grid(SettingsMain, Grid_forward, Grid_psi, Dev_ChiX_f, Dev_ChiY_f,
-		    		(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C1 + 4*Grid_forward.N,
-					Dev_Psi_real, t_vec, dt_vec, loop_ctr, 1);
+		    	message = "MapUpdateGrid was removed : Exiting"; std::cout<<message+"\n"; logger.push(message);
+		    	loop_ctr = iterMax;
+//				advect_using_stream_hermite_grid(SettingsMain, Grid_forward, Grid_psi, Dev_ChiX_f, Dev_ChiY_f,
+//						(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C1 + 4*Grid_forward.N,
+//						Dev_Psi_real, t_vec, dt_vec, loop_ctr, 1);
 		    }
 		    // by footpoints
 		    else {
@@ -927,11 +931,11 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 				Map_Stack.copy_map_to_host(Dev_ChiX, Dev_ChiY);
 
 				//resetting map
-				k_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
+				k_init_diffeo<double><<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
 
 				if (SettingsMain.getForwardMap()) {
 					Map_Stack_f.copy_map_to_host(Dev_ChiX_f, Dev_ChiY_f);
-					k_init_diffeo<<<Grid_forward.blocksPerGrid, Grid_forward.threadsPerBlock>>>(Dev_ChiX_f, Dev_ChiY_f, Grid_forward);
+					k_init_diffeo<double><<<Grid_forward.blocksPerGrid, Grid_forward.threadsPerBlock>>>(Dev_ChiX_f, Dev_ChiY_f, Grid_forward);
 				}
 			}
 		}
@@ -958,7 +962,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 				Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
 
 		// compute coarse vorticity as a simulation variable, is needed for entrophy and palinstrophy
-		k_apply_map_and_sample_from_hermite<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
+		k_apply_map_and_sample_from_hermite<double><<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
 				Dev_W_coarse, Dev_W_H_fine_real, Grid_coarse, Grid_coarse, Grid_fine, 0, false);
 
 		/*

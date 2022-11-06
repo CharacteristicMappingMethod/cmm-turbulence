@@ -15,14 +15,295 @@
 #ifndef __CMM_INIT_H__
 #define __CMM_INIT_H__
 
+#include <curand.h>
+#include <curand_kernel.h>
+
 #include "../grid/cmm-grid2d.h"  // for PI, twoPI and grid
 #include "../ui/settings.h"  // for SettingsCMM
 
-// initial condition for vorticity
-__device__ double d_init_vorticity(double x, double y, int simulation_num);
 
-// initial condition for scalars
-__device__ double d_init_scalar(double x, double y, int scalar_num);
+extern __constant__ double d_rand[1000];  // array for random numbers being used for random initial conditions
+
+
+/*******************************************************************
+*			Initial condition for vorticity						   *
+*******************************************************************/
+template<typename T>
+__device__ T d_init_vorticity(T x, T y, int simulation_num)
+{
+	/*
+	 *  Initial conditions for vorticity
+	 *  "4_nodes" 				-	flow containing exactly 4 fourier modes with two vortices
+	 *  "quadropole"			-	???
+	 *  "two_vortices"			-	???
+	 *  "three_vortices"		-	???
+	 *  "single_shear_layer"	-	shear layer problem forming helmholtz-instabilities, merging into two vortices which then merges into one big vortex
+	 *  "turbulence_gaussienne"	-	gaussian blobs - version made by thibault
+	 *  "gaussian_blobs"		-	gaussian blobs in order - version made by julius
+	 *  "shielded_vortex"		-	vortex core with ring of negative vorticity around it
+	 */
+
+	switch (simulation_num) {
+		case 0:  // 4_nodes
+		{
+			x -= floor(x/twoPI)*twoPI;
+			y -= floor(y/twoPI)*twoPI;
+
+			return cos(x) + cos(y) + 0.6*cos(2*x) + 0.2*cos(3*x);
+			break;
+		}
+		case 1:  // quadropole
+		{
+			T ret = 0;
+			T A = static_cast<T>(0.6258473);
+			T s = static_cast<T>(0.5);
+			for(int iy = -2; iy <= 2; iy++)
+				for(int ix = -2; ix <= 2; ix++)
+				{
+					T dx = x - PI/2 + ix * 2*PI;
+					T dy = y - PI/2 + iy * 2*PI;
+					T B = A/(s*s*s*s) * (dx * dy) * (dx*dx + dy*dy - 6*s*s);
+					T D = (dx*dx + dy*dy)/(2*s*s);
+					ret += B * exp(-D);
+				}
+				return ret;
+			break;
+		}
+		case 2:  // one vortex - stationary case for investigations
+		{
+			T fac = 1;  // factor to increase strength
+			T sigma = twoPI*0.125;  // scaling in width
+			return fac / (twoPI*sigma*sigma) * exp(-((x-PI)*(x-PI) + (y-PI)*(y-PI))/(2*sigma*sigma));
+			break;
+		}
+		case 3:  // two vortices
+		{
+			T ret = 0;
+			for(int iy = -1; iy <= 1; iy++)
+				for(int ix = -1; ix <= 1; ix++)
+				{
+					ret += sin(0.5*(x + twoPI*ix))*sin(0.5*(x + twoPI*ix))*sin(0.5*((y + twoPI*iy) + twoPI*iy))*sin(0.5*((y + twoPI*iy) + twoPI*iy)) * (exp(-(((x + twoPI*ix) - PI)*((x + twoPI*ix) - PI) + ((y + twoPI*iy) - 0.33*twoPI)*((y + twoPI*iy) - 0.33*twoPI))*5) +
+												exp(-(((x + twoPI*ix) - PI)*((x + twoPI*ix) - PI) + ((y + twoPI*iy) - 0.67*twoPI)*((y + twoPI*iy) - 0.67*twoPI))*5));		 //two votices of same size
+				}
+			return ret;
+			break;
+		}
+		case 4:  // three vortices
+		{
+			//three vortices
+			T ret = 0;
+			T LX = PI/2.0;
+			T LY = PI/(2.0*sqrt(2.0));
+
+			for(int iy = -1; iy <= 1; iy++)
+				for(int ix = -1; ix <= 1; ix++)
+				{
+					ret += sin(0.5*(x + twoPI*ix))*sin(0.5*(x + twoPI*ix))*sin(0.5*((y + twoPI*iy) + twoPI*iy))*sin(0.5*((y + twoPI*iy) + twoPI*iy)) *
+								(
+								+	exp(-(((x + twoPI*ix) - PI - LX)*((x + twoPI*ix) - PI - LX) + ((y + twoPI*iy) - PI)*((y + twoPI*iy) - PI))*5)
+								+	exp(-(((x + twoPI*ix) - PI + LX)*((x + twoPI*ix) - PI + LX) + ((y + twoPI*iy) - PI)*((y + twoPI*iy) - PI))*5)
+								-	exp(-(((x + twoPI*ix) - PI + LX)*((x + twoPI*ix) - PI + LX) + ((y + twoPI*iy) - PI - LY)*((y + twoPI*iy) - PI - LY))*5)
+								);		 //two votices of same size
+				}
+			return ret;
+			break;
+		}
+		case 5:  // single_shear_layer
+		{
+			T delta = 50;  // thickness of shear layer
+			T delta2 = static_cast<T>(0.01);  // strength of instability
+
+			return (1 + delta2*cos(2*x)) * exp(-delta*(y-PI)*(y-PI));
+			break;
+		}
+		case 6:  // tanh_shear_layer with more parameters by julius and using a tanh velocity profile
+		{
+			T fac = 5;  // Factor to set freestream velocity
+
+			T inst_strength = static_cast<T>(0.01);  // strength of instability
+			T inst_freq = 2;  // frequency of instability / how many swirls
+			T shear_delta = 14 * inst_freq / twoPI;  // thickness of shear layer, physically connected, twoPi as domainsize
+
+			// (1 + sin-perturbation) * sech^2(thickness*x)
+			return fac * (1 + inst_strength * cos(inst_freq*x))  * 4 / (exp(-shear_delta*(y-PI))+exp(shear_delta*(y-PI)))
+															         / (exp(-shear_delta*(y-PI))+exp(shear_delta*(y-PI)));
+			break;
+		}
+		case 7:  // turbulence_gaussienne by thibault, similar to clercx2000 / keetels2008
+		{
+			x -= floor(x/twoPI)*twoPI;
+			y -= floor(y/twoPI)*twoPI;
+
+			const int NB_gaus = 8;		//NB_gaus = 6;sigma = 0.24;
+			T sigma = static_cast<T>(0.2);
+			T ret = 0;
+
+			// add positive blobs without random offset, as they sit on the corners too
+			#pragma unroll
+			for(int mu_x = 0; mu_x < NB_gaus; mu_x++){
+				#pragma unroll
+				for(int mu_y = 0; mu_y < NB_gaus; mu_y++){
+					ret += 1/(twoPI*sigma*sigma)*exp(-((x-mu_x*twoPI/(NB_gaus-1))*(x-mu_x*twoPI/(NB_gaus-1))/(2*sigma*sigma)
+													 + (y-mu_y*twoPI/(NB_gaus-1))*(y-mu_y*twoPI/(NB_gaus-1))/(2*sigma*sigma)));
+				}
+			}
+			// add negative blobs with random offset
+			#pragma unroll
+			for(int mu_x = 0; mu_x < NB_gaus-1; mu_x++){
+				#pragma unroll
+				for(int mu_y = 0; mu_y < NB_gaus-1; mu_y++){
+					// initialize random offset, could be changed but its working now
+					curandState_t state_x;
+					curand_init((mu_x+1)*mu_y*mu_y, 0, 0, &state_x);
+					T RAND_gaus_x = ((T)(curand(&state_x)%1000)-500)/100000;
+					curandState_t state_y;
+					curand_init((mu_y+1)*mu_x*mu_x, 0, 0, &state_y);
+					T RAND_gaus_y = ((T)(curand(&state_y)%1000)-500)/100000;
+					ret -= 1/(twoPI*sigma*sigma)*exp(-((x-(2*mu_x+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_x)
+													  *(x-(2*mu_x+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_x)/(2*sigma*sigma)
+													  +(y-(2*mu_y+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_y)
+													  *(y-(2*mu_y+1)*twoPI/(2*(NB_gaus-1))+RAND_gaus_y)/(2*sigma*sigma)));
+				}
+			}
+			//curandState_t state;
+			//curand_init(floor(y * 16384) * 16384 + floor(x * 16384), 0, 0, &state);
+			//ret *= 1+((double)(curand(&state)%1000)-500)/100000;
+			return ret - 0.008857380480028442;
+			break;
+		}
+		case 8:  // ordered gaussienne blobs by julius, similar to clercx2000 / keetels2008
+		{
+			x -= floor(x/twoPI)*twoPI;
+			y -= floor(y/twoPI)*twoPI;
+
+			const int NB_gaus = 5;  // number of negative and positive blobs in each row
+			T sigma = twoPI*0.025;  // scaling in width
+			T fac = static_cast<T>(1e0);  // strength scaling
+			T rand_offset = twoPI*0.0125;  // maximum random offset of blobs
+			int border = 2;  // increase parallel domain to include values of blobs from neighbouring domains
+
+			int dir = 1;  // a bit hackery, but it works
+			T ret = 0;  // initialize value
+			#pragma unroll
+			for (int mu_x = -border; mu_x < 2*NB_gaus + border; mu_x++) {
+				#pragma unroll
+				for (int mu_y = -border; mu_y < 2*NB_gaus + border; mu_y++) {
+					// comput unique number of blob, take warping into account, to have unique offset
+					int blob_num = (mu_x-floor(mu_x/(T)(NB_gaus*2))*NB_gaus*2)
+							     + (mu_y-floor(mu_y/(T)(NB_gaus*2))*NB_gaus*2)*NB_gaus*2;
+					T exp_x = x - (mu_x+0.5)*twoPI/(2*NB_gaus) + d_rand[blob_num]*rand_offset;
+					T exp_y = y - (mu_y+0.5)*twoPI/(2*NB_gaus) + d_rand[blob_num + NB_gaus*NB_gaus*4]*rand_offset;
+
+					ret += fac * dir / (twoPI*sigma*sigma)
+						 * exp(-(exp_x*exp_x + exp_y*exp_y)/(2*sigma*sigma));
+					dir *= -1;
+				}
+				dir *= -1;  // don't alternate on line change
+			}
+			return ret;
+			break;
+		}
+
+		// u(x,y)= - y 1/(nu^2 t^2) exp(-(x^2+y^2)/(4 nu t))
+		// v(x,y)= + x 1/(nu^2 t^2) exp(-(x^2+y^2)/(4 nu t))
+		case 9:  // shielded vortex
+		{
+			T nu = static_cast<T>(2e-1);
+			T nu_fac = 1 / (2*nu*nu);  // 1 / (2*nu*nu*nu)
+			T nu_center = 4*nu;  // 4*nu
+			T nu_scale = 4*nu;  // 4*nu
+
+			// compute distance from center
+			T x_r = PI-x; T y_r = PI-y;
+
+			// build vorticity
+			return nu_fac * (nu_center - x_r*x_r - y_r*y_r) * exp(-(x_r*x_r + y_r*y_r)/nu_scale);
+			break;
+		}
+		case 10:  // two_cosine as stationary case
+		{
+			x -= floor(x/twoPI)*twoPI;
+			y -= floor(y/twoPI)*twoPI;
+
+			return cos(x)*cos(y);
+			break;
+		}
+		// omega = exp(-(y - phi(x))^2 / (2 delta^2)) / (sqrt(2 pi) delta^2) with phi(x) sin(x)/2
+		case 11:  // vortex sheets similar to caflisch
+		{
+			T Re = static_cast<T>(1e4);
+			T delta_Re = 1/sqrt(Re);  // rewritte for delta to reduce confusion
+			// compute distance from center
+			return exp(- (y-PI - sin(x)/2.0) * (y-PI - sin(x)/2.0) / (2 * delta_Re * delta_Re)) / sqrt(2*PI) / delta_Re;
+		}
+		default:
+			return 0;
+	}
+
+}
+
+
+
+/*******************************************************************
+*			Initial conditions for passive scalar				   *
+*******************************************************************/
+template<typename T>
+__device__ T d_init_scalar(T x, T y, int scalar_num) {
+	/*
+	 *  Initial conditions for transport of passive scalar
+	 *  "rectangle"					-	simple rectangle with sharp borders
+	 *  "gaussian"					-   gaussian blob
+	 *  "circular_ring"				-   circular ring
+	 */
+	switch (scalar_num) {
+		case 0:  // rectangle
+		{
+			x -= floor(x/twoPI)*twoPI;
+			y -= floor(y/twoPI)*twoPI;
+			T center_x = PI;  // frame center position
+			T center_y = PI/2.0;  // frame center position
+			T width_x = 2*PI;  // frame width
+			T width_y = PI;  // frame width
+
+			// check if position is inside of rectangle
+			if (    x > center_x - width_x/2.0 and x < center_x + width_x/2.0
+			    and y > center_y - width_y/2.0 and y < center_y + width_y/2.0) {
+				return 1.0;
+			}
+			else return 0.0;
+			break;
+		}
+		case 1:  // normal distribution / gaussian blob
+		{
+			T mu_x = PI;  // frame center position
+			T mu_y = PI;  // frame center position
+			T var_x = PI/4.0;  // variance
+			T var_y = PI/4.0;  // variance
+
+			// compute value of gaussian blob
+			return 1.0/(twoPI*var_x*var_y)*exp(-((x-mu_x)*(x-mu_x)/(2*var_x*var_x)
+											   + (y-mu_y)*(y-mu_y)/(2*var_y*var_y)));
+
+			break;
+		}
+		case 2:  // circular ring by two tanh functions
+		{
+			T r = PI/2.0;  // radius of the circle
+			T r_width = r/8.0;  // frame center position
+			T str_1 = 10.0;  // strength of outer tanh function
+			T str_2 = 10.0;  // strength of inner tanh function
+
+			return (tanh(str_1*((x-PI)*(x-PI) + (y-PI)*(y-PI) - (r+r_width)*(r+r_width)))
+				  - tanh(str_2*((x-PI)*(x-PI) + (y-PI)*(y-PI) - (r-r_width)*(r-r_width)))) / 2.0;
+			break;
+		}
+		default:  // default - all zero
+		{
+			return 0;
+			break;
+		}
+	}
+}
 
 // initial condition for particles
 __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain,

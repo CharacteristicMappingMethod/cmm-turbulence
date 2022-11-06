@@ -107,7 +107,7 @@ void SettingsCMM::setPresets() {
 
 
 	// set minor properties
-	double incomp_threshhold = 1e-4;  // the maximum allowance of map to deviate from grad_chi begin 1
+	double incomp_threshhold = 1e-5;  // the maximum allowance of map to deviate from grad_chi begin 1
 	double map_epsilon = 1e-3;  // distance used for foot points for GALS map advection
 //	double map_epsilon = 6.283185307179/512.0;  // distance used for foot points for GALS map advection
 	// skip remapping, useful for convergence tests
