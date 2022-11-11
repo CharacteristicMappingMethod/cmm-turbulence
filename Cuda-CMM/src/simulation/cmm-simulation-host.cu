@@ -31,8 +31,6 @@
 #include <thrust/device_ptr.h>
 #include "../numerical/cmm-mesure.h"
 
-__constant__ double d_L1[4], d_L12[4], d_c1[12], d_cx[12], d_cy[12], d_cxy[12], d_bounds[4];
-
 
 // function to get difference to 1 for thrust parallel reduction
 struct absto1
@@ -44,7 +42,7 @@ struct absto1
 };
 double incompressibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_map, double *ChiX, double *ChiY, double *grad_Chi) {
 	// compute determinant of gradient and save in gradchi
-	k_incompressibility_check<double><<<Grid_check.blocksPerGrid, Grid_check.threadsPerBlock>>>(Grid_check, Grid_map, ChiX, ChiY, grad_Chi);
+	k_incompressibility_check<<<Grid_check.blocksPerGrid, Grid_check.threadsPerBlock>>>(Grid_check, Grid_map, ChiX, ChiY, grad_Chi);
 
 	// compute maximum using thrust parallel reduction
 	thrust::device_ptr<double> grad_Chi_ptr = thrust::device_pointer_cast(grad_Chi);
@@ -54,7 +52,7 @@ double incompressibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_map, dou
 double invertibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_backward, TCudaGrid2D Grid_forward,
 		double *ChiX_b, double *ChiY_b, double *ChiX_f, double *ChiY_f, double *abs_invert) {
 	// compute determinant of gradient and save in gradchi
-	k_invertibility_check<double><<<Grid_check.blocksPerGrid, Grid_check.threadsPerBlock>>>(Grid_check, Grid_backward, Grid_forward,
+	k_invertibility_check<<<Grid_check.blocksPerGrid, Grid_check.threadsPerBlock>>>(Grid_check, Grid_backward, Grid_forward,
 			ChiX_b, ChiY_b, ChiX_f, ChiY_f, abs_invert);
 
 	// compute maximum using thrust parallel reduction
@@ -99,7 +97,7 @@ void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map,
 //	printf("Time - %f \t dt - %f \t TimeInt - %d \t Lagrange - %d \n", t[loop_ctr_l+1], dt[loop_ctr_l+1], SettingsMain.getTimeIntegrationNum(), SettingsMain.getLagrangeOrder());
 
 	// now launch the kernel
-	k_advect_using_stream_hermite<double><<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock>>>(ChiX, ChiY, Chi_new_X, Chi_new_Y,
+	k_advect_using_stream_hermite<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock>>>(ChiX, ChiY, Chi_new_X, Chi_new_Y,
 			psi, Grid_map, Grid_psi, t[loop_ctr_l+1], dt[loop_ctr_l+1],
 			SettingsMain.getMapEpsilon(), SettingsMain.getTimeIntegrationNum(),
 			SettingsMain.getMapUpdateOrderNum(), SettingsMain.getLagrangeOrder(), direction);
@@ -118,12 +116,12 @@ void apply_map_stack(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double 
 	// backwards map from last to first
 	if (direction == -1) {
 		// first application: current map
-		k_h_sample_map_compact<double><<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
+		k_h_sample_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
 
 		// afterwards: trace back all other maps
 		for (int i_map = Map_Stack.map_stack_ctr-1; i_map >= 0; i_map--) {
 			Map_Stack.copy_map_to_device(i_map);
-			k_apply_map_compact<double><<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
+			k_apply_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
 					Dev_Temp, *Map_Stack.Grid, Grid);
 		}
 	}
@@ -133,21 +131,21 @@ void apply_map_stack(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double 
 		if (Map_Stack.map_stack_ctr > 0) {
 			// first map to get map onto grid
 			Map_Stack.copy_map_to_device(0);
-			k_h_sample_map_compact<double><<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack, Dev_Temp, *Map_Stack.Grid, Grid);
+			k_h_sample_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack, Dev_Temp, *Map_Stack.Grid, Grid);
 
 			// loop over all other maps
 			for (int i_map = 1; i_map < Map_Stack.map_stack_ctr; i_map++) {
 				Map_Stack.copy_map_to_device(i_map);
-				k_apply_map_compact<double><<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
+				k_apply_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
 						Dev_Temp, *Map_Stack.Grid, Grid);
 			}
 
 			// last map: current map
-			k_apply_map_compact<double><<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
+			k_apply_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
 		}
 		// no remapping has occured yet
 		else {
-			k_h_sample_map_compact<double><<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
+			k_h_sample_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
 		}
 	}
 }
@@ -168,14 +166,14 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 	if (direction == -1) {
 		// first application: current map
 		// sample map
-		k_h_sample_map_compact<double><<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
+		k_h_sample_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
 
 		// sample particles / specific points, do this for all particles and append them to output
 		ParticlesForwarded *particles_forwarded = SettingsMain.getParticlesForwarded();
 		double *pos_out_counter = fluid_particles_pos_out;
 		for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
 			if ((particles_forwarded[i_p].init_map != 0 && particles_forwarded[i_p].init_time != 0) || particles_forwarded[i_p].init_time == 0) {
-				k_h_sample_points_map<double><<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
+				k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
 						fluid_particles_pos_in[i_p], pos_out_counter, particles_forwarded[i_p].num);
 			}
 			// particles cannot be traced back, just give back the particle positions
@@ -190,7 +188,7 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 		for (int i_map = Map_Stack.map_stack_ctr-1; i_map >= 0; i_map--) {
 			Map_Stack.copy_map_to_device(i_map);
 			// sample map
-			k_apply_map_compact<double><<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
+			k_apply_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
 					Dev_Temp, *Map_Stack.Grid, Grid);
 
 			// sample particles / specific points
@@ -199,7 +197,7 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
 				// check if this map is applied too
 				if ((i_map >= particles_forwarded[i_p].init_map && particles_forwarded[i_p].init_time != 0 && particles_forwarded[i_p].init_map != 0) || particles_forwarded[i_p].init_time == 0) {
-					k_h_sample_points_map<double><<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
+					k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
 							pos_out_counter, pos_out_counter, particles_forwarded[i_p].num);
 				}
 				// shift pointer
@@ -214,14 +212,14 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 			// first map to get map onto grid
 			Map_Stack.copy_map_to_device(0);
 			// sample map
-			k_h_sample_map_compact<double><<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack, Dev_Temp, *Map_Stack.Grid, Grid);
+			k_h_sample_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack, Dev_Temp, *Map_Stack.Grid, Grid);
 			// sample particles / specific points, do this for all particles and append them to output
 			ParticlesForwarded *particles_forwarded = SettingsMain.getParticlesForwarded();
 			double *pos_out_counter = fluid_particles_pos_out;
 			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
 				// apply first map
 				if (particles_forwarded[i_p].init_time == 0) {
-					k_h_sample_points_map<double><<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
+					k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
 							fluid_particles_pos_in[i_p], pos_out_counter, particles_forwarded[i_p].num);
 				}
 				// copy initially as we do not start at t=0
@@ -235,14 +233,14 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 			// loop over all other maps
 			for (int i_map = 1; i_map < Map_Stack.map_stack_ctr; i_map++) {
 				Map_Stack.copy_map_to_device(i_map);
-				k_apply_map_compact<double><<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
+				k_apply_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
 						Dev_Temp, *Map_Stack.Grid, Grid);
 
 				pos_out_counter = fluid_particles_pos_out;
 				for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
 					// apply first map
 					if ((i_map >= particles_forwarded[i_p].init_map && particles_forwarded[i_p].init_time != 0) || particles_forwarded[i_p].init_time == 0) {
-						k_h_sample_points_map<double><<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
+						k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
 								pos_out_counter, pos_out_counter, particles_forwarded[i_p].num);
 					}
 					// shift pointer
@@ -251,12 +249,12 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 			}
 
 			// last map: current map
-			k_apply_map_compact<double><<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
+			k_apply_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
 			pos_out_counter = fluid_particles_pos_out;
 			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
 				// apply first map
 				if ((particles_forwarded[i_p].init_map != 0 && particles_forwarded[i_p].init_time != 0) || particles_forwarded[i_p].init_time == 0) {
-					k_h_sample_points_map<double><<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
+					k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
 							pos_out_counter, pos_out_counter, particles_forwarded[i_p].num);
 				}
 				// shift pointer
@@ -266,12 +264,12 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 		// no remapping has occured yet
 		else {
 			// sample map
-			k_h_sample_map_compact<double><<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
+			k_h_sample_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
 			// sample particles / specific points, do this for all particles and append them to output
 			ParticlesForwarded *particles_forwarded = SettingsMain.getParticlesForwarded();
 			double *pos_out_counter = fluid_particles_pos_out;
 			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
-				k_h_sample_points_map<double><<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
+				k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
 						fluid_particles_pos_in[i_p], pos_out_counter, particles_forwarded[i_p].num);
 
 				pos_out_counter += 2*particles_forwarded[i_p].num;
@@ -294,7 +292,7 @@ void translate_initial_condition_through_map_stack(TCudaGrid2D Grid_fine, TCudaG
 	// W_H_real is used as temporary variable and output
 	apply_map_stack(Grid_fine, Map_Stack, Dev_ChiX, Dev_ChiY, W_H_real+Grid_fine.N, -1);
 	// initial condition - 0 to switch for vorticity
-	k_h_sample_from_init<double><<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(W_H_real, W_H_real+Grid_fine.N, Grid_fine, Grid_discrete,
+	k_h_sample_from_init<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(W_H_real, W_H_real+Grid_fine.N, Grid_fine, Grid_discrete,
 			0, simulation_num_c, W_initial_discrete, initial_discrete);
 
 	// go to comlex space
@@ -320,7 +318,7 @@ void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCu
 {
 
 	// apply map to w and sample using mollifier, do it on a special grid for vorticity and apply mollification if wanted
-	k_apply_map_and_sample_from_hermite<double><<<Grid_vort.blocksPerGrid, Grid_vort.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
+	k_apply_map_and_sample_from_hermite<<<Grid_vort.blocksPerGrid, Grid_vort.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
 			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_fine_real, Grid_coarse, Grid_vort, Grid_fine, molly_stencil, true);
 
 	// forward fft
@@ -581,7 +579,7 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 
 			// passive scalar theta - 1 to switch for passive scalar
 			if (save_var.find("Scalar") != std::string::npos or save_var.find("Theta") != std::string::npos) {
-				k_h_sample_from_init<double><<<Grid_sample[i_save].blocksPerGrid, Grid_sample[i_save].threadsPerBlock>>>(Dev_sample, (cufftDoubleReal*)Dev_Temp_C1,
+				k_h_sample_from_init<<<Grid_sample[i_save].blocksPerGrid, Grid_sample[i_save].threadsPerBlock>>>(Dev_sample, (cufftDoubleReal*)Dev_Temp_C1,
 						Grid_sample[i_save], Grid_discrete, 1, SettingsMain.getScalarNum(), W_initial_discrete, SettingsMain.getScalarDiscrete());
 
 				writeTimeVariable(SettingsMain, "Scalar_Theta_"+to_str(Grid_sample[i_save].NX),
@@ -593,7 +591,7 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 			}
 
 			// compute vorticity - 0 to switch for vorticity
-			k_h_sample_from_init<double><<<Grid_sample[i_save].blocksPerGrid, Grid_sample[i_save].threadsPerBlock>>>(Dev_sample, (cufftDoubleReal*)Dev_Temp_C1,
+			k_h_sample_from_init<<<Grid_sample[i_save].blocksPerGrid, Grid_sample[i_save].threadsPerBlock>>>(Dev_sample, (cufftDoubleReal*)Dev_Temp_C1,
 					Grid_sample[i_save], Grid_discrete, 0, SettingsMain.getInitialConditionNum(), W_initial_discrete, SettingsMain.getInitialDiscrete());
 
 			// save vorticity
@@ -755,10 +753,10 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 						if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos) {
 							cudaMemcpy2D(Host_debug, sizeof(double), Dev_Temp+Grid_zoom_i.N, sizeof(double)*2,
 									sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToHost);
-							writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiX");
+							writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiX_f_"+to_str(Grid_zoom_i.NX);
 							cudaMemcpy2D(Host_debug, sizeof(double), Dev_Temp+Grid_zoom_i.N+1, sizeof(double)*2,
 									sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToHost);
-							writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiY");
+							writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiY_f_"+to_str(Grid_zoom_i.NX);
 						}
 
 						// save position of forwarded particles, go through all and only safe the needed ones
@@ -799,29 +797,29 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 				if (save_var.find("Map_b") != std::string::npos or save_var.find("Chi_b") != std::string::npos) {
 					cudaMemcpy2D(Host_debug, sizeof(double), Dev_Temp+Grid_zoom_i.N, sizeof(double)*2,
 							sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToHost);
-					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiX");
+					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiX_"+to_str(Grid_zoom_i.NX));
 					cudaMemcpy2D(Host_debug, sizeof(double), Dev_Temp+Grid_zoom_i.N+1, sizeof(double)*2,
 							sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToHost);
-					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiY");
+					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiY_"+to_str(Grid_zoom_i.NX));
 				}
 
 				// passive scalar theta - 1 to switch for passive scalar
 				if (save_var.find("Scalar") != std::string::npos or save_var.find("Theta") != std::string::npos) {
-					k_h_sample_from_init<double><<<Grid_zoom_i.blocksPerGrid, Grid_zoom_i.threadsPerBlock>>>(Dev_Temp, Dev_Temp+Grid_zoom_i.N,
+					k_h_sample_from_init<<<Grid_zoom_i.blocksPerGrid, Grid_zoom_i.threadsPerBlock>>>(Dev_Temp, Dev_Temp+Grid_zoom_i.N,
 							Grid_zoom_i, Grid_discrete, 1, SettingsMain.getScalarNum(), W_initial_discrete, SettingsMain.getScalarDiscrete());
 
 					cudaMemcpy(Host_debug, Dev_Temp, Grid_zoom_i.sizeNReal, cudaMemcpyDeviceToHost);
-					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Scalar_Theta");
+					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Scalar_Theta_"+to_str(Grid_zoom_i.NX));
 				}
 
 				// compute and save vorticity zoom
 				if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos) {
 					// compute vorticity - 0 to switch for vorticity
-					k_h_sample_from_init<double><<<Grid_zoom_i.blocksPerGrid, Grid_zoom_i.threadsPerBlock>>>(Dev_Temp, Dev_Temp+Grid_zoom_i.N,
+					k_h_sample_from_init<<<Grid_zoom_i.blocksPerGrid, Grid_zoom_i.threadsPerBlock>>>(Dev_Temp, Dev_Temp+Grid_zoom_i.N,
 							Grid_zoom_i, Grid_discrete, 0, SettingsMain.getInitialConditionNum(), W_initial_discrete, SettingsMain.getInitialDiscrete());
 
 					cudaMemcpy(Host_debug, Dev_Temp, Grid_zoom_i.sizeNReal, cudaMemcpyDeviceToHost);
-					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Vorticity_W");
+					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Vorticity_W_"+to_str(Grid_zoom_i.NX));
 				}
 
 				// compute sample of stream function - it's not a zoom though!
@@ -831,7 +829,7 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 
 					// save psi zoom
 					cudaMemcpy(Host_debug, Dev_Temp, Grid_zoom_i.sizeNReal, cudaMemcpyDeviceToHost);
-					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Stream_function_Psi");
+					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Stream_function_Psi_"+to_str(Grid_zoom_i.NX));
 				}
 
 				// safe particles in zoomframe if wanted

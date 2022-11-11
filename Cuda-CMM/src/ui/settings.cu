@@ -138,7 +138,6 @@ void SettingsCMM::setPresets() {
 
 	// mapupdate order, "2nd", "4th", "6th"
 	std::string map_update_order = "4th";
-	bool map_update_grid = false;  // should map update be computed with grid or footpoints?
 
 	// mollification settings, stencil size, 0, 4, 8
 	int molly_stencil = 0;
@@ -274,7 +273,6 @@ void SettingsCMM::setPresets() {
 	setLagrangeOverride(lagrange_override);
 	setLagrangeInitHigherOrder(lagrange_init_higher_order);
 	setMapUpdateOrder(map_update_order);
-	setMapUpdateGrid(map_update_grid);
 	setMollyStencil(molly_stencil);
 	setFreqCutPsi(freq_cut_psi);
 	setSkipRemapping(skip_remapping);
@@ -374,7 +372,6 @@ int SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		else if (command == "lagrange_override") setLagrangeOverride(std::stoi(value));
 		else if (command == "lagrange_init_higher_order") setLagrangeInitHigherOrder(getBoolFromString(value));
 		else if (command == "map_update_order") setMapUpdateOrder(value);
-		else if (command == "map_update_grid") setMapUpdateGrid(getBoolFromString(value));
 		else if (command == "molly_stencil") setMollyStencil(std::stoi(value));
 		else if (command == "freq_cut_psi") setFreqCutPsi(std::stod(value));
 		else if (command == "skip_remapping") setSkipRemapping(getBoolFromString(value));

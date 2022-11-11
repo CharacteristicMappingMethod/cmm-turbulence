@@ -51,31 +51,16 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	*						 	 Constants							   *
 	*******************************************************************/
 	
-	double LX = twoPI;													// domain length
-	double LY = twoPI;													// domain length
-	double bounds[4] = {0, LX, 0, LY};									// boundary information for translating
-	int NX_coarse = SettingsMain.getGridCoarse();						// coarse grid size
-	int NY_coarse = SettingsMain.getGridCoarse();						// coarse grid size
-	int NX_fine = SettingsMain.getGridFine();							// fine grid size
-	int NY_fine = SettingsMain.getGridFine();							// fine grid size
-	
-	double t0 = 0;													// time - initial
-	double tf = SettingsMain.getFinalTime();							// time - final
-	double grid_by_time = SettingsMain.getFactorDtByGrid();				// time - factor by grid
-	int steps_per_sec = SettingsMain.getStepsPerSec();					// time - steps per second
+	double bounds[4] = {0, twoPI, 0, twoPI};							// boundary information for translating
+	double t0 = 0;														// time - initial
 	double dt;															// time - step final
 	int iterMax;														// time - maximum iteration count for safety
-
-	std::string workspace = SettingsMain.getWorkspace();						// folder where we work in
-	std::string sim_name = SettingsMain.getSimName();						// name of the simulation
-	std::string initial_condition = SettingsMain.getInitialCondition();		// name of the initial condition
-//	int snapshots_per_second = SettingsMain.getSnapshotsPerSec();		// saves per second
 
 	double mb_used_RAM_GPU, mb_used_RAM_CPU;  // count memory usage by variables in mbyte
 
 	// compute dt, for grid settings we have to use max in case we want to differ NX and NY
-	if (SettingsMain.getSetDtBySteps()) dt = 1.0 / steps_per_sec;  // direct setting of timestep
-	else dt = 1.0 / std::max(NX_coarse, NY_coarse) / grid_by_time;  // setting of timestep by grid and factor
+	if (SettingsMain.getSetDtBySteps()) dt = 1.0 / SettingsMain.getStepsPerSec();  // direct setting of timestep
+	else dt = 1.0 / std::max(SettingsMain.getGridCoarse(), SettingsMain.getGridCoarse()) / SettingsMain.getFactorDtByGrid();  // setting of timestep by grid and factor
 	
 	// reset lagrange order, check first for particles
 	ParticlesAdvected* particles_advected = SettingsMain.getParticlesAdvected();
@@ -90,15 +75,16 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	if (SettingsMain.getLagrangeOverride() != -1) SettingsMain.setLagrangeOrder(SettingsMain.getLagrangeOverride());
 	
 	// shared parameters
-	iterMax = (int)(1.05*ceil(tf / dt));  // maximum amount of steps, important for more dynamic steps, however, reduced for now
+	iterMax = (int)(1.05*ceil(SettingsMain.getFinalTime() / dt));  // maximum amount of steps, important for more dynamic steps, however, reduced for now
 
-	double map_size = 8*NX_coarse*NY_coarse*sizeof(double) / 1e6;  // size of one mapping
+	double map_size = 8*SettingsMain.getGridCoarse()*SettingsMain.getGridCoarse()*sizeof(double) / 1e6;  // size of one mapping
 	int Nb_array_RAM = 4;  // fixed for four different stacks
 	int cpu_map_num = int(double(SettingsMain.getMemRamCpuRemaps())/map_size/double(Nb_array_RAM));  // define how many more remappings we can save on CPU than on GPU
 	if (SettingsMain.getForwardMap()) cpu_map_num = (int)(cpu_map_num/2.0);  // divide by to in case of forward map too
 	
 	// build file name together
-	std::string file_name = sim_name + "_" + initial_condition + "_C" + to_str(NX_coarse) + "_F" + to_str(NX_fine) + "_t" + to_str((int)(1.0/dt)) + "_T" + to_str(tf);
+	std::string file_name = SettingsMain.getSimName() + "_" + SettingsMain.getInitialCondition() + "_C" + to_str(SettingsMain.getGridCoarse()) + "_F" + to_str(SettingsMain.getGridFine())
+			+ "_t" + to_str((int)(1.0/dt)) + "_T" + to_str(SettingsMain.getFinalTime());
 	SettingsMain.setFileName(file_name);
 
 	create_directory_structure(SettingsMain, dt, iterMax);
@@ -126,7 +112,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
     // print simulation details
     if (SettingsMain.getVerbose() >= 1) {
-		message = "Initial condition = " + initial_condition; std::cout<<message+"\n"; logger.push(message);
+		message = "Initial condition = " + SettingsMain.getInitialCondition(); std::cout<<message+"\n"; logger.push(message);
 		message = "Iter max = " + to_str(iterMax); std::cout<<message+"\n"; logger.push(message);
 		message = "Map stack length on CPU = " + to_str(cpu_map_num); std::cout<<message+"\n"; logger.push(message);
 		message = "Map stack length total on CPU = " + to_str(cpu_map_num * Nb_array_RAM); std::cout<<message+"\n"; logger.push(message);
@@ -143,8 +129,8 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	*																   *
 	*******************************************************************/
 	
-	TCudaGrid2D Grid_coarse(NX_coarse, NY_coarse, bounds);
-	TCudaGrid2D Grid_fine(NX_fine, NY_fine, bounds);
+	TCudaGrid2D Grid_coarse(SettingsMain.getGridCoarse(), SettingsMain.getGridCoarse(), bounds);
+	TCudaGrid2D Grid_fine(SettingsMain.getGridFine(), SettingsMain.getGridFine(), bounds);
 	TCudaGrid2D Grid_psi(SettingsMain.getGridPsi(), SettingsMain.getGridPsi(), bounds);
 	TCudaGrid2D Grid_vort(SettingsMain.getGridVort(), SettingsMain.getGridVort(), bounds);
 
@@ -421,7 +407,8 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	 ******************************************************************/
 
 	// not ideal and a bit hackery, but my current initialization for the stack sucks
-	TCudaGrid2D Grid_forward(1+(NX_coarse-1)*SettingsMain.getForwardMap(), 1+(NY_coarse-1)*SettingsMain.getForwardMap(), bounds);
+	TCudaGrid2D Grid_forward(1+(SettingsMain.getGridCoarse()-1)*SettingsMain.getForwardMap(),
+			1+(SettingsMain.getGridCoarse()-1)*SettingsMain.getForwardMap(), bounds);
 
 	// initialize forward map
 	double *Dev_ChiX_f, *Dev_ChiY_f;
@@ -562,10 +549,10 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	}
 		
 	//initialization of flow map as normal grid for forward and backward map
-	k_init_diffeo<double><<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
+	k_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
 
 	if (SettingsMain.getForwardMap()) {
-		k_init_diffeo<double><<<Grid_forward.blocksPerGrid, Grid_forward.threadsPerBlock>>>(Dev_ChiX_f, Dev_ChiY_f, Grid_forward);
+		k_init_diffeo<<<Grid_forward.blocksPerGrid, Grid_forward.threadsPerBlock>>>(Dev_ChiX_f, Dev_ChiY_f, Grid_forward);
 	}
 
 	//setting initial conditions for vorticity by translating with initial grid
@@ -579,7 +566,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
 
 	// compute coarse vorticity as a simulation variable, is needed for entrophy and palinstrophy
-	k_apply_map_and_sample_from_hermite<double><<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
+	k_apply_map_and_sample_from_hermite<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
 			Dev_W_coarse, Dev_W_H_fine_real, Grid_coarse, Grid_coarse, Grid_fine, 0, false);
 
 
@@ -674,20 +661,20 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 			// to switch direction, we have to reverse psi arrangement too
 			// outer elements - always have to be reversed / swapped
-			k_swap_h<double><<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>(Dev_Psi_real, Dev_Psi_real + 4*Grid_psi.N*(i_order-(i_order==lagrange_order_init)), Grid_psi);
+			k_swap_h<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>(Dev_Psi_real, Dev_Psi_real + 4*Grid_psi.N*(i_order-(i_order==lagrange_order_init)), Grid_psi);
 			// inner elements - swapped only for order = 4
 			if (i_order-(i_order==lagrange_order_init) >= 3) {
-				k_swap_h<double><<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>(Dev_Psi_real + 4*Grid_psi.N, Dev_Psi_real + 2*4*Grid_psi.N, Grid_psi);
+				k_swap_h<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>(Dev_Psi_real + 4*Grid_psi.N, Dev_Psi_real + 2*4*Grid_psi.N, Grid_psi);
 			}
 
 			// reset map for next init direction
-			k_init_diffeo<double><<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
+			k_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
 		}
 
 		// reset everything for normal loop
 		SettingsMain.setTimeIntegration(time_integration_init);
 		SettingsMain.setLagrangeOrder(lagrange_order_init);
-		k_init_diffeo<double><<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
+		k_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
 	}
 
 
@@ -776,6 +763,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	}
 	int loop_ctr = 0;
 	int old_ctr = 0;
+	bool continue_loop = true;
 
 
 	// first timing save before loop - this is the initialization time
@@ -807,7 +795,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		std::cout<<"\n"+message+"\n\n"; logger.push(message);
 	}
 
-	while(tf - t_vec[loop_ctr + SettingsMain.getLagrangeOrder()-1] > dt*1e-5 && loop_ctr < iterMax)
+	while(SettingsMain.getFinalTime() - t_vec[loop_ctr + SettingsMain.getLagrangeOrder()-1] > dt*1e-5 && loop_ctr < iterMax && continue_loop)
 	{
 		/*
 		 * Timestep initialization:
@@ -821,7 +809,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		double dt_now = compute_next_timestep(SettingsMain, t_vec[loop_ctr_l], dt);
 
 		// avoid overstepping final time
-		if(t_vec[loop_ctr_l] + dt_now > tf) dt_now = tf - t_vec[loop_ctr_l];
+		if(t_vec[loop_ctr_l] + dt_now > SettingsMain.getFinalTime()) dt_now = SettingsMain.getFinalTime() - t_vec[loop_ctr_l];
 		// set new dt into time vectors for lagrange interpolation
 		t_vec[loop_ctr_l + 1] = t_vec[loop_ctr_l] + dt_now;
 		dt_vec[loop_ctr_l + 1] = dt_now;
@@ -831,41 +819,19 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		 *  - Velocity is already intialized, so we can safely do that here
 		 *  - do for backward map important to flow and forward map if wanted
 		 */
-	    // by grid itself - only useful for very large grid sizes (has to be investigated), not recommended
-	    if (SettingsMain.getMapUpdateGrid()) {
-	    	message = "MapUpdateGrid was removed : Exiting"; std::cout<<message+"\n"; logger.push(message);
-	    	loop_ctr = iterMax;
-//			advect_using_stream_hermite_grid(SettingsMain, Grid_coarse, Grid_psi, Dev_ChiX, Dev_ChiY,
-//					(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C1 + 4*Grid_coarse.N,
-//					Dev_Psi_real, t_vec, dt_vec, loop_ctr, -1);
-	    }
-	    // by footpoints
-	    else {
-		    advect_using_stream_hermite(SettingsMain, Grid_coarse, Grid_psi, Dev_ChiX, Dev_ChiY,
-		    		(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)(Dev_Temp_C1) + 4*Grid_coarse.N,
-					Dev_Psi_real, t_vec, dt_vec, loop_ctr, -1);
-			cudaMemcpyAsync(Dev_ChiX, (cufftDoubleReal*)(Dev_Temp_C1), 			   		 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice, streams[2]);
-			cudaMemcpyAsync(Dev_ChiY, (cufftDoubleReal*)(Dev_Temp_C1) + 4*Grid_coarse.N, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice, streams[3]);
-	    }
+		advect_using_stream_hermite(SettingsMain, Grid_coarse, Grid_psi, Dev_ChiX, Dev_ChiY,
+				(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)(Dev_Temp_C1) + 4*Grid_coarse.N,
+				Dev_Psi_real, t_vec, dt_vec, loop_ctr, -1);
+		cudaMemcpyAsync(Dev_ChiX, (cufftDoubleReal*)(Dev_Temp_C1), 			   		 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice, streams[2]);
+		cudaMemcpyAsync(Dev_ChiY, (cufftDoubleReal*)(Dev_Temp_C1) + 4*Grid_coarse.N, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice, streams[3]);
 	    cudaDeviceSynchronize();
 
 	    if (SettingsMain.getForwardMap()) {
-		    // by grid itself - only useful for very large grid sizes (has to be investigated), not recommended
-		    if (SettingsMain.getMapUpdateGrid()) {
-		    	message = "MapUpdateGrid was removed : Exiting"; std::cout<<message+"\n"; logger.push(message);
-		    	loop_ctr = iterMax;
-//				advect_using_stream_hermite_grid(SettingsMain, Grid_forward, Grid_psi, Dev_ChiX_f, Dev_ChiY_f,
-//						(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C1 + 4*Grid_forward.N,
-//						Dev_Psi_real, t_vec, dt_vec, loop_ctr, 1);
-		    }
-		    // by footpoints
-		    else {
-			    advect_using_stream_hermite(SettingsMain, Grid_forward, Grid_psi, Dev_ChiX_f, Dev_ChiY_f,
-			    		(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)(Dev_Temp_C1) + 4*Grid_forward.N,
-						Dev_Psi_real, t_vec, dt_vec, loop_ctr, 1);
-				cudaMemcpyAsync(Dev_ChiX_f, (cufftDoubleReal*)(Dev_Temp_C1), 			   		4*Grid_forward.sizeNReal, cudaMemcpyDeviceToDevice, streams[2]);
-				cudaMemcpyAsync(Dev_ChiY_f, (cufftDoubleReal*)(Dev_Temp_C1) + 4*Grid_forward.N, 4*Grid_forward.sizeNReal, cudaMemcpyDeviceToDevice, streams[3]);
-		    }
+			advect_using_stream_hermite(SettingsMain, Grid_forward, Grid_psi, Dev_ChiX_f, Dev_ChiY_f,
+					(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)(Dev_Temp_C1) + 4*Grid_forward.N,
+					Dev_Psi_real, t_vec, dt_vec, loop_ctr, 1);
+			cudaMemcpyAsync(Dev_ChiX_f, (cufftDoubleReal*)(Dev_Temp_C1), 			   		4*Grid_forward.sizeNReal, cudaMemcpyDeviceToDevice, streams[2]);
+			cudaMemcpyAsync(Dev_ChiY_f, (cufftDoubleReal*)(Dev_Temp_C1) + 4*Grid_forward.N, 4*Grid_forward.sizeNReal, cudaMemcpyDeviceToDevice, streams[3]);
 		    cudaDeviceSynchronize();
 	    }
 
@@ -907,7 +873,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 					message = "Stack Saturated : Exiting"; std::cout<<message+"\n"; logger.push(message);
 				}
 				stack_saturated = true;
-				loop_ctr = iterMax;
+				continue_loop = false;
 			}
 
 			if (!stack_saturated) {
@@ -931,11 +897,11 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 				Map_Stack.copy_map_to_host(Dev_ChiX, Dev_ChiY);
 
 				//resetting map
-				k_init_diffeo<double><<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
+				k_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
 
 				if (SettingsMain.getForwardMap()) {
 					Map_Stack_f.copy_map_to_host(Dev_ChiX_f, Dev_ChiY_f);
-					k_init_diffeo<double><<<Grid_forward.blocksPerGrid, Grid_forward.threadsPerBlock>>>(Dev_ChiX_f, Dev_ChiY_f, Grid_forward);
+					k_init_diffeo<<<Grid_forward.blocksPerGrid, Grid_forward.threadsPerBlock>>>(Dev_ChiX_f, Dev_ChiY_f, Grid_forward);
 				}
 			}
 		}
@@ -962,7 +928,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 				Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
 
 		// compute coarse vorticity as a simulation variable, is needed for entrophy and palinstrophy
-		k_apply_map_and_sample_from_hermite<double><<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
+		k_apply_map_and_sample_from_hermite<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
 				Dev_W_coarse, Dev_W_H_fine_real, Grid_coarse, Grid_coarse, Grid_fine, 0, false);
 
 		/*
@@ -1073,7 +1039,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		}
 		if (SettingsMain.getVerbose() >= 2) {
 			message = "Step = " + to_str(loop_ctr)
-					+ " \t S-Time = " + to_str(t_vec[loop_ctr_l+1]) + "/" + to_str(tf)
+					+ " \t S-Time = " + to_str(t_vec[loop_ctr_l+1]) + "/" + to_str(SettingsMain.getFinalTime())
 					+ " \t E-inc = " + to_str(monitor_map[0]);
 			if (SettingsMain.getForwardMap()) {
 				message += " \t E-inc_f = " + to_str(monitor_map[1])
