@@ -56,7 +56,7 @@ When changing many values in *'Cuda-CMM/src/simulation/settings.cu'* or *'Cuda-C
 terminate called after throwing an instance of 'std::bad_alloc'
 ```
 
-This problem can be solved by rebuilding the whole code with 'make rebuild'.
+This problem can be solved by rebuilding the whole code with `make rebuild`.
 
 # Code structure
 
