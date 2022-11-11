@@ -14,7 +14,7 @@ Their work has been supervised by Prof. Jean-Christophe Nave (McGill U) and Prof
 
 # Prerequesites
 
-This code is developed to be built and run on Linux machines. In addition, an installation of Nvidia Cuda together with a featured graphics card is required. To properly install Cuda on your system, Nvidia provides a helpful guide for installation: "https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html". On top of that, a working c++ implementation has to be present. The code was checked for g++ 8.4.0. The c++ code itself was developed under C++14 with Cuda 11.0.
+This code is developed to be built and run on Linux machines. In addition, an installation of Nvidia Cuda together with a featured graphics card is required. To properly install Cuda on your system, Nvidia provides a helpful [guide for installation](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html). On top of that, a working c++ implementation has to be present. The code was checked for g++ 8.4.0. The c++ code itself was developed under C++14 with Cuda 11.0.
 
 # Compiling, building and running
 
@@ -30,7 +30,7 @@ This code is developed to be built and run on Linux machines. In addition, an in
 
    Makefile:
    - set the CUDA_PATH variable to match your cuda install location, default is located under *'/usr/local/cuda'*
-   - set the GPU_ARCH variable to match your GPU architecture. This specifies the name of the NVIDIA GPU architecture that the CUDA files will be compiled for. Further information regarding the architecture can be found at "https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#gpu-feature-list". Choose a version matching your architecture name.
+   - set the GPU_ARCH variable to match your GPU architecture. This specifies the name of the NVIDIA GPU architecture that the CUDA files will be compiled for. Further information regarding the architecture can be found [here](https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#gpu-feature-list). Choose a version matching your architecture name.
    - compile the code in a shell by changing into the directory and running `make all`.
      check for errors, if not listed, please provide them as an issue along with the given error stack.
    
@@ -66,7 +66,7 @@ The three most important files are *'Cuda-CMM/src/simulation/cmm-euler-2d.cu'* c
 
 # Literature references and Research project
 
-The open access code has been developed in the context of the ongoing ANR project "CM2E" (http://lmfa.ec-lyon.fr/spip.php?article1807) and is used in this framework.
+The open access code has been developed in the context of the ongoing ANR project [CM2E](http://lmfa.ec-lyon.fr/spip.php?article1807) and is used in this framework.
 It is based on the original version of the cuda code, developed by Badal Yadav at McGill University, Canada. 
 Further literature describing the method and different features in chronological order:
 
