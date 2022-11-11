@@ -68,25 +68,23 @@ The three most important files are *'Cuda-CMM/src/simulation/cmm-euler-2d.cu'* c
 
 The open access code has been developed in the context of the ongoing ANR project "CM2E" (http://lmfa.ec-lyon.fr/spip.php?article1807) and is used in this framework.
 It is based on the original version of the cuda code, developed by Badal Yadav at McGill University, Canada. 
-Further literature describing the method and different features:
+Further literature describing the method and different features in chronological order:
 
-Badal Yadav, Characteristic mapping method for incompressible Euler equations.
-Master thesis, McGill University, Canada, 2015.
+[Julius Bergmann](https://hal.archives-ouvertes.fr/tel-03812702). _Investigation of mixing and particle transport in 2D incompressible Euler flows using the characteristic mapping method._ Master thesis, Aix-Marseille University, France, 2022.
 
-X.Y. Yin, O. Mercier, B. Yadav, K. Schneider and J.-C. Nave, A Characteristic Mapping Method for the two-dimensional incompressible Euler equations. 
-doi.org/10.1016/j.jcp.2020.109781, J. Comput. Phys., 424, 109781, 2021.
+[X.Y. Yin, O. Mercier, B. Yadav, K. Schneider and J.-C. Nave](doi.org/10.1016/j.jcp.2020.109781), _A Characteristic Mapping Method for the two-dimensional incompressible Euler equations._ , J. Comput. Phys., 424, 109781, 2021.
 
-X.Y. Yin, K. Schneider, and J.-C. Nave, A characteristic mapping method for the three-dimensional incompressible Euler equations.
-arxiv.org/abs/2107.03504, 2021b.
+[X.Y. Yin, K. Schneider, and J.-C. Nave](arxiv.org/abs/2107.03504), _A characteristic mapping method for the three-dimensional incompressible Euler equations._ , 2021b.
 
-Nicolas Saber, Two-dimensional Characteristic Mapping Method with inertial particles on GPU using CUDA.
+Nicolas Saber, _Two-dimensional Characteristic Mapping Method with inertial particles on GPU using CUDA._
 Master thesis, Aix-Marseille University, France, 2021.
 
-O. Mercier, X.Y. Yin, and J.-C. Nave, The Characteristic Mapping Method for the linear advection of arbitrary sets.
-doi.org/10.1137/18M1234424, J. Sci. Comput. 42,3, 2013.
+Badal Yadav, _Characteristic mapping method for incompressible Euler equations._
+Master thesis, McGill University, Canada, 2015.
 
-J.-C. Nave, R.R. Rosalis, and B. Seibold, A gradient-augmented level set method with an optimally local, coherent advection scheme,
-doi.org/10.1016/j.jcp.2010.01.029, J. Comput. Phys 229, 2010.
+[O. Mercier, X.Y. Yin, and J.-C. Nave](doi.org/10.1137/18M1234424), _The Characteristic Mapping Method for the linear advection of arbitrary sets._ , J. Sci. Comput. 42,3, 2013.
+
+[J.-C. Nave, R.R. Rosalis, and B. Seibold](doi.org/10.1016/j.jcp.2010.01.029), _A gradient-augmented level set method with an optimally local, coherent advection scheme._ , J. Comput. Phys 229, 2010.
 
 # Acknowledgements: 
 
