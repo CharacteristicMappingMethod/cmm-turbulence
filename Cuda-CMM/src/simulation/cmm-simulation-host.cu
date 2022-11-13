@@ -731,6 +731,8 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 				// safe bounds in array
 				double bounds[4] = {x_min, x_max, y_min, y_max};
 
+				printf("bounds - %f,  %f,  %f, %f", x_min, x_max, y_min, y_max);
+
 				TCudaGrid2D Grid_zoom_i(Grid_zoom[i_save].NX, Grid_zoom[i_save].NY, bounds);
 
 				// compute forwards map for map stack of zoom window first, as it can be discarded afterwards
@@ -753,10 +755,10 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 						if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos) {
 							cudaMemcpy2D(Host_debug, sizeof(double), Dev_Temp+Grid_zoom_i.N, sizeof(double)*2,
 									sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToHost);
-							writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiX_f_"+to_str(Grid_zoom_i.NX);
+							writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiX_f_"+to_str(Grid_zoom_i.NX));
 							cudaMemcpy2D(Host_debug, sizeof(double), Dev_Temp+Grid_zoom_i.N+1, sizeof(double)*2,
 									sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToHost);
-							writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiY_f_"+to_str(Grid_zoom_i.NX);
+							writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiY_f_"+to_str(Grid_zoom_i.NX));
 						}
 
 						// save position of forwarded particles, go through all and only safe the needed ones
