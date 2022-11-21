@@ -733,7 +733,7 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 
 				printf("bounds - %f,  %f,  %f, %f", x_min, x_max, y_min, y_max);
 
-				TCudaGrid2D Grid_zoom_i(Grid_zoom[i_save].NX, Grid_zoom[i_save].NY, bounds);
+				TCudaGrid2D Grid_zoom_i(Grid_zoom[i_save].NX, Grid_zoom[i_save].NY, Grid_zoom[i_save].NZ, bounds);
 
 				// compute forwards map for map stack of zoom window first, as it can be discarded afterwards
 				if (SettingsMain.getForwardMap()) {

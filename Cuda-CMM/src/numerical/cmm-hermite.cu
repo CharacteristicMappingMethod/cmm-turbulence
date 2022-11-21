@@ -21,32 +21,120 @@
 // this computation is used very often, using it as a function greatL.y reduces code-redundancy
 // however, here we have 8 scattered memory accesses where I[0] - I[1] and I[2] - I[3] are paired (in theory)
 template<typename T>
-__device__ T device_hermite_mult_2D(T *H, T b[][4], int I[], long int N, T h)
+__device__ T device_hermite_mult_2D(T *H, T b[][4], int I[], long long int N, T h)
 {
-	return b[0][0]* H[    I[0]] + b[0][1]* H[    I[1]] + b[1][0]* H[    I[2]] + b[1][1]* H[    I[3]] // Point interpolation
-	    + (b[0][2]* H[1*N+I[0]] + b[0][3]* H[1*N+I[1]] + b[1][2]* H[1*N+I[2]] + b[1][3]* H[1*N+I[3]]) * (h)  // dx
-	    + (b[2][0]* H[2*N+I[0]] + b[2][1]* H[2*N+I[1]] + b[3][0]* H[2*N+I[2]] + b[3][1]* H[2*N+I[3]]) * (h)  // dy
-	    + (b[2][2]* H[3*N+I[0]] + b[2][3]* H[3*N+I[1]] + b[3][2]* H[3*N+I[2]] + b[3][3]* H[3*N+I[3]]) * (h*h);  // dx dy
+	T h_out = (T)0.0;
+	for (int i_ord = 0; i_ord < 4; ++i_ord) {
+		T h_temp = (T)0.0;
+		int2 ind_ord = make_int2(2 * ((i_ord >> 1) & 1), 2*(i_ord & 1));  // (i/2)%2 and i%2
+		for (int i_p = 0; i_p < 4; ++i_p) {
+			h_temp += b[((i_p >> 1) & 1) + ind_ord.x][(i_p & 1) + ind_ord.y] * H[i_ord*N + I[i_p]];
+		}
+		if (i_ord >= 1) h_temp *= h;
+		if (i_ord >= 3) h_temp *= h;
+		h_out += h_temp;
+	}
+	return h_out;
+}
+template<typename T>
+__device__ T device_hermite_mult_3D(T *H, T b[][4][4], int I[], long long int N, T h)
+{
+	T h_out = (T)0.0;
+	for (int i_ord = 0; i_ord < 8; ++i_ord) {
+		T h_temp = (T)0.0;
+		int3 ind_ord = make_int3(2 * ((i_ord >> 2) & 1), 2 * ((i_ord >> 1) & 1), 2*(i_ord & 1));  // (i/4)%2, (i/2)%2 and i%2
+		for (int i_p = 0; i_p < 8; ++i_p) {
+			h_temp += b[((i_p >> 2) & 1) + ind_ord.x][((i_p >> 1) & 1) + ind_ord.y][(i_p & 1) + ind_ord.z]
+					* H[i_ord*N + I[i_p]];
+		}
+		if (i_ord >= 1) h_temp *= h;
+		if (i_ord >= 4) h_temp *= h;
+		h_out += h_temp;
+	}
+	return h_out;
 }
 
+
 template<typename T>
-__device__ T device_hermite_mult_2D_warp(T *H, T b[][4], int I[], int I_w[], T L, long int N, T h)
+__device__ T device_hermite_mult_2D_warp(T *H, T b[][4], int I[], int I_w[], T L, long long int N, T h)
 {
-	return b[0][0]* (H[I[0]] + I_w[0]*L) + b[0][1]* (H[I[1]] + I_w[1]*L) + b[1][0]* (H[I[2]] + I_w[2]*L) + b[1][1]* (H[I[3]] + I_w[3]*L) // Point interpolation
-	    + (b[0][2]* H[1*N+I[0]] + b[0][3]* H[1*N+I[1]] + b[1][2]* H[1*N+I[2]] + b[1][3]* H[1*N+I[3]]) * (h)  // dx
-	    + (b[2][0]* H[2*N+I[0]] + b[2][1]* H[2*N+I[1]] + b[3][0]* H[2*N+I[2]] + b[3][1]* H[2*N+I[3]]) * (h)  // dy
-	    + (b[2][2]* H[3*N+I[0]] + b[2][3]* H[3*N+I[1]] + b[3][2]* H[3*N+I[2]] + b[3][3]* H[3*N+I[3]]) * (h*h);  // dx dy
+	T h_out = (T)0.0;
+	for (int i_ord = 0; i_ord < 4; ++i_ord) {
+		T h_temp = (T)0.0;
+		int2 ind_ord = make_int2(2 * ((i_ord >> 1) & 1), 2*(i_ord & 1));  // (i_ord / 2) % 2 and (i_ord) % 2
+		for (int i_p = 0; i_p < 4; ++i_p) {
+			if (i_ord == 0) {
+				h_temp += b[((i_p >> 1) & 1) + ind_ord.x][(i_p & 1) + ind_ord.y] * (H[I[i_p]] + I_w[i_p]*L);
+			}
+			else {
+				h_temp += b[((i_p >> 1) & 1) + ind_ord.x][(i_p & 1) + ind_ord.y] * H[i_ord*N + I[i_p]];
+			}
+		}
+		if (i_ord >= 1) h_temp *= h;
+		if (i_ord >= 3) h_temp *= h;
+		h_out += h_temp;
+	}
+	return h_out;
+}
+template<typename T>
+__device__ T device_hermite_mult_3D_warp(T *H, T b[][4][4], int I[], int I_w[], T L, long long int N, T h)
+{
+	T h_out = (T)0.0;
+	for (int i_ord = 0; i_ord < 8; ++i_ord) {
+		T h_temp = (T)0.0;
+		int3 ind_ord = make_int3(2 * ((i_ord >> 2) & 1), 2 * ((i_ord >> 1) & 1), 2*(i_ord & 1));  // (i/4)%2, (i/2)%2 and i%2
+		for (int i_p = 0; i_p < 8; ++i_p) {
+			if (i_ord == 0) {
+				h_temp += b[((i_p >> 2) & 1) + ind_ord.x][((i_p >> 1) & 1) + ind_ord.y][(i_p & 1) + ind_ord.z]
+						* (H[I[i_p]] + I_w[i_p]*L);
+			}
+			else {
+				h_temp += b[((i_p >> 2) & 1) + ind_ord.x][((i_p >> 1) & 1) + ind_ord.y][(i_p & 1) + ind_ord.z]
+						* H[i_ord*N + I[i_p]];
+			}
+		}
+		if (i_ord >= 1) h_temp *= h;
+		if (i_ord >= 4) h_temp *= h;
+		h_out += h_temp;
+	}
+	return h_out;
 }
 
 
 // save memory by not storing the matrix b but computing it in the function
 template<typename T>
-__device__ T device_hermite_mult_2D(T *H, T bX[], T bY[], int I[], long int N, T h)
+__device__ T device_hermite_mult_2D(T *H, T bX[], T bY[], int I[], long long int N, T h)
 {
-	return bX[0]*bY[0]* H[    I[0]] + bX[1]*bY[0]* H[    I[1]] + bX[0]*bY[1]* H[    I[2]] + bX[1]*bY[1]* H[    I[3]] // Point interpolation
-	    + (bX[2]*bY[0]* H[1*N+I[0]] + bX[3]*bY[0]* H[1*N+I[1]] + bX[2]*bY[1]* H[1*N+I[2]] + bX[3]*bY[1]* H[1*N+I[3]]) * (h)  // dx
-	    + (bX[0]*bY[2]* H[2*N+I[0]] + bX[1]*bY[2]* H[2*N+I[1]] + bX[0]*bY[3]* H[2*N+I[2]] + bX[1]*bY[3]* H[2*N+I[3]]) * (h)  // dy
-	    + (bX[2]*bY[2]* H[3*N+I[0]] + bX[3]*bY[2]* H[3*N+I[1]] + bX[2]*bY[3]* H[3*N+I[2]] + bX[3]*bY[3]* H[3*N+I[3]]) * (h*h);  // dx dy
+	T h_out = (T)0.0;
+	for (int i_ord = 0; i_ord < 4; ++i_ord) {
+		T h_temp = (T)0.0;
+		int2 ind_ord = make_int2(2 * ((i_ord >> 1) & 1), 2*(i_ord & 1));  // (i/2)%2 and i%2
+		for (int i_p = 0; i_p < 4; ++i_p) {
+			h_temp += bX[((i_p >> 1) & 1) + ind_ord.x] * bY[(i_p & 1) + ind_ord.y] * H[i_ord*N + I[i_p]];
+		}
+		if (i_ord >= 1) h_temp *= h;
+		if (i_ord >= 3) h_temp *= h;
+		h_out += h_temp;
+	}
+	return h_out;
+}
+// save memory by not storing the matrix b but computing it in the function
+template<typename T>
+__device__ T device_hermite_mult_3D(T *H, T bX[], T bY[], T bZ[], int I[], long long int N, T h)
+{
+	T h_out = (T)0.0;
+	for (int i_ord = 0; i_ord < 8; ++i_ord) {
+		T h_temp = (T)0.0;
+		int3 ind_ord = make_int3(2*(i_ord & 1), 2 * ((i_ord >> 1) & 1), 2 * ((i_ord >> 2) & 1));  // (i/4)%2, (i/2)%2 and i%2
+		for (int i_p = 0; i_p < 4; ++i_p) {
+			h_temp += bX[(i_p& 1) + ind_ord.x] * bY[((i_p >> 1) & 1) + ind_ord.y] * bZ[((i_p >> 2) & 1) + ind_ord.z]
+					* H[i_ord*N + I[i_p]];
+		}
+		if (i_ord >= 1) h_temp *= h;
+		if (i_ord >= 4) h_temp *= h;
+		h_out += h_temp;
+	}
+	return h_out;
 }
 
 
@@ -97,6 +185,12 @@ __device__ void device_build_b(T *bX, T *bY, T dx, T dy) {
 //	bY[0] = H_f1_3(dy); bY[1] = H_f1_3(1-dy); bY[2] = H_f2_3(dy); bY[3] = -H_f2_3(1-dy);
 }
 template<typename T>
+__device__ void device_build_b(T *bX, T *bY, T *bZ, T dx, T dy, T dz) {
+	bX[0] = H_f3_3(1-dx); bX[1] = H_f3_3(dx); bX[2] = -H_f4_3(1-dx); bX[3] = H_f4_3(dx);
+	bY[0] = H_f3_3(1-dy); bY[1] = H_f3_3(dy); bY[2] = -H_f4_3(1-dy); bY[3] = H_f4_3(dy);
+	bZ[0] = H_f3_3(1-dz); bZ[1] = H_f3_3(dz); bZ[2] = -H_f4_3(1-dz); bZ[3] = H_f4_3(dz);
+}
+template<typename T>
 __device__ void device_build_bx(T *bX, T *bY, T dx, T dy) {
 	bX[0] = -H_f3x_3(1-dx); bX[1] = H_f3x_3(dx); bX[2] =  H_f4x_3(1-dx); bX[3] = H_f4x_3(dx);
 	bY[0] =  H_f3_3(1-dy);  bY[1] = H_f3_3(dy);  bY[2] = -H_f4_3(1-dy);  bY[3] = H_f4_3(dy);
@@ -104,11 +198,29 @@ __device__ void device_build_bx(T *bX, T *bY, T dx, T dy) {
 //	bY[0] = H_f1_3(dy);  bY[1] =  H_f1_3(1-dy);  bY[2] = H_f2_3(dy);  bY[3] = -H_f2_3(1-dy);
 }
 template<typename T>
+__device__ void device_build_bx(T *bX, T *bY, T *bZ, T dx, T dy, T dz) {
+	bX[0] = -H_f3x_3(1-dx); bX[1] = H_f3x_3(dx); bX[2] =  H_f4x_3(1-dx); bX[3] = H_f4x_3(dx);
+	bY[0] =  H_f3_3(1-dy);  bY[1] = H_f3_3(dy);  bY[2] = -H_f4_3(1-dy);  bY[3] = H_f4_3(dy);
+	bZ[0] =  H_f3_3(1-dz);  bZ[1] = H_f3_3(dz);  bZ[2] = -H_f4_3(1-dz);  bZ[3] = H_f4_3(dz);
+}
+template<typename T>
 __device__ void device_build_by(T *bX, T *bY, T dx, T dy) {
 	bX[0] =  H_f3_3(1-dx);  bX[1] = H_f3_3(dx);  bX[2] = -H_f4_3(1-dx);  bX[3] = H_f4_3(dx);
 	bY[0] = -H_f3x_3(1-dy); bY[1] = H_f3x_3(dy); bY[2] =  H_f4x_3(1-dy); bY[3] = H_f4x_3(dy);
 //	bX[0] = H_f1_3(dx);  bX[1] =  H_f1_3(1-dx);  bX[2] = H_f2_3(dx);  bX[3] = -H_f2_3(1-dx);
 //	bY[0] = H_f1x_3(dy); bY[1] = -H_f1x_3(1-dy); bY[2] = H_f2x_3(dy); bY[3] =  H_f2x_3(1-dy);
+}
+template<typename T>
+__device__ void device_build_by(T *bX, T *bY, T *bZ, T dx, T dy, T dz) {
+	bX[0] =  H_f3_3(1-dx);  bX[1] = H_f3_3(dx);  bX[2] = -H_f4_3(1-dx);  bX[3] = H_f4_3(dx);
+	bY[0] = -H_f3x_3(1-dy); bY[1] = H_f3x_3(dy); bY[2] =  H_f4x_3(1-dy); bY[3] = H_f4x_3(dy);
+	bZ[0] =  H_f3_3(1-dz);  bZ[1] = H_f3_3(dz);  bZ[2] = -H_f4_3(1-dz);  bZ[3] = H_f4_3(dz);
+}
+template<typename T>
+__device__ void device_build_bz(T *bX, T *bY, T *bZ, T dx, T dy, T dz) {
+	bX[0] =  H_f3_3(1-dx);  bX[1] = H_f3_3(dx);  bX[2] = -H_f4_3(1-dx);  bX[3] = H_f4_3(dx);
+	bY[0] =  H_f3_3(1-dy);  bY[1] = H_f3_3(dy);  bY[2] = -H_f4_3(1-dy);  bY[3] = H_f4_3(dy);
+	bZ[0] = -H_f3x_3(1-dz); bZ[1] = H_f3x_3(dz); bZ[2] =  H_f4x_3(1-dz); bZ[3] = H_f4x_3(dz);
 }
 // combine the build of the quintic vectors to reduce redundant code, build from later matrices due to less computations
 template<typename T>

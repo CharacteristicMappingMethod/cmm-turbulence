@@ -14,23 +14,25 @@
 #include "cmm-grid2d.h"
 
 
-TCudaGrid2D::TCudaGrid2D (int NX, int NY, double *bounds)
+TCudaGrid2D::TCudaGrid2D (int NX, int NY, int NZ, double *bounds)
 {
 	this->NX = NX;
 	this->NX_fft = (int)(NX/2.0+1);
 	this->NY = NY;
+	this->NZ = NZ;
 
 	this->h = (bounds[1] - bounds[0]) / (float)NX;  // for quadratic problems, is used everywhere so changing it is tedious
 
 	this->hx = (bounds[1] - bounds[0]) / (float)NX;
 	this->hy = (bounds[3] - bounds[2]) / (float)NY;
+	this->hz = (bounds[5] - bounds[4]) / (float)NZ;
 
 	for (int i_b = 0; i_b < 4; ++i_b) {
 		this->bounds[i_b] = bounds[i_b];
 	}
 
-	this->N = NX*NY;
-	this->Nfft = NX_fft*NY;
+	this->N = NX*NY*NZ;
+	this->Nfft = NX_fft*NY*NZ;
 
 	this->sizeNReal = sizeof(double)*N;
 	this->sizeNComplex = sizeof(cufftDoubleComplex)*N;
@@ -43,30 +45,32 @@ TCudaGrid2D::TCudaGrid2D (int NX, int NY, double *bounds)
 
 	blocksPerGrid.x = ceil(NX/(double)threadsPerBlock.x);
 	blocksPerGrid.y = ceil(NY/(double)threadsPerBlock.y);
-	blocksPerGrid.z = 1;
+	blocksPerGrid.z = ceil(NZ/(double)threadsPerBlock.z);
 
 	fft_blocks.x = ceil((NX+1)/2.0/(double)threadsPerBlock.x);
 	fft_blocks.y = ceil(NY/(double)threadsPerBlock.y);
-	fft_blocks.z = 1;
+	fft_blocks.z = ceil(NZ/(double)threadsPerBlock.z);
 }
 
 
-void fill_grid(TCudaGrid2D *Grid, int NX, int NY, double *bounds) {
+void fill_grid(TCudaGrid2D *Grid, int NX, int NY, int NZ, double *bounds) {
 	Grid->NX = NX;
 	Grid->NX_fft = (int)(NX/2.0+1);
 	Grid->NY = NY;
+	Grid->NZ = NZ;
 
 	Grid->h = (bounds[1] - bounds[0]) / (float)NX;  // for quadratic problems, is used everywhere so changing it is tedious
 
 	Grid->hx = (bounds[1] - bounds[0]) / (float)NX;
 	Grid->hy = (bounds[3] - bounds[2]) / (float)NY;
+	Grid->hz = (bounds[5] - bounds[4]) / (float)NZ;
 
-	for (int i_b = 0; i_b < 4; ++i_b) {
+	for (int i_b = 0; i_b < 6; ++i_b) {
 		Grid->bounds[i_b] = bounds[i_b];
 	}
 
-	Grid->N = NX*NY;
-	Grid->Nfft = Grid->NX_fft*NY;
+	Grid->N = NX*NY*NZ;
+	Grid->Nfft = Grid->NX_fft*NY*NZ;
 
 	Grid->sizeNReal = sizeof(double)*Grid->N;
 	Grid->sizeNComplex = sizeof(cufftDoubleComplex)*Grid->N;
@@ -79,11 +83,11 @@ void fill_grid(TCudaGrid2D *Grid, int NX, int NY, double *bounds) {
 
 	Grid->blocksPerGrid.x = ceil(NX/(double)Grid->threadsPerBlock.x);
 	Grid->blocksPerGrid.y = ceil(NY/(double)Grid->threadsPerBlock.y);
-	Grid->blocksPerGrid.z = 1;
+	Grid->blocksPerGrid.z = ceil(NZ/(double)Grid->threadsPerBlock.z);
 
 	Grid->fft_blocks.x = ceil((NX+1)/2.0/(double)Grid->threadsPerBlock.x);
 	Grid->fft_blocks.y = ceil(NY/(double)Grid->threadsPerBlock.y);
-	Grid->fft_blocks.z = 1;
+	Grid->fft_blocks.z = ceil(NZ/(double)Grid->threadsPerBlock.z);
 }
 
 

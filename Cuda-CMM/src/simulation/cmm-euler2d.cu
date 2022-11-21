@@ -51,7 +51,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	*						 	 Constants							   *
 	*******************************************************************/
 	
-	double bounds[4] = {0, twoPI, 0, twoPI};							// boundary information for translating
+	double bounds[6] = {0, twoPI, 0, twoPI, 0, 0};						// boundary information for translating
 	double t0 = 0;														// time - initial
 	double dt;															// time - step final
 	int iterMax;														// time - maximum iteration count for safety
@@ -77,7 +77,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	// shared parameters
 	iterMax = (int)(1.05*ceil(SettingsMain.getFinalTime() / dt));  // maximum amount of steps, important for more dynamic steps, however, reduced for now
 
-	double map_size = 8*SettingsMain.getGridCoarse()*SettingsMain.getGridCoarse()*sizeof(double) / 1e6;  // size of one mapping
+	double map_size = 8*(double)SettingsMain.getGridCoarse()*(double)SettingsMain.getGridCoarse()*sizeof(double) / 1e6;  // size of one mapping
 	int Nb_array_RAM = 4;  // fixed for four different stacks
 	int cpu_map_num = int(double(SettingsMain.getMemRamCpuRemaps())/map_size/double(Nb_array_RAM));  // define how many more remappings we can save on CPU than on GPU
 	if (SettingsMain.getForwardMap()) cpu_map_num = (int)(cpu_map_num/2.0);  // divide by to in case of forward map too
@@ -114,6 +114,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
     if (SettingsMain.getVerbose() >= 1) {
 		message = "Initial condition = " + SettingsMain.getInitialCondition(); std::cout<<message+"\n"; logger.push(message);
 		message = "Iter max = " + to_str(iterMax); std::cout<<message+"\n"; logger.push(message);
+		message = "Map size in MB = " + to_str((int)map_size); std::cout<<message+"\n"; logger.push(message);
 		message = "Map stack length on CPU = " + to_str(cpu_map_num); std::cout<<message+"\n"; logger.push(message);
 		message = "Map stack length total on CPU = " + to_str(cpu_map_num * Nb_array_RAM); std::cout<<message+"\n"; logger.push(message);
 		message = "Name of simulation = " + SettingsMain.getFileName(); std::cout<<message+"\n"; logger.push(message);
@@ -129,14 +130,14 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	*																   *
 	*******************************************************************/
 	
-	TCudaGrid2D Grid_coarse(SettingsMain.getGridCoarse(), SettingsMain.getGridCoarse(), bounds);
-	TCudaGrid2D Grid_fine(SettingsMain.getGridFine(), SettingsMain.getGridFine(), bounds);
-	TCudaGrid2D Grid_psi(SettingsMain.getGridPsi(), SettingsMain.getGridPsi(), bounds);
-	TCudaGrid2D Grid_vort(SettingsMain.getGridVort(), SettingsMain.getGridVort(), bounds);
+	TCudaGrid2D Grid_coarse(SettingsMain.getGridCoarse(), SettingsMain.getGridCoarse(), 1, bounds);
+	TCudaGrid2D Grid_fine(SettingsMain.getGridFine(), SettingsMain.getGridFine(), 1, bounds);
+	TCudaGrid2D Grid_psi(SettingsMain.getGridPsi(), SettingsMain.getGridPsi(), 1, bounds);
+	TCudaGrid2D Grid_vort(SettingsMain.getGridVort(), SettingsMain.getGridVort(), 1, bounds);
 
 	TCudaGrid2D *Grid_sample = (TCudaGrid2D *)malloc(sizeof(TCudaGrid2D) * SettingsMain.getSaveSampleNum());
 	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
-		fill_grid(Grid_sample+i_save, SettingsMain.getSaveSample()[i_save].grid, SettingsMain.getSaveSample()[i_save].grid, bounds);
+		fill_grid(Grid_sample+i_save, SettingsMain.getSaveSample()[i_save].grid, SettingsMain.getSaveSample()[i_save].grid, 1, bounds);
 	}
 
 //	TCudaGrid2D Grid_sample[SettingsMain.getSampleNum()];
@@ -144,12 +145,12 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 	TCudaGrid2D *Grid_zoom = (TCudaGrid2D *)malloc(sizeof(TCudaGrid2D) * SettingsMain.getSaveZoomNum());
 	for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); ++i_save) {
-		fill_grid(Grid_zoom+i_save, SettingsMain.getSaveZoom()[i_save].grid, SettingsMain.getSaveZoom()[i_save].grid, bounds);
+		fill_grid(Grid_zoom+i_save, SettingsMain.getSaveZoom()[i_save].grid, SettingsMain.getSaveZoom()[i_save].grid, 1, bounds);
 	}
 
 //	TCudaGrid2D Grid_zoom(SettingsMain.getGridZoom(), SettingsMain.getGridZoom(), bounds);
 	
-	TCudaGrid2D Grid_discrete(SettingsMain.getInitialDiscreteGrid(), SettingsMain.getInitialDiscreteGrid(), bounds);
+	TCudaGrid2D Grid_discrete(SettingsMain.getInitialDiscreteGrid(), SettingsMain.getInitialDiscreteGrid(), 1, bounds);
 
 	/*******************************************************************
 	*							CuFFT plans							   *
@@ -227,7 +228,11 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		cufftSetWorkArea(cufft_plan_discrete_D2Z, fft_work_area); cufftSetWorkArea(cufft_plan_discrete_Z2D, fft_work_area);
 	}
 	
+	if (SettingsMain.getVerbose() >= 4) {
+		message = "Initialized cuFFT plans"; std::cout<<message+"\n"; logger.push(message);
+	}
 	
+
 	/*******************************************************************
 	*							Temporary variable
 	*          Used for temporary copying and storing of data
@@ -236,7 +241,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	*******************************************************************/
 	
 	// set after largest grid, checks are for failsave in case one chooses weird grid
-	long int size_max_c = std::max(Grid_fine.sizeNfft, Grid_fine.sizeNReal);
+	long long int size_max_c = std::max(Grid_fine.sizeNfft, Grid_fine.sizeNReal);
 	size_max_c = std::max(size_max_c, 8*Grid_coarse.sizeNReal);
 	size_max_c = std::max(size_max_c, 2*Grid_coarse.sizeNfft);  // redundant, for palinstrophy
 	size_max_c = std::max(size_max_c, Grid_psi.sizeNfft);
@@ -251,7 +256,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		size_max_c = std::max(size_max_c, 2*Grid_sample[i_save].sizeNReal);  // is basically redundant, but lets take it anyways
 		if (SettingsMain.getForwardMap() and SettingsMain.getParticlesForwarded()) {
 			// we need to save and transfer new particle positions somehow, in addition to map
-			long int stacked_size = 2*(Grid_sample[i_save].sizeNReal*sizeof(double));
+			long long int stacked_size = 2*(Grid_sample[i_save].sizeNReal*sizeof(double));
 			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
 				stacked_size += 2*SettingsMain.getParticlesForwarded()[i_p].num*sizeof(double);
 			}
@@ -263,7 +268,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 //		if (SettingsMain.getZoomSavePsi()) size_max_c = std::max(size_max_c, 4*Grid_zoom.sizeNReal);
 		if (SettingsMain.getForwardMap() and SettingsMain.getParticlesForwarded()) {
 			// we need to save and transfer new particle positions somehow, in addition to map
-			long int stacked_size = 2*(Grid_zoom[i_save].sizeNReal*sizeof(double));
+			long long int stacked_size = 2*(Grid_zoom[i_save].sizeNReal*sizeof(double));
 			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
 				stacked_size += 2*SettingsMain.getParticlesForwarded()[i_p].num*sizeof(double);
 			}
@@ -272,15 +277,19 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	}
 	// take care of fluid particles in order to save the velocity later if needed, normally shouldn't add restrictions
 	for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
-		size_max_c = std::max(size_max_c, (long int)(2*SettingsMain.getParticlesAdvected()[i_p].num*sizeof(double)));
+		size_max_c = std::max(size_max_c, (long long int)(2*SettingsMain.getParticlesAdvected()[i_p].num*sizeof(double)));
 	}
 	// for now three thrash variables are needed for cufft with hermites
 	cufftDoubleComplex *Dev_Temp_C1;
 	cudaMalloc((void**)&Dev_Temp_C1, size_max_c);
 	mb_used_RAM_GPU += size_max_c / 1e6;
 	
+	if (SettingsMain.getVerbose() >= 4) {
+		message = "Initialized GPU temp array"; std::cout<<message+"\n"; logger.push(message);
+	}
+
 	// we actually only need one host array, as we always just copy from and to this and never really read files
-	long int size_max_r = std::max(4*Grid_fine.N, 4*Grid_psi.N);
+	long long int size_max_r = std::max(4*Grid_fine.N, 4*Grid_psi.N);
 	size_max_r = std::max(size_max_r, 4*Grid_coarse.N);
 	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
 		size_max_r = std::max(size_max_r, 4*Grid_sample[i_save].N);
@@ -291,6 +300,10 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	double *Host_save;
 	Host_save = new double[size_max_r];
 	mb_used_RAM_CPU = size_max_r*sizeof(double) / 1e6;
+
+	if (SettingsMain.getVerbose() >= 4) {
+		message = "Initialized CPU temp array"; std::cout<<message+"\n"; logger.push(message);
+	}
 
 	
 	/*******************************************************************
@@ -306,6 +319,10 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	cudaMalloc((void**)&Dev_ChiY, 4*Grid_coarse.sizeNReal);
 	mb_used_RAM_GPU += 8*Grid_coarse.sizeNReal / 1e6;
 
+	if (SettingsMain.getVerbose() >= 4) {
+		message = "Initialized maps"; std::cout<<message+"\n"; logger.push(message);
+	}
+
 	
 
 	/*******************************************************************
@@ -319,6 +336,10 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	MapStack Map_Stack(&Grid_coarse, cpu_map_num);
 	mb_used_RAM_GPU += 8*Grid_coarse.sizeNReal / 1e6;
 	mb_used_RAM_CPU += cpu_map_num * map_size * Nb_array_RAM;
+
+	if (SettingsMain.getVerbose() >= 4) {
+		message = "Initialized CPU map stack"; std::cout<<message+"\n\n"; logger.push(message);
+	}
 
 
 	/*******************************************************************
@@ -343,6 +364,10 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		h_rand[i_rand] = rand_fun(rand_gen);
 	}
 	cudaMemcpyToSymbol(d_rand, h_rand, sizeof(double)*1000);
+
+	if (SettingsMain.getVerbose() >= 4) {
+		message = "Initialized coarse and fine vorticity"; std::cout<<message+"\n"; logger.push(message);
+	}
 
 	
 	/*******************************************************************
@@ -383,6 +408,10 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			std::cout<<message+"\n"; logger.push(message);
 		}
 
+		if (SettingsMain.getVerbose() >= 4) {
+			message = "Initialized discrete initial condition"; std::cout<<message+"\n"; logger.push(message);
+		}
+
 		delete [] Host_W_initial;
 	}
 
@@ -408,7 +437,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 	// not ideal and a bit hackery, but my current initialization for the stack sucks
 	TCudaGrid2D Grid_forward(1+(SettingsMain.getGridCoarse()-1)*SettingsMain.getForwardMap(),
-			1+(SettingsMain.getGridCoarse()-1)*SettingsMain.getForwardMap(), bounds);
+			1+(SettingsMain.getGridCoarse()-1)*SettingsMain.getForwardMap(), 1, bounds);
 
 	// initialize forward map
 	double *Dev_ChiX_f, *Dev_ChiY_f;
@@ -416,12 +445,20 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		cudaMalloc((void**)&Dev_ChiX_f, 4*Grid_forward.sizeNReal);
 		cudaMalloc((void**)&Dev_ChiY_f, 4*Grid_forward.sizeNReal);
 		mb_used_RAM_GPU += 8*Grid_forward.sizeNReal / 1e6;
+
+		if (SettingsMain.getVerbose() >= 4) {
+			message = "Initialized forward map"; std::cout<<message+"\n"; logger.push(message);
+		}
 	}
 
 	// initialize foward map stack dynamically to be super small if we are not computing it
 	MapStack Map_Stack_f(&Grid_forward, cpu_map_num);
 	mb_used_RAM_GPU += 8*Grid_forward.sizeNReal / 1e6;
 	mb_used_RAM_CPU += cpu_map_num * map_size * Nb_array_RAM * SettingsMain.getForwardMap();
+
+	if (SettingsMain.getForwardMap() and SettingsMain.getVerbose() >= 4) {
+		message = "Initialized CPU forward map stack"; std::cout<<message+"\n"; logger.push(message);
+	}
 
 	// initialize forward particles position, will stay constant over time though so a dynamic approach could be chosen later too
 	// however, the particles should not take up too much memory, so I guess it's okay
@@ -444,6 +481,12 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 			// initialize particle position with 1 as forward particle type for parameters
 			init_particles(Dev_forward_particles_pos[i_p], SettingsMain, forward_particles_thread, forward_particles_block[i_p], bounds, 1, i_p);
+
+			// print some output to the Console
+			if (SettingsMain.getVerbose() >= 1) {
+				message = "Particles set F"+ to_str_0(i_p+1, 2) +" : Num = " + to_str(particles_forwarded[i_p].num, 8);
+				std::cout<<message+"\n"; logger.push(message);
+			}
 		}
 	}
 
