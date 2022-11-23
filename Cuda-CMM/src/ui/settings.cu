@@ -56,6 +56,7 @@ void SettingsCMM::setPresets() {
 	 *  1	-	Initialization and finishing output
 	 *  2	-	Step and Saving output
 	 *  3	-	Version stuff and Conservation results
+	 *  4	-	Array initialization details
 	 */
 	int verbose = 3;
 
@@ -63,7 +64,7 @@ void SettingsCMM::setPresets() {
 	double final_time = 1;  // end of computation
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
-	int steps_per_sec = 32;  // how many steps do we want per seconds?
+	int steps_per_sec = 8192;  // how many steps do we want per seconds?
 	// dt will be set in cudaeuler, so that all changes can be applied there
 
 	/*
@@ -109,7 +110,6 @@ void SettingsCMM::setPresets() {
 	// set minor properties
 	double incomp_threshhold = 1e-5;  // the maximum allowance of map to deviate from grad_chi begin 1
 	double map_epsilon = 1e-3;  // distance used for foot points for GALS map advection
-//	double map_epsilon = 6.283185307179/512.0;  // distance used for foot points for GALS map advection
 	// skip remapping, useful for convergence tests
 	bool skip_remapping = false;
 

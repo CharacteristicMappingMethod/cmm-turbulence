@@ -19,7 +19,7 @@
 *						  Hermite interpolation					   *
 *******************************************************************/
 // this computation is used very often, using it as a function greatL.y reduces code-redundancy
-// however, here we have 8 scattered memory accesses where I[0] - I[1] and I[2] - I[3] are paired (in theory)
+// however, here we have 8 scattered memory accesses where I[0] - I[1] and I[2] - I[3] are paired most of the time (in theory)
 template<typename T>
 __device__ T device_hermite_mult_2D(T *H, T b[][4], int I[], long long int N, T h)
 {
@@ -101,7 +101,6 @@ __device__ T device_hermite_mult_3D_warp(T *H, T b[][4][4], int I[], int I_w[], 
 }
 
 
-// save memory by not storing the matrix b but computing it in the function
 template<typename T>
 __device__ T device_hermite_mult_2D(T *H, T bX[], T bY[], int I[], long long int N, T h)
 {
@@ -110,7 +109,7 @@ __device__ T device_hermite_mult_2D(T *H, T bX[], T bY[], int I[], long long int
 		T h_temp = (T)0.0;
 		int2 ind_ord = make_int2(2 * ((i_ord >> 1) & 1), 2*(i_ord & 1));  // (i/2)%2 and i%2
 		for (int i_p = 0; i_p < 4; ++i_p) {
-			h_temp += bX[((i_p >> 1) & 1) + ind_ord.x] * bY[(i_p & 1) + ind_ord.y] * H[i_ord*N + I[i_p]];
+			h_temp += bY[((i_p >> 1) & 1) + ind_ord.x] * bX[(i_p & 1) + ind_ord.y] * H[i_ord*N + I[i_p]];
 		}
 		if (i_ord >= 1) h_temp *= h;
 		if (i_ord >= 3) h_temp *= h;
@@ -156,6 +155,25 @@ __device__ void device_init_ind(int *I, T *dxy, T x, T y, TCudaGrid2D Grid) {
 	I[0] = Iy0 * Grid.NX + Ix0; I[1] = Iy0 * Grid.NX + Ix1; I[2] = Iy1 * Grid.NX + Ix0; I[3] = Iy1 * Grid.NX + Ix1;
 }
 template<typename T>
+__device__ void device_init_ind(int *I, T *dxyz, T x, T y, T z, TCudaGrid2D Grid) {
+	//cell index
+	int Ix0 = floor(x/Grid.hx); int Iy0 = floor(y/Grid.hy); int Iz0 = floor(z/Grid.hz);
+	int Ix1 = Ix0 + 1; int Iy1 = Iy0 + 1; int Iz1 = Iz0 + 1;
+
+	//dx, dy
+	dxyz[0] = x/Grid.hx - Ix0; dxyz[1] = y/Grid.hy - Iy0; dxyz[2] = z/Grid.hz - Iz0;
+
+	// project into domain, < 0 check is needed as integer division rounds towards 0
+	Ix0 -= (Ix0/Grid.NX - (Ix0 < 0))*Grid.NX; Iy0 -= (Iy0/Grid.NY - (Iy0 < 0))*Grid.NY; Iz0 -= (Iz0/Grid.NZ - (Iz0 < 0))*Grid.NZ;
+	Ix1 -= (Ix1/Grid.NX - (Ix1 < 0))*Grid.NX; Iy1 -= (Iy1/Grid.NY - (Iy1 < 0))*Grid.NY; Iz1 -= (Iz1/Grid.NZ - (Iz1 < 0))*Grid.NZ;
+
+	// I000, I100, I010, I110, I001, I101, I011, I111 in Vector to shorten function calls
+	I[0] = Iz0 * Grid.NX*Grid.NY + Iy0 * Grid.NX + Ix0; I[1] = Iz0 * Grid.NX*Grid.NY + Iy0 * Grid.NX + Ix1;
+	I[2] = Iz0 * Grid.NX*Grid.NY + Iy1 * Grid.NX + Ix0; I[3] = Iz0 * Grid.NX*Grid.NY + Iy1 * Grid.NX + Ix1;
+	I[4] = Iz1 * Grid.NX*Grid.NY + Iy0 * Grid.NX + Ix0; I[5] = Iz1 * Grid.NX*Grid.NY + Iy0 * Grid.NX + Ix1;
+	I[6] = Iz1 * Grid.NX*Grid.NY + Iy1 * Grid.NX + Ix0; I[7] = Iz1 * Grid.NX*Grid.NY + Iy1 * Grid.NX + Ix1;
+}
+template<typename T>
 __device__ void device_init_ind_diff(int *I, int *I_w, T *dxy, T x, T y, TCudaGrid2D Grid) {
 	// cell index
 	int Ix0 = floor(x/Grid.hx); int Iy0 = floor(y/Grid.hy);
@@ -173,6 +191,29 @@ __device__ void device_init_ind_diff(int *I, int *I_w, T *dxy, T x, T y, TCudaGr
 
 	// I00, I10, I01, I11 in Vector to shorten function calls
 	I[0] = Iy0 * Grid.NX + Ix0; I[1] = Iy0 * Grid.NX + Ix1; I[2] = Iy1 * Grid.NX + Ix0; I[3] = Iy1 * Grid.NX + Ix1;
+}
+template<typename T>
+__device__ void device_init_ind_diff(int *I, int *I_w, T *dxyz, T x, T y, T z, TCudaGrid2D Grid) {
+	// cell index
+	int Ix0 = floor(x/Grid.hx); int Iy0 = floor(y/Grid.hy); int Iz0 = floor(z/Grid.hz);
+	int Ix1 = Ix0 + 1; int Iy1 = Iy0 + 1; int Iz1 = Iz0 + 1;
+
+	//dx, dy
+	dxyz[0] = x/Grid.hx - Ix0; dxyz[1] = y/Grid.hy - Iy0; dxyz[2] = z/Grid.hz - Iz0;
+
+	//warping, compute projection needed to map onto L.x/L.y domain, add 1 for negative values to accommodate sign
+	I_w[0] = Ix0/Grid.NX - (Ix0 < 0); I_w[1] = Iy0/Grid.NY - (Iy0 < 0);
+	I_w[2] = Ix1/Grid.NX - (Ix1 < 0); I_w[3] = Iy1/Grid.NY - (Iy1 < 0);
+	I_w[4] = Iz0/Grid.NZ - (Iz0 < 0); I_w[5] = Iz1/Grid.NZ - (Iz1 < 0);
+
+	// project back into domain
+	Ix0 -= I_w[0]*Grid.NX; Iy0 -= I_w[1]*Grid.NY; Ix1 -= I_w[2]*Grid.NX; Iy1 -= I_w[3]*Grid.NY; Iz0 -= I_w[4]*Grid.NZ; Iz1 -= I_w[5]*Grid.NZ;
+
+	// I000, I100, I010, I110, I001, I101, I011, I111 in Vector to shorten function calls
+	I[0] = Iz0 * Grid.NX*Grid.NY + Iy0 * Grid.NX + Ix0; I[1] = Iz0 * Grid.NX*Grid.NY + Iy0 * Grid.NX + Ix1;
+	I[2] = Iz0 * Grid.NX*Grid.NY + Iy1 * Grid.NX + Ix0; I[3] = Iz0 * Grid.NX*Grid.NY + Iy1 * Grid.NX + Ix1;
+	I[4] = Iz1 * Grid.NX*Grid.NY + Iy0 * Grid.NX + Ix0; I[5] = Iz1 * Grid.NX*Grid.NY + Iy0 * Grid.NX + Ix1;
+	I[6] = Iz1 * Grid.NX*Grid.NY + Iy1 * Grid.NX + Ix0; I[7] = Iz1 * Grid.NX*Grid.NY + Iy1 * Grid.NX + Ix1;
 }
 
 
@@ -245,6 +286,16 @@ __device__ void device_build_b_mat(T b[][4], T bX[], T bY[]) {
 	for (int i_x = 0; i_x < 4; ++i_x) {
 		for (int i_y = 0; i_y < 4; ++i_y) {
 			b[i_x][i_y] = bX[i_y]*bY[i_x];
+		}
+	}
+}
+template<typename T>
+__device__ void device_build_b_mat(T b[][4][4], T bX[], T bY[], T bZ[]) {
+	for (int i_x = 0; i_x < 4; ++i_x) {
+		for (int i_y = 0; i_y < 4; ++i_y) {
+			for (int i_z = 0; i_z < 4; ++i_z) {
+				b[i_x][i_y][i_z] = bX[i_z]*bY[i_y]*bZ[i_x];
+			}
 		}
 	}
 }

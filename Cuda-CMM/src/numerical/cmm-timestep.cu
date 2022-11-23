@@ -18,6 +18,8 @@
 
 #include "stdio.h"
 
+extern __constant__ double d_L1[4], d_L12[4], d_c1[12], d_cx[12], d_cy[12], d_cxy[12], d_bounds[4];
+
 /*******************************************************************
 *		script with all different timestep methods
 *			_b stands for backwards
@@ -29,7 +31,7 @@ __device__ void euler_exp(double *psi, double *x_in, double *x_out, TCudaGrid2D 
 	x_out[0] = x_in[0] + dt * u[0];
 	x_out[1] = x_in[1] + dt * u[1];
 }
-__device__ void euler_exp_b(double *psi, double *d_L1, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
+__device__ void euler_exp_b(double *psi, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
 	double u[8]; // velocity placeholders, set after largest l_order
 	device_hermite_interpolate_grad_2D(psi, x_in, u, Grid, l_order);
 	double k[2] = {d_L1[0] * u[0], d_L1[0] * u[1]};
@@ -43,7 +45,7 @@ __device__ void euler_exp_b(double *psi, double *d_L1, double *x_in, double *x_o
 
 
 // second order Heun
-__device__ void RK2_heun(double *psi, double *d_L1, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
+__device__ void RK2_heun(double *psi, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
 	double u[8];  // velocity placeholders
 	double k[4];  // step placeholders
 
@@ -61,7 +63,7 @@ __device__ void RK2_heun(double *psi, double *d_L1, double *x_in, double *x_out,
 	x_out[0] = x_in[0] + dt * (k[0] + k[2])/2;
 	x_out[1] = x_in[1] + dt * (k[1] + k[3])/2;
 }
-__device__ void RK2_heun_b(double *psi, double *d_L1, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
+__device__ void RK2_heun_b(double *psi, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
 	double u[8];  // velocity placeholders
 
 	device_hermite_interpolate_grad_2D(psi, x_in, u, Grid, l_order);
@@ -138,7 +140,7 @@ __device__ void adam_bashford_2_pc_b(double *psi, double *x_in, double *x_out, T
  *   1  | -1   2
  *      | 1/6 2/3 1/6
  */
-__device__ void RK3_classical(double *psi, double *d_L1, double *d_L12, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
+__device__ void RK3_classical(double *psi, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
 	double u[8];  // velocity placeholders
 	double k[6];  // step placeholders
 
@@ -170,7 +172,7 @@ __device__ void RK3_classical(double *psi, double *d_L1, double *d_L12, double *
 	x_out[0] = x_in[0] + dt * (k[0] + 4*k[2] + k[4])/6.0;
 	x_out[1] = x_in[1] + dt * (k[1] + 4*k[3] + k[5])/6.0;
 }
-__device__ void RK3_classical_b(double *psi, double *d_L1, double *d_L12, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
+__device__ void RK3_classical_b(double *psi, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
 	double u[8];  // velocity placeholders
 	double k[6];  // step placeholders
 
@@ -213,7 +215,7 @@ __device__ void RK3_classical_b(double *psi, double *d_L1, double *d_L12, double
  *   1  |  0   0   1
  *      | 1/6 1/3 1/3 1/6
  */
-__device__ void RK4_classical(double *psi, double *d_L1, double *d_L12, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
+__device__ void RK4_classical(double *psi, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
 	double u[8];  // velocity placeholders
 	double k[8];  // step placeholders
 
@@ -256,7 +258,7 @@ __device__ void RK4_classical(double *psi, double *d_L1, double *d_L12, double *
 	x_out[0] = x_in[0] + dt * (k[0] + 2*k[2] + 2*k[4] + k[6])/6.0;
 	x_out[1] = x_in[1] + dt * (k[1] + 2*k[3] + 2*k[5] + k[7])/6.0;
 }
-__device__ void RK4_classical_b(double *psi, double *d_L1, double *d_L12, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
+__device__ void RK4_classical_b(double *psi, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
 	double u[8];  // velocity placeholders
 	double k[8];  // step placeholders
 
@@ -340,7 +342,7 @@ __device__ void RK3_optimized(double *psi, double *x_in, double *x_out, TCudaGri
  * 2 |  4   -2
  *   | 5/12 2/3 -1/12
  */
-__device__ void RK3_optimized_b(double *psi, double *d_L1, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
+__device__ void RK3_optimized_b(double *psi, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
 	double u[8];  // velocity placeholders
 	double k[6];  // step placeholders
 
@@ -379,7 +381,7 @@ __device__ void RK3_optimized_b(double *psi, double *d_L1, double *x_in, double 
  *   1  | -3/2  3/2   1
  *      |   0   2/3  1/6  1/6
  */
-__device__ void RK4_optimized(double *psi, double *d_L1, double *d_L12, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
+__device__ void RK4_optimized(double *psi, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
 	double u[8];  // velocity placeholders
 	double k[8];  // step placeholders
 
@@ -427,7 +429,7 @@ __device__ void RK4_optimized(double *psi, double *d_L1, double *d_L12, double *
  *   1  |  0  -1/3  4/3
  *      | 1/6 -1/12 2/3 1/4
  */
-__device__ void RK4_optimized_b(double *psi, double *d_L1, double *d_L12, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
+__device__ void RK4_optimized_b(double *psi, double *x_in, double *x_out, TCudaGrid2D Grid, double dt, int l_order) {
 	double u[8];  // velocity placeholders
 	double k[8];  // step placeholders
 
