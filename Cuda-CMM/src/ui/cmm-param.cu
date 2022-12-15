@@ -94,7 +94,6 @@ void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 		file << write_line("lagrange_override", to_str(SettingsMain.getLagrangeOverride(), 16));
 		file << write_line("lagrange_init_higher_order", to_str(SettingsMain.getLagrangeInitHigherOrder(), 16));
 		file << write_line("map_update_order", to_str(SettingsMain.getMapUpdateOrder(), 16));
-		file << write_line("map_update_grid", to_str(SettingsMain.getMapUpdateGrid(), 16));
 		file << write_line("molly_stencil", to_str(SettingsMain.getMollyStencil(), 16));
 		file << write_line("freq_cut_psi", to_str(SettingsMain.getFreqCutPsi(), 16));
 		file << write_line("skip_remapping", to_str(SettingsMain.getSkipRemapping(), 16));

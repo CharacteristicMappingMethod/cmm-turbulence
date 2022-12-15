@@ -40,10 +40,6 @@ __global__ void k_invertibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_b
 		double *ChiX_b, double *ChiY_b, double *ChiX_f, double *ChiY_f, double *abs_invert);
 
 // map update kernels
-__global__ void k_compute_footpoints(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi,
-		TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double t, double dt, int time_integration_num, int l_order, int direction);
-__global__ void k_map_update(double *Chi, double *Chi_new, TCudaGrid2D Grid_map, int map_ord_1, int warp_direc);
-
 __global__ void k_advect_using_stream_hermite(double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y, double *psi,
 		TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi, double t, double dt, double ep, int time_integration_num, int map_update_order_num, int l_order, int direction);
 

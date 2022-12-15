@@ -43,7 +43,7 @@ void SettingsCMM::setPresets() {
 	 *  "two_cosine"			-	stationary setup of two cosine vortices
 	 *  "vortex_sheets"			-	vortex sheets used for singularity studies
 	 */
-	std::string initial_condition = "vortex_sheets";
+	std::string initial_condition = "4_nodes";
 
 	// possibility to compute from discrete initial condition
 	bool initial_discrete = false;
@@ -56,14 +56,15 @@ void SettingsCMM::setPresets() {
 	 *  1	-	Initialization and finishing output
 	 *  2	-	Step and Saving output
 	 *  3	-	Version stuff and Conservation results
+	 *  4	-	Array initialization details
 	 */
 	int verbose = 3;
 
 	// set time properties
-	double final_time = 5;  // end of computation
+	double final_time = 1;  // end of computation
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
-	int steps_per_sec = 256;  // how many steps do we want per seconds?
+	int steps_per_sec = 8192;  // how many steps do we want per seconds?
 	// dt will be set in cudaeuler, so that all changes can be applied there
 
 	/*
@@ -107,9 +108,8 @@ void SettingsCMM::setPresets() {
 
 
 	// set minor properties
-	double incomp_threshhold = 1e-4;  // the maximum allowance of map to deviate from grad_chi begin 1
+	double incomp_threshhold = 1e-5;  // the maximum allowance of map to deviate from grad_chi begin 1
 	double map_epsilon = 1e-3;  // distance used for foot points for GALS map advection
-//	double map_epsilon = 6.283185307179/512.0;  // distance used for foot points for GALS map advection
 	// skip remapping, useful for convergence tests
 	bool skip_remapping = false;
 
@@ -138,7 +138,6 @@ void SettingsCMM::setPresets() {
 
 	// mapupdate order, "2nd", "4th", "6th"
 	std::string map_update_order = "4th";
-	bool map_update_grid = false;  // should map update be computed with grid or footpoints?
 
 	// mollification settings, stencil size, 0, 4, 8
 	int molly_stencil = 0;
@@ -274,7 +273,6 @@ void SettingsCMM::setPresets() {
 	setLagrangeOverride(lagrange_override);
 	setLagrangeInitHigherOrder(lagrange_init_higher_order);
 	setMapUpdateOrder(map_update_order);
-	setMapUpdateGrid(map_update_grid);
 	setMollyStencil(molly_stencil);
 	setFreqCutPsi(freq_cut_psi);
 	setSkipRemapping(skip_remapping);
@@ -374,7 +372,6 @@ int SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		else if (command == "lagrange_override") setLagrangeOverride(std::stoi(value));
 		else if (command == "lagrange_init_higher_order") setLagrangeInitHigherOrder(getBoolFromString(value));
 		else if (command == "map_update_order") setMapUpdateOrder(value);
-		else if (command == "map_update_grid") setMapUpdateGrid(getBoolFromString(value));
 		else if (command == "molly_stencil") setMollyStencil(std::stoi(value));
 		else if (command == "freq_cut_psi") setFreqCutPsi(std::stod(value));
 		else if (command == "skip_remapping") setSkipRemapping(getBoolFromString(value));
@@ -786,6 +783,7 @@ void ParticlesAdvected::setVariable(std::string command_full) {
 			else if(init_name == "normal" or init_name == "gaussian") init_num = 1;
 			else if(init_name == "circular_ring") init_num = 2;
 			else if(init_name == "uniform_grid") init_num = 3;
+			else if(init_name == "sine_sheets") init_num = 4;
 			else init_num = -1;
 		}
 		else if (command == "init_time") init_time = stod(value);
@@ -842,6 +840,7 @@ void ParticlesForwarded::setVariable(std::string command_full) {
 			else if(init_name == "normal" or init_name == "gaussian") init_num = 1;
 			else if(init_name == "circular_ring") init_num = 2;
 			else if(init_name == "uniform_grid") init_num = 3;
+			else if(init_name == "sine_sheets") init_num = 4;
 			else init_num = -1;
 		}
 		else if (command == "init_time") init_time = stod(value);

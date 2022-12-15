@@ -31,8 +31,6 @@
 #include <thrust/device_ptr.h>
 #include "../numerical/cmm-mesure.h"
 
-extern __constant__ double d_L1[4], d_L12[4], d_c1[12], d_cx[12], d_cy[12], d_cxy[12], d_bounds[4];
-
 
 // function to get difference to 1 for thrust parallel reduction
 struct absto1
@@ -60,33 +58,6 @@ double invertibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_backward, TC
 	// compute maximum using thrust parallel reduction
 	thrust::device_ptr<double> abs_invert_ptr = thrust::device_pointer_cast(abs_invert);
 	return thrust::reduce(abs_invert_ptr, abs_invert_ptr + Grid_check.N, 0.0, thrust::maximum<double>());
-}
-
-
-// advect stream where footpoints are just neighbouring points
-void advect_using_stream_hermite_grid(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi,
-		double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y,
-		double *psi, double *t, double *dt, int loop_ctr, int direction) {
-	// compute lagrange coefficients from dt vector for timesteps n+dt and n+dt/2, this makes them dynamic
-	double h_L1[4], h_L12[4];  // constant memory for lagrange coefficient to be computed only once
-	int loop_ctr_l = loop_ctr + SettingsMain.getLagrangeOrder()-1;  // dt and t are shifted because of initial previous steps
-	for (int i_p = 0; i_p < SettingsMain.getLagrangeOrder(); ++i_p) {
-		h_L1[i_p] = get_L_coefficient(t, t[loop_ctr_l+1], loop_ctr_l, i_p, SettingsMain.getLagrangeOrder());
-		h_L12[i_p] = get_L_coefficient(t, t[loop_ctr_l] + dt[loop_ctr_l+1]/2.0, loop_ctr_l, i_p, SettingsMain.getLagrangeOrder());
-	}
-
-	// copy to constant memory
-	cudaMemcpyToSymbol(d_L1, h_L1, sizeof(double)*4); cudaMemcpyToSymbol(d_L12, h_L12, sizeof(double)*4);
-
-	// first of all: compute footpoints at gridpoints, here we could speedup the first sampling of u by directly using the values, as we start at exact grid point locations
-	k_compute_footpoints<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock>>>(ChiX, ChiY, Chi_new_X, Chi_new_Y, psi,
-			Grid_map, Grid_psi, t[loop_ctr_l+1], dt[loop_ctr_l+1],
-			SettingsMain.getTimeIntegrationNum(), SettingsMain.getLagrangeOrder(), direction);
-
-	// update map, x and y can be done seperately
-	int shared_size = (18+2*SettingsMain.getMapUpdateOrderNum())*(18+2*SettingsMain.getMapUpdateOrderNum());  // how many points do we want to load?
-	k_map_update<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock, shared_size*sizeof(double)>>>(ChiX, Chi_new_X, Grid_map, SettingsMain.getMapUpdateOrderNum()+1, 0);
-	k_map_update<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock, shared_size*sizeof(double)>>>(ChiY, Chi_new_Y, Grid_map, SettingsMain.getMapUpdateOrderNum()+1, 1);
 }
 
 
@@ -760,7 +731,9 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 				// safe bounds in array
 				double bounds[4] = {x_min, x_max, y_min, y_max};
 
-				TCudaGrid2D Grid_zoom_i(Grid_zoom[i_save].NX, Grid_zoom[i_save].NY, bounds);
+				printf("bounds - %f,  %f,  %f, %f", x_min, x_max, y_min, y_max);
+
+				TCudaGrid2D Grid_zoom_i(Grid_zoom[i_save].NX, Grid_zoom[i_save].NY, Grid_zoom[i_save].NZ, bounds);
 
 				// compute forwards map for map stack of zoom window first, as it can be discarded afterwards
 				if (SettingsMain.getForwardMap()) {
@@ -782,10 +755,10 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 						if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos) {
 							cudaMemcpy2D(Host_debug, sizeof(double), Dev_Temp+Grid_zoom_i.N, sizeof(double)*2,
 									sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToHost);
-							writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiX");
+							writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiX_f_"+to_str(Grid_zoom_i.NX));
 							cudaMemcpy2D(Host_debug, sizeof(double), Dev_Temp+Grid_zoom_i.N+1, sizeof(double)*2,
 									sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToHost);
-							writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiY");
+							writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiY_f_"+to_str(Grid_zoom_i.NX));
 						}
 
 						// save position of forwarded particles, go through all and only safe the needed ones
@@ -826,10 +799,10 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 				if (save_var.find("Map_b") != std::string::npos or save_var.find("Chi_b") != std::string::npos) {
 					cudaMemcpy2D(Host_debug, sizeof(double), Dev_Temp+Grid_zoom_i.N, sizeof(double)*2,
 							sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToHost);
-					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiX");
+					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiX_"+to_str(Grid_zoom_i.NX));
 					cudaMemcpy2D(Host_debug, sizeof(double), Dev_Temp+Grid_zoom_i.N+1, sizeof(double)*2,
 							sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToHost);
-					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiY");
+					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Map_ChiY_"+to_str(Grid_zoom_i.NX));
 				}
 
 				// passive scalar theta - 1 to switch for passive scalar
@@ -838,7 +811,7 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 							Grid_zoom_i, Grid_discrete, 1, SettingsMain.getScalarNum(), W_initial_discrete, SettingsMain.getScalarDiscrete());
 
 					cudaMemcpy(Host_debug, Dev_Temp, Grid_zoom_i.sizeNReal, cudaMemcpyDeviceToHost);
-					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Scalar_Theta");
+					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Scalar_Theta_"+to_str(Grid_zoom_i.NX));
 				}
 
 				// compute and save vorticity zoom
@@ -848,7 +821,7 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 							Grid_zoom_i, Grid_discrete, 0, SettingsMain.getInitialConditionNum(), W_initial_discrete, SettingsMain.getInitialDiscrete());
 
 					cudaMemcpy(Host_debug, Dev_Temp, Grid_zoom_i.sizeNReal, cudaMemcpyDeviceToHost);
-					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Vorticity_W");
+					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Vorticity_W_"+to_str(Grid_zoom_i.NX));
 				}
 
 				// compute sample of stream function - it's not a zoom though!
@@ -858,7 +831,7 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 
 					// save psi zoom
 					cudaMemcpy(Host_debug, Dev_Temp, Grid_zoom_i.sizeNReal, cudaMemcpyDeviceToHost);
-					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Stream_function_Psi");
+					writeAllRealToBinaryFile(Grid_zoom_i.N, Host_debug, SettingsMain, sub_folder_name+"/Stream_function_Psi_"+to_str(Grid_zoom_i.NX));
 				}
 
 				// safe particles in zoomframe if wanted

@@ -225,13 +225,13 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 			return cos(x)*cos(y);
 			break;
 		}
-		// omega = exp(-(y - phi(x))^2 / (2 delta^2)) * sqrt(2 i delta^2) with phi(x) sin(x)/2
+		// omega = exp(-(y - phi(x))^2 / (2 delta^2)) / (sqrt(2 pi) delta^2) with phi(x) sin(x)/2
 		case 11:  // vortex sheets similar to caflisch
 		{
-			double Re = 1e3;
+			double Re = 5e3;
+			double delta_Re = 1/sqrt(Re);  // rewritte for delta to reduce confusion
 			// compute distance from center
-			double x_r = x - PI; double y_r = y - PI;
-			return exp(- (y_r - sin(x_r)/2) * (y_r - sin(x_r)/2) * Re / 2) / (2*PI) * sqrt(Re);
+			return exp(- (y-PI - sin(x)/2.0) * (y-PI - sin(x)/2.0) / (2 * delta_Re * delta_Re)) / sqrt(2*PI) / delta_Re;
 		}
 		default:
 			return 0;
@@ -391,6 +391,13 @@ __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain
 					init_parameter[0], init_parameter[1], init_parameter[2], init_parameter[3]);
 			break;
 		}
+		case 4:  // sine distribution fitting for vortex sheets
+		{
+			// init_param constitute to offset_x, pffset_y, empty_x and empty_y
+			k_part_init_sine_sheets<<<particle_block, particle_thread>>>(Dev_particles_pos, num,
+					init_parameter[0], init_parameter[1], init_parameter[2], init_parameter[3]);
+			break;
+		}
 
 		default:
 			break;
@@ -429,7 +436,7 @@ __global__ void k_part_init_uniform_grid(double* Dev_particles_pos, int particle
 
 
 // kernel to compute initial positions for vortex sheets center line? I'm not sure if thats whats wanted though
-__global__ void k_part_init_sheets(double* Dev_particles_pos, int particle_num,
+__global__ void k_part_init_sine_sheets(double* Dev_particles_pos, int particle_num,
 		double offset_x, double offset_y, double empty_x, double empty_y) {
 	int i = (blockDim.x * blockIdx.x + threadIdx.x);  // (thread_num_max * block_num + thread_num) - gives position
 
@@ -437,6 +444,6 @@ __global__ void k_part_init_sheets(double* Dev_particles_pos, int particle_num,
 	if (i >= particle_num)
 		return;
 
-	Dev_particles_pos[2*i]   = sin(i/(double)particle_num*twoPI) + offset_x;
-	Dev_particles_pos[2*i+1] = i/(double)particle_num*twoPI + offset_y;
+	Dev_particles_pos[2*i]   = i/(double)particle_num*twoPI + offset_x;
+	Dev_particles_pos[2*i+1] = sin(i/(double)particle_num*twoPI)/2.0 + offset_y;
 }

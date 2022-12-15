@@ -26,9 +26,6 @@ double invertibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_backward, TC
 		double *ChiX_b, double *ChiY_b, double *ChiX_f, double *ChiY_f, double *abs_invert);
 
 // map advection
-void advect_using_stream_hermite_grid(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi,
-		double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y,
-		double *psi, double *t, double *dt, int loop_ctr, int direction);
 void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi,
 		double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y,
 		double *psi, double *t, double *dt, int loop_ctr, int direction);

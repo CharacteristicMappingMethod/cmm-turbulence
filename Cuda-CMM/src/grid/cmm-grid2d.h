@@ -24,21 +24,21 @@
 struct TCudaGrid2D
 {
 	public:
-		int NX, NY, NX_fft;
-		long int N, Nfft;
+		int NX, NY, NZ, NX_fft;
+		long long int N, Nfft;
 		double h;
 
-		double hx, hy;
-		double bounds[4];
+		double hx, hy, hz;
+		double bounds[6];
 
 		dim3 threadsPerBlock, blocksPerGrid, fft_blocks;
 
-		long int sizeNReal, sizeNComplex, sizeNfft;
+		long long int sizeNReal, sizeNComplex, sizeNfft;
 
-		TCudaGrid2D(int NX, int NY, double *bounds);
+		TCudaGrid2D(int NX, int NY, int NZ, double *bounds);
 };
 
-void fill_grid(TCudaGrid2D *Grid, int NX, int NY, double *bounds);
+void fill_grid(TCudaGrid2D *Grid, int NX, int NY, int NZ, double *bounds);
 
 // class for map stack thingies, because I am always just transferring this everywhere
 class MapStack {

@@ -134,7 +134,6 @@ private:
 	int lagrange_order, lagrange_override;
 	bool lagrange_init_higher_order;
 	std::string map_update_order; int map_update_order_num;
-	bool map_update_grid;
 	int molly_stencil;
 	double freq_cut_psi;
 	bool skip_remapping;
@@ -282,8 +281,6 @@ public:
 		else map_update_order_num = -1;
 	}
 	int getMapUpdateOrderNum() const { return map_update_order_num; }
-	bool getMapUpdateGrid() const { return map_update_grid; }
-	void setMapUpdateGrid(bool mapUpdateGrid) { map_update_grid = mapUpdateGrid; }
 
 	// molly stencil, amount of points to be used for mollification
 	int getMollyStencil() const { return molly_stencil; }
