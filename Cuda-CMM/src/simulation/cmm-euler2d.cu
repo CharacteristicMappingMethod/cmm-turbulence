@@ -76,10 +76,6 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	
 	// shared parameters
 	iterMax = (int)(1.05*ceil((SettingsMain.getFinalTime() - SettingsMain.getRestartTime()) / dt));  // maximum amount of steps, important for more dynamic steps, however, reduced for now
-
-	double map_size = 8*(double)SettingsMain.getGridCoarse()*(double)SettingsMain.getGridCoarse()*sizeof(double) / 1e6;  // size of one mapping
-	int cpu_map_num = int(double(SettingsMain.getMemRamCpuRemaps())/map_size);  // define how many more remappings we can save on CPU than on GPU
-	if (SettingsMain.getForwardMap()) cpu_map_num = (int)(cpu_map_num/2.0);  // divide by two in case of forward map
 	
 	// build file name together
 	std::string file_name = SettingsMain.getSimName() + "_" + SettingsMain.getInitialCondition() + "_C" + to_str(SettingsMain.getGridCoarse()) + "_F" + to_str(SettingsMain.getGridFine())
@@ -100,8 +96,12 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
     // print version details
     if (SettingsMain.getVerbose() >= 3) {
-		int version;
-		cudaRuntimeGetVersion(&version);
+
+		int deviceCount; cudaGetDeviceCount(&deviceCount);
+		message = "Number of CUDA devices = " + to_str(deviceCount); std::cout<<message+"\n"; logger.push(message);
+		int activeDevice; cudaGetDevice(&activeDevice);
+		message = "Active CUDA device = " + to_str(activeDevice); std::cout<<message+"\n"; logger.push(message);
+		int version; cudaRuntimeGetVersion(&version);
     	message = "Cuda runtime version = " + to_str(version); std::cout<<message+"\n"; logger.push(message);
 		cudaDriverGetVersion(&version);
     	message = "Cuda driver version = " + to_str(version); std::cout<<message+"\n"; logger.push(message);
@@ -113,8 +113,6 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
     if (SettingsMain.getVerbose() >= 1) {
 		message = "Initial condition = " + SettingsMain.getInitialCondition(); std::cout<<message+"\n"; logger.push(message);
 		message = "Iter max = " + to_str(iterMax); std::cout<<message+"\n"; logger.push(message);
-		message = "Map size in MB = " + to_str((int)map_size); std::cout<<message+"\n"; logger.push(message);
-		message = "Map stack length on CPU = " + to_str(cpu_map_num); std::cout<<message+"\n"; logger.push(message);
 		message = "Name of simulation = " + SettingsMain.getFileName(); std::cout<<message+"\n"; logger.push(message);
     }
 	
@@ -330,11 +328,20 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	* 																   *
 	*******************************************************************/
 	
+	double map_size = 8*Grid_coarse.sizeNReal / 1e6;  // size of one mapping in x- and y- direction
+	int cpu_map_num = int(double(SettingsMain.getMemRamCpuRemaps())/map_size);  // define how many more remappings we can save on CPU than on GPU
+	if (SettingsMain.getForwardMap()) cpu_map_num = (int)(cpu_map_num/2.0);  // divide by two in case of forward map
+
 	// initialize backward map stack
 	MapStack Map_Stack(&Grid_coarse, cpu_map_num);
 	mb_used_RAM_GPU += 8*Grid_coarse.sizeNReal / 1e6;
 	mb_used_RAM_CPU += cpu_map_num * map_size;
 
+    // print map details
+    if (SettingsMain.getVerbose() >= 1) {
+		message = "Map size in MB = " + to_str((int)map_size); std::cout<<message+"\n"; logger.push(message);
+		message = "Map stack length on CPU = " + to_str(cpu_map_num); std::cout<<message+"\n"; logger.push(message);
+    }
 	if (SettingsMain.getVerbose() >= 4) {
 		message = "Initialized CPU map stack"; std::cout<<message+"\n\n"; logger.push(message);
 	}

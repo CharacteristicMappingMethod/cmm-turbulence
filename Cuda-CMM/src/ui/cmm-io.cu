@@ -423,8 +423,8 @@ void writeMapStack(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Gri
 
 	// save every map one by one
 	for (int i_map = 0; i_map < Map_Stack.map_stack_ctr; ++i_map) {
-		writeAllRealToBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM+i_map*4*Map_Stack.Grid->N, SettingsMain, sub_folder_name + "/Map_ChiX" + str_forward + "_H_" + to_str(i_map));
-		writeAllRealToBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM+i_map*4*Map_Stack.Grid->N, SettingsMain, sub_folder_name + "/Map_ChiY" + str_forward + "_H_" + to_str(i_map));
+		writeAllRealToBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM[i_map], SettingsMain, sub_folder_name + "/Map_ChiX" + str_forward + "_H_" + to_str(i_map));
+		writeAllRealToBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM[i_map], SettingsMain, sub_folder_name + "/Map_ChiY" + str_forward + "_H_" + to_str(i_map));
 	}
 
 	// save the active map
@@ -475,8 +475,8 @@ void readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, TCudaGrid2D Gri
 
 	// read in every map one by one
 	for (int i_map = 0; i_map < countFilesWithString(folder_name_now, "Map_ChiX" + str_forward + "_H") - 1; ++i_map) {
-		readAllRealFromBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM+i_map*4*Map_Stack.Grid->N, folder_name_now + "/Map_ChiX" + str_forward + "_H_" + to_str(i_map) + ".data");
-		readAllRealFromBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM+i_map*4*Map_Stack.Grid->N, folder_name_now + "/Map_ChiY" + str_forward + "_H_" + to_str(i_map) + ".data");
+		readAllRealFromBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM[i_map], folder_name_now + "/Map_ChiX" + str_forward + "_H_" + to_str(i_map) + ".data");
+		readAllRealFromBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM[i_map], folder_name_now + "/Map_ChiY" + str_forward + "_H_" + to_str(i_map) + ".data");
 		Map_Stack.map_stack_ctr++;
 	}
 

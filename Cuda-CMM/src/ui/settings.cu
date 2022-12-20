@@ -58,14 +58,14 @@ void SettingsCMM::setPresets() {
 	 *  3	-	Version stuff and Conservation results
 	 *  4	-	Array initialization details
 	 */
-	int verbose = 3;
+	int verbose = 4;
 
 	// set time properties
 	double final_time = 3;  // end of computation
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
 	int steps_per_sec = 32;  // how many steps do we want per seconds?
-	// dt will be set in cudaeuler, so that all changes can be applied there
+	// dt will be set in cmm-euler, so that all changes can be applied there
 
 	/*
 	 * Which variables do we want to save? Best separated by a "-"
@@ -115,7 +115,7 @@ void SettingsCMM::setPresets() {
 
 	// set memory properties
 	int mem_RAM_CPU_remaps = 9000;  // mem_RAM_CPU_remaps in MB on the CPU
-	bool save_map_stack = true;  // possibility to save the map stack to reuse for other computations to skip initial time
+	bool save_map_stack = false;  // possibility to save the map stack to reuse for other computations to skip initial time
 	// restart simulation
 	double restart_time = 0;  // other than zero means the simulation is restarted
 	std::string restart_location = "";  // if empty, then data is read from own data folder
