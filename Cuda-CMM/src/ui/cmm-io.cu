@@ -63,33 +63,35 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax
 		ofstream file(fileName.c_str(), std::ios::out | std::ios::trunc);
 		file.close();
 	}
-	// empty out mesure file for sample
-	if (SettingsMain.getSaveSampleNum() > 0) {
-		std::string monitoring_names[5] = {"/Time_s_", "/Energy_", "/Enstrophy_", "/Palinstrophy_", "/Max_vorticity_",
-		};
-		for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
-			int grid_i = SettingsMain.getSaveSample()[i_save].grid;
-			std::string var_i = SettingsMain.getSaveSample()[i_save].var;
-			for ( const auto &i_mon_names : monitoring_names) {
-				std::string fileName = folder_name + "/Monitoring_data/Mesure" + i_mon_names + to_str(grid_i)  + ".data";
-				ofstream file(fileName.c_str(), std::ios::out | std::ios::trunc);
-				file.close();
+	// empty out mesure file for sample if we do not restart
+	if (SettingsMain.getRestartTime() != 0) {
+		if (SettingsMain.getSaveSampleNum() > 0) {
+			std::string monitoring_names[5] = {"/Time_s_", "/Energy_", "/Enstrophy_", "/Palinstrophy_", "/Max_vorticity_",
+			};
+			for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
+				int grid_i = SettingsMain.getSaveSample()[i_save].grid;
+				std::string var_i = SettingsMain.getSaveSample()[i_save].var;
+				for ( const auto &i_mon_names : monitoring_names) {
+					std::string fileName = folder_name + "/Monitoring_data/Mesure" + i_mon_names + to_str(grid_i)  + ".data";
+					ofstream file(fileName.c_str(), std::ios::out | std::ios::trunc);
+					file.close();
+				}
+				if (var_i.find("Scalar") != std::string::npos or var_i.find("Theta") != std::string::npos) {
+					std::string fileName = folder_name + "/Monitoring_data/Mesure/Scalar_integral_" + to_str(grid_i)  + ".data";
+					ofstream file(fileName.c_str(), std::ios::out | std::ios::trunc);
+					file.close();
+				}
 			}
-			if (var_i.find("Scalar") != std::string::npos or var_i.find("Theta") != std::string::npos) {
-				std::string fileName = folder_name + "/Monitoring_data/Mesure/Scalar_integral_" + to_str(grid_i)  + ".data";
-				ofstream file(fileName.c_str(), std::ios::out | std::ios::trunc);
-				file.close();
-			}
-		}
 
-	}
-	if (SettingsMain.getForwardMap()) {
-		std::string fileName = folder_name + "/Monitoring_data/Error_incompressibility_forward.data";
-		ofstream file(fileName.c_str(), std::ios::out | std::ios::trunc);
-		file.close();
-		std::string fileName2 = folder_name + "/Monitoring_data/Error_invertibility.data";
-		ofstream file2(fileName2.c_str(), std::ios::out | std::ios::trunc);
-		file.close();
+		}
+		if (SettingsMain.getForwardMap()) {
+			std::string fileName = folder_name + "/Monitoring_data/Error_incompressibility_forward.data";
+			ofstream file(fileName.c_str(), std::ios::out | std::ios::trunc);
+			file.close();
+			std::string fileName2 = folder_name + "/Monitoring_data/Error_invertibility.data";
+			ofstream file2(fileName2.c_str(), std::ios::out | std::ios::trunc);
+			file.close();
+		}
 	}
 }
 
@@ -409,58 +411,109 @@ void writeFineParticles(SettingsCMM SettingsMain, string i_num, double *Host_par
 }
 
 
-// save the map stack, only save used maps though
-void writeMapStack(SettingsCMM SettingsMain, MapStack Map_Stack) {
+// save the map stack together with current map and psi
+void writeMapStack(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Grid_psi, double* Dev_ChiX, double* Dev_ChiY, double* Dev_Psi_real, double* Host_save, bool isForward) {
 	// create new subfolder for mapstack, doesn't matter if we try to create it several times
 	string sub_folder_name = "/MapStack";
 	string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
 	struct stat st = {0};
 	if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
 
-	// check if we have to save a stack for every stack
-	int save_ctr;
-	if (Map_Stack.map_stack_ctr / (double)Map_Stack.cpu_map_num > 0) {
-		if (Map_Stack.map_stack_ctr > 1*Map_Stack.cpu_map_num) save_ctr = Map_Stack.cpu_map_num;
-		else save_ctr = Map_Stack.map_stack_ctr - 0*Map_Stack.cpu_map_num;
-		printf("Save %d maps of map stack 1\n",save_ctr);
-		writeAllRealToBinaryFile(save_ctr*4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM_0, SettingsMain, "/MapStack/MapStack_ChiX_0");
-		writeAllRealToBinaryFile(save_ctr*4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM_0, SettingsMain, "/MapStack/MapStack_ChiY_0");
+	string str_forward = ""; if (isForward) str_forward = "_f";
+
+	// save every map one by one
+	for (int i_map = 0; i_map < Map_Stack.map_stack_ctr; ++i_map) {
+		writeAllRealToBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM+i_map*4*Map_Stack.Grid->N, SettingsMain, sub_folder_name + "/Map_ChiX" + str_forward + "_H_" + to_str(i_map));
+		writeAllRealToBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM+i_map*4*Map_Stack.Grid->N, SettingsMain, sub_folder_name + "/Map_ChiY" + str_forward + "_H_" + to_str(i_map));
 	}
-	else if (Map_Stack.map_stack_ctr / (double)Map_Stack.cpu_map_num > 1) {
-		if (Map_Stack.map_stack_ctr > 2*Map_Stack.cpu_map_num) save_ctr = Map_Stack.cpu_map_num;
-		else save_ctr = Map_Stack.map_stack_ctr - 1*Map_Stack.cpu_map_num;
-		writeAllRealToBinaryFile(save_ctr*4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM_1, SettingsMain, "/MapStack/MapStack_ChiX_1");
-		writeAllRealToBinaryFile(save_ctr*4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM_1, SettingsMain, "/MapStack/MapStack_ChiY_1");
-	}
-	else if (Map_Stack.map_stack_ctr / (double)Map_Stack.cpu_map_num > 2) {
-		if (Map_Stack.map_stack_ctr > 3*Map_Stack.cpu_map_num) save_ctr = Map_Stack.cpu_map_num;
-		else save_ctr = Map_Stack.map_stack_ctr - 2*Map_Stack.cpu_map_num;
-		writeAllRealToBinaryFile(save_ctr*4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM_2, SettingsMain, "/MapStack/MapStack_ChiX_2");
-		writeAllRealToBinaryFile(save_ctr*4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM_2, SettingsMain, "/MapStack/MapStack_ChiY_2");
-	}
-	else if (Map_Stack.map_stack_ctr / (double)Map_Stack.cpu_map_num > 3) {
-		if (Map_Stack.map_stack_ctr > 4*Map_Stack.cpu_map_num) save_ctr = Map_Stack.cpu_map_num;
-		else save_ctr = Map_Stack.map_stack_ctr - 3*Map_Stack.cpu_map_num;
-		writeAllRealToBinaryFile(save_ctr*4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM_3, SettingsMain, "/MapStack/MapStack_ChiX_3");
-		writeAllRealToBinaryFile(save_ctr*4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM_3, SettingsMain, "/MapStack/MapStack_ChiY_3");
+
+	// save the active map
+	cudaMemcpy(Host_save, Dev_ChiX, 4*Map_Stack.Grid->sizeNReal, cudaMemcpyDeviceToHost);
+	writeAllRealToBinaryFile(4*Map_Stack.Grid->N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiX"  + str_forward + "_H_coarse");
+	cudaMemcpy(Host_save, Dev_ChiY, 4*Map_Stack.Grid->sizeNReal, cudaMemcpyDeviceToHost);
+	writeAllRealToBinaryFile(4*Map_Stack.Grid->N, Host_save, SettingsMain, sub_folder_name + "/Map_ChiY"  + str_forward + "_H_coarse");
+
+	if (!isForward) {
+		// save psi together with the previous ones, this seems the easiest for me at the moment even though afterwards the amount has to match
+		for (int i_psi = 0; i_psi < SettingsMain.getLagrangeOrder(); ++i_psi) {
+			cudaMemcpy(Host_save, Dev_Psi_real + i_psi*4*Grid_psi.N, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToHost);
+			writeAllRealToBinaryFile(4*Grid_psi.N, Host_save, SettingsMain, sub_folder_name + "/Stream_function_Psi_H_psi_" + to_str(i_psi));
+		}
 	}
 }
+
+
+// check how many maps we can load
+int countFilesWithString(const std::string& dirPath, const std::string& searchString) {
+	int count = 0; DIR *dir; struct dirent *ent;
+
+	// try to open the directory
+	if ((dir = opendir (dirPath.c_str())) != NULL) {
+		// loop through the directory entries
+		while ((ent = readdir (dir)) != NULL) {
+			// check if the entry is a regular file and if it contains the search string
+			if (ent->d_type == DT_REG && std::string(ent->d_name).find(searchString) != std::string::npos) {
+				count++;
+			}
+		}
+		closedir (dir);
+	} else {
+		// could not open directory
+		std::cerr << "Error: Could not open directory " << dirPath << std::endl;
+	}
+	return count;
+}
+
+// read the map stack together with current map and psi
+void readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, TCudaGrid2D Grid_psi, double* Dev_ChiX, double* Dev_ChiY, double* Dev_Psi_real, double* Host_save, bool isForward, std::string data_name) {
+	// set default path
+	string folder_name_now = data_name;
+	if (data_name == "") {
+		folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/MapStack";
+	}
+	string str_forward = ""; if (isForward) str_forward = "_f";
+
+	// read in every map one by one
+	for (int i_map = 0; i_map < countFilesWithString(folder_name_now, "Map_ChiX" + str_forward + "_H") - 1; ++i_map) {
+		readAllRealFromBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM+i_map*4*Map_Stack.Grid->N, folder_name_now + "/Map_ChiX" + str_forward + "_H_" + to_str(i_map) + ".data");
+		readAllRealFromBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM+i_map*4*Map_Stack.Grid->N, folder_name_now + "/Map_ChiY" + str_forward + "_H_" + to_str(i_map) + ".data");
+		Map_Stack.map_stack_ctr++;
+	}
+
+	// read the active map
+	readAllRealFromBinaryFile(4*Map_Stack.Grid->N, Host_save, folder_name_now + "/Map_ChiX"  + str_forward + "_H_coarse.data");
+	cudaMemcpy(Dev_ChiX, Host_save, 4*Map_Stack.Grid->sizeNReal, cudaMemcpyHostToDevice);
+	readAllRealFromBinaryFile(4*Map_Stack.Grid->N, Host_save, folder_name_now + "/Map_ChiY"  + str_forward + "_H_coarse.data");
+	cudaMemcpy(Dev_ChiY, Host_save, 4*Map_Stack.Grid->sizeNReal, cudaMemcpyHostToDevice);
+
+	if (!isForward) {
+		// save psi together with the previous ones, this seems the easiest for me at the moment even though afterwards the amount has to match
+		for (int i_psi = 0; i_psi < SettingsMain.getLagrangeOrder(); ++i_psi) {
+			readAllRealFromBinaryFile(4*Grid_psi.N, Host_save, folder_name_now + "/Stream_function_Psi_H_psi_" + to_str(i_psi) + ".data");
+			cudaMemcpy(Dev_Psi_real + i_psi*4*Grid_psi.N, Host_save, 4*Grid_psi.sizeNReal, cudaMemcpyHostToDevice);
+		}
+	}
+}
+
 
 
 Logger::Logger(SettingsCMM SettingsMain)
 {
 	fileName = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/log.txt";
-	file.open(fileName.c_str(), ios::out);
-//	file.open(fileName.c_str(), ios::out | ios::app);  // append to file for continuing simulation
+	if (SettingsMain.getRestartTime() == 0) file.open(fileName.c_str(), ios::out);
+	else file.open(fileName.c_str(), ios::out | ios::app);  // append to file for continuing simulation
 
 	if(!file)
 	{
-		cout<<"Unable to open log file.. exitting\n";
+		std::cerr<<"Unable to open log file.. exitting" << std::endl;
 		exit(0);
 	}
 	else
 	{
-		file<<SettingsMain.getFileName()<<endl;  // if file existed, this will basically overwrite it
+		// new simulation, overwrite old file if existent
+		if (SettingsMain.getRestartTime() == 0) file<<SettingsMain.getFileName()<<endl;
+		// continue simulation
+		else file<<"\nContinuing simulation\n"<<endl;
 		file.close();
 	}
 }

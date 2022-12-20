@@ -23,7 +23,7 @@ void SettingsCMM::setPresets() {
 	// grid settings for coarse and fine grid
 	// 	8		16		32		64		128		256		512		1024	2048	4096	8192	16384	32768
 	// max working on Anthicythere : grid_scale = 8192; fine_grid_scale = 16384;
-	int grid_coarse = 1024;
+	int grid_coarse = 512;
 	int grid_fine = 2048;
 	int grid_psi = 1024;  // psi will be (up)sampled on this grid, Restriction: 2*N_fft_psi !> 4*N_coarse
 	int grid_vort = grid_fine;  // vorticity will be sampled on this grid for computation of psi, this changes the scales of the vorticity
@@ -61,10 +61,10 @@ void SettingsCMM::setPresets() {
 	int verbose = 3;
 
 	// set time properties
-	double final_time = 1;  // end of computation
+	double final_time = 3;  // end of computation
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
-	int steps_per_sec = 8192;  // how many steps do we want per seconds?
+	int steps_per_sec = 32;  // how many steps do we want per seconds?
 	// dt will be set in cudaeuler, so that all changes can be applied there
 
 	/*
@@ -115,7 +115,11 @@ void SettingsCMM::setPresets() {
 
 	// set memory properties
 	int mem_RAM_CPU_remaps = 9000;  // mem_RAM_CPU_remaps in MB on the CPU
-	bool save_map_stack = false;  // possibility to save the map stack to reuse for other computations to skip initial time
+	bool save_map_stack = true;  // possibility to save the map stack to reuse for other computations to skip initial time
+	// restart simulation
+	double restart_time = 0;  // other than zero means the simulation is restarted
+	std::string restart_location = "";  // if empty, then data is read from own data folder
+
 
 	// set specific settings
 	/*
@@ -266,6 +270,8 @@ void SettingsCMM::setPresets() {
 
 	setMemRamCpuRemaps(mem_RAM_CPU_remaps);
 	setSaveMapStack(save_map_stack);
+	setRestartTime(restart_time);
+	setRestartLocation(restart_location);
 
 	setIncompThreshold(incomp_threshhold);
 	setMapEpsilon(map_epsilon);
@@ -358,6 +364,8 @@ int SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 
 		else if (command == "mem_RAM_CPU_remaps") setMemRamCpuRemaps(std::stoi(value));
 		else if (command == "save_map_stack") setSaveMapStack(getBoolFromString(value));
+		else if (command == "restart_time") setRestartTime(std::stod(value));
+		else if (command == "restart_location") setRestartLocation(value);
 
 		else if (command == "verbose") setVerbose(std::stoi(value));
 

@@ -173,10 +173,10 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 			x -= floor(x/twoPI)*twoPI;
 			y -= floor(y/twoPI)*twoPI;
 
-			const int NB_gaus = 5;  // number of negative and positive blobs in each row
-			double sigma = twoPI*0.025;  // scaling in width
+			const int NB_gaus = 10;  // number of negative and positive blobs in each row
+			double sigma = twoPI*0.01;  // scaling in width
 			double fac = 1e0;  // strength scaling
-			double rand_offset = twoPI*0.0125;  // maximum random offset of blobs
+			double rand_offset = twoPI*0.005;  // maximum random offset of blobs
 			int border = 2;  // increase parallel domain to include values of blobs from neighbouring domains
 
 			int dir = 1;  // a bit hackery, but it works

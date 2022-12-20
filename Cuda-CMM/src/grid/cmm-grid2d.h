@@ -43,12 +43,9 @@ void fill_grid(TCudaGrid2D *Grid, int NX, int NY, int NZ, double *bounds);
 // class for map stack thingies, because I am always just transferring this everywhere
 class MapStack {
 public:
-	double *Host_ChiX_stack_RAM_0, *Host_ChiY_stack_RAM_0,
-		   *Host_ChiX_stack_RAM_1, *Host_ChiY_stack_RAM_1,
-		   *Host_ChiX_stack_RAM_2, *Host_ChiY_stack_RAM_2,
-		   *Host_ChiX_stack_RAM_3, *Host_ChiY_stack_RAM_3,
+	double *Host_ChiX_stack_RAM, *Host_ChiY_stack_RAM,
 		   *Dev_ChiX_stack, *Dev_ChiY_stack;
-	int cpu_map_num, Nb_array_RAM;
+	int cpu_map_num;
 	int map_stack_ctr;
 
 	TCudaGrid2D *Grid;

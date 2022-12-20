@@ -129,6 +129,7 @@ private:
 	double map_epsilon;
 	//memory variables
 	int mem_RAM_CPU_remaps; bool save_map_stack;
+	double restart_time; std::string restart_location;
 	// specific
 	std::string time_integration; int time_integration_num;
 	int lagrange_order, lagrange_override;
@@ -269,6 +270,10 @@ public:
 	void setMemRamCpuRemaps(int memRamCpuRemaps) { mem_RAM_CPU_remaps = memRamCpuRemaps; }
 	bool getSaveMapStack() const { return save_map_stack; }
 	void setSaveMapStack(bool saveMapStack) { save_map_stack = saveMapStack; }
+	double getRestartTime() const { return restart_time; }
+	void setRestartTime(double restartTime) { restart_time = restartTime; }
+	std::string getRestartLocation() const { return restart_location; }
+	void setRestartLocation(std::string restartLocation) { restart_location = restartLocation; }
 
 	// map update order handling the stencil of footpoints
 	std::string getMapUpdateOrder() const { return map_update_order; }

@@ -78,6 +78,8 @@ void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 
 		file << write_line("mem_RAM_CPU_remaps", to_str(SettingsMain.getMemRamCpuRemaps(), 16));
 		file << write_line("save_map_stack", to_str(SettingsMain.getSaveMapStack(), 16));
+		file << write_line("restart_time", to_str(SettingsMain.getRestartTime(), 16));
+		file << write_line("restart_location", to_str(SettingsMain.getRestartLocation(), 16));
 
 		file << write_line("verbose", to_str(SettingsMain.getVerbose(), 16));
 

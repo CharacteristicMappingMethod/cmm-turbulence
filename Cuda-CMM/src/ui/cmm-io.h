@@ -27,6 +27,10 @@
 #include <string>
 #include <time.h>
 
+// check for reading in directory
+#include <vector>
+#include <dirent.h> // for directory functions
+
 // mkdir
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -63,7 +67,8 @@ void writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, doubl
 		TCudaGrid2D Grid_psi, double *Dev_psi, double *Dev_Temp, int* fluid_particles_blocks, int fluid_particles_threads);
 void writeFineParticles(SettingsCMM SettingsMain, string i_num, double *Host_particles_fine_pos, int fine_particle_save_num);
 
-void writeMapStack(SettingsCMM SettingsMain, MapStack Map_Stack);
+void writeMapStack(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Grid_psi, double* Dev_ChiX, double* Dev_ChiY, double* Dev_Psi_real, double* Host_save, bool isForward);
+void readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, TCudaGrid2D Grid_psi, double* Dev_ChiX, double* Dev_ChiY, double* Dev_Psi_real, double* Host_save, bool isForward, string data_name);
 
 class Logger
 {
