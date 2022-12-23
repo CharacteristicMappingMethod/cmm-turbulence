@@ -44,6 +44,9 @@ void SettingsCMM::setPresets() {
 	 *  "vortex_sheets"			-	vortex sheets used for singularity studies
 	 */
 	std::string initial_condition = "4_nodes";
+	// string containing parameters for initial condition, they have to be formatted to fit {D1,D2,D3,...} or "D1,D2,D3,..."
+	// can be 10 values max, check cmm-init.cu if the initial condition needs parameter
+	std::string initial_params = "{5e4}";
 
 	// possibility to compute from discrete initial condition
 	bool initial_discrete = false;
@@ -58,7 +61,7 @@ void SettingsCMM::setPresets() {
 	 *  3	-	Version stuff and Conservation results
 	 *  4	-	Array initialization details
 	 */
-	int verbose = 4;
+	int verbose = 3;
 
 	// set time properties
 	double final_time = 3;  // end of computation
@@ -94,7 +97,7 @@ void SettingsCMM::setPresets() {
 	std::string save_computational_s[12] = {
 			"{is_instant=1,time_start=0,var=W-U,conv=1}",  // save begin
 			"{is_instant=1,time_start="+str_t(T_MAX)+",var=W-U,conv=1}",  // save end
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=0.5,var= ,conv=1}",  // conv over simulation
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=0.5,var ,conv=1}",  // conv over simulation
 			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_01,conv=0}",
 			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_02,conv=0}",
 			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_03,conv=0}",
@@ -224,7 +227,7 @@ void SettingsCMM::setPresets() {
 	 * init_vel - if the inertial particles velocity should be set after the velocity or to zero
 	 * init_param - specific parameters to control the initial condition
 	 */
-	int particles_advected_num = 0;
+	int particles_advected_num = 2;
 	std::string particles_advected_s[8] = {
 			"{num=100000,tau=0,seed=0,time_integration=RK3,init_name=uniform,init_time=0,init_vel=0"
 			",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI*2.0)+",init_param_4="+str_t(PI*2.0)+"}",
@@ -262,6 +265,7 @@ void SettingsCMM::setPresets() {
 	}
 
 	setInitialCondition(initial_condition);
+	setInitialParams(initial_params);
 	setInitialDiscrete(initial_discrete);
 	setInitialDiscreteGrid(initial_discrete_grid);
 	setInitialDiscreteLocation(initial_discrete_location);
@@ -370,6 +374,7 @@ int SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		else if (command == "verbose") setVerbose(std::stoi(value));
 
 		else if (command == "initial_condition") setInitialCondition(value);
+		else if (command == "initial_params") setInitialParams(value);
 		else if (command == "initial_discrete") setInitialDiscrete(getBoolFromString(value));
 		else if (command == "initial_discrete_grid") setInitialDiscreteGrid(stoi(value));
 		else if (command == "initial_discrete_location") setInitialDiscreteLocation(value);
@@ -464,65 +469,6 @@ SettingsCMM::SettingsCMM(int argc, char *args[]) {
 	setPresets();
 	// override presets with command line arguments
 	applyCommands(argc, args);
-}
-
-
-// little helper functions to be able to give in arrays
-void SettingsCMM::string_to_double_array(std::string s_array, double *array) {
-	// parse check to only pass with correct surroundings
-	bool parse_check = false;
-	// erase " if surrounded by it
-	if (s_array.substr(0, 1) == "\"" || s_array.substr(s_array.length()-1, s_array.length()) == "\"") {
-		s_array.erase(0, 1); s_array.erase(s_array.length()-1, s_array.length());  // erase brackets
-		parse_check = true;
-	}
-	// erase {} if surrounded by it
-	if (s_array.substr(0, 1) == "{" || s_array.substr(s_array.length()-1, s_array.length()) == "}") {
-		s_array.erase(0, 1); s_array.erase(s_array.length()-1, s_array.length());  // erase brackets
-		parse_check = true;
-	}
-	if (parse_check) {
-		// loop over all elements
-		int index = 0;
-		std::string::size_type pos = 0; std::string::size_type pos_new = 0;
-		do {
-			pos_new = s_array.find(",", pos );
-			std::string substring;
-			if (pos_new != std::string::npos) substring = s_array.substr(pos, pos_new - pos);
-			else substring = s_array.substr(pos, s_array.length());
-			array[index] = std::stod(substring);
-			index++;
-			pos = pos_new + 1;
-		} while (pos_new != std::string::npos);
-	}
-}
-void SettingsCMM::string_to_int_array(std::string s_array, int *array) {
-	// parse check to only pass with correct surroundings
-	bool parse_check = false;
-	// erase " if surrounded by it
-	if (s_array.substr(0, 1) == """" || s_array.substr(s_array.length()-1, s_array.length()) == """") {
-		s_array.erase(0, 1); s_array.erase(s_array.length()-1, s_array.length());  // erase brackets
-		parse_check = true;
-	}
-	// erase {} if surrounded by it
-	if (s_array.substr(0, 1) == "{" || s_array.substr(s_array.length()-1, s_array.length()) == "}") {
-		s_array.erase(0, 1); s_array.erase(s_array.length()-1, s_array.length());  // erase brackets
-		parse_check = true;
-	}
-	if (parse_check) {
-		// loop over all elements
-		int index = 0;
-		std::string::size_type pos = 0; std::string::size_type pos_new = 0;
-		do {
-			pos_new = s_array.find(",", pos );
-			std::string substring;
-			if (pos_new != std::string::npos) substring = s_array.substr(pos, pos_new - pos);
-			else substring = s_array.substr(pos, s_array.length());
-			array[index] = std::stoi(substring);
-			index++;
-			pos = pos_new + 1;
-		} while (pos_new != std::string::npos);
-	}
 }
 
 
@@ -867,7 +813,8 @@ std::string ParticlesForwarded::getVariables() {
 
 
 bool getBoolFromString(std::string value) {
-	if (value == "true" || value == "True" || value == "1") return true;
-	else if (value == "false" || value == "False" || value == "0") return false;
-	return false;  // in case no value is chosen
+	return (value == "true" || value == "True" || value == "1");
+//	if (value == "true" || value == "True" || value == "1") return true;
+//	else if (value == "false" || value == "False" || value == "0") return false;
+//	return false;  // in case no value is chosen
 }

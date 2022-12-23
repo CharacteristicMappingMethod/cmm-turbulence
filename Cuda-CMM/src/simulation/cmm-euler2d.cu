@@ -37,7 +37,7 @@
 #include "../numerical/cmm-mesure.h"
 
 
-extern __constant__ double d_rand[1000];  // array for random numbers being used for random initial conditions
+extern __constant__ double d_rand[1000], d_init_params[10];  // array for random numbers being used for random initial conditions
 
 
 void cuda_euler_2d(SettingsCMM& SettingsMain)
@@ -56,7 +56,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	double dt;															// time - step final
 	int iterMax;														// time - maximum iteration count for safety
 
-	double mb_used_RAM_GPU, mb_used_RAM_CPU;  // count memory usage by variables in mbyte
+	double mb_used_RAM_GPU = 0, mb_used_RAM_CPU = 0;  // count memory usage by variables in mbyte
 
 	// compute dt, for grid settings we have to use max in case we want to differ NX and NY
 	if (SettingsMain.getSetDtBySteps()) dt = 1.0 / SettingsMain.getStepsPerSec();  // direct setting of timestep
@@ -211,7 +211,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	}
 	void *fft_work_area;
 	cudaMalloc(&fft_work_area, size_max_fft);
-	mb_used_RAM_GPU = size_max_fft / 1e6;
+	mb_used_RAM_GPU += size_max_fft / 1e6;
 
 	// set new workarea to plans
 	cufftSetWorkArea(cufft_plan_coarse_D2Z, fft_work_area); cufftSetWorkArea(cufft_plan_coarse_Z2D, fft_work_area);
@@ -284,23 +284,6 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		message = "Initialized GPU temp array"; std::cout<<message+"\n"; logger.push(message);
 	}
 
-	// we actually only need one host array, as we always just copy from and to this and never really read files
-	long long int size_max_r = std::max(4*Grid_fine.N, 4*Grid_psi.N);
-	size_max_r = std::max(size_max_r, 4*Grid_coarse.N);
-	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
-		size_max_r = std::max(size_max_r, 4*Grid_sample[i_save].N);
-	}
-	for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); ++i_save) {
-		size_max_r = std::max(size_max_r, 4*Grid_zoom[i_save].N);
-	}
-	double *Host_save;
-	Host_save = new double[size_max_r];
-	mb_used_RAM_CPU = size_max_r*sizeof(double) / 1e6;
-
-	if (SettingsMain.getVerbose() >= 4) {
-		message = "Initialized CPU temp array"; std::cout<<message+"\n"; logger.push(message);
-	}
-
 	
 	/*******************************************************************
 	*							  Chi								   *
@@ -369,6 +352,9 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		h_rand[i_rand] = rand_fun(rand_gen);
 	}
 	cudaMemcpyToSymbol(d_rand, h_rand, sizeof(double)*1000);
+
+	// initialize init_param values
+	cudaMemcpyToSymbol(d_init_params, SettingsMain.getInitialParamsPointer(), sizeof(double)*10);
 
 	if (SettingsMain.getVerbose() >= 4) {
 		message = "Initialized coarse and fine vorticity"; std::cout<<message+"\n"; logger.push(message);
@@ -726,6 +712,20 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			SettingsMain.setLagrangeOrder(lagrange_order_init);
 			k_init_diffeo<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY, Grid_coarse);
 		}
+
+		// initialize velocity for inertial particles
+		for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
+			if (particles_advected[i_p].tau != 0) {
+				// set after current velocity
+				if (particles_advected[i_p].init_vel) {
+					Particle_advect_inertia_init<<<particle_block[i_p], particle_thread>>>(particles_advected[i_p].num,
+										Dev_particles_pos[i_p], Dev_particles_vel[i_p],
+										Dev_Psi_real, Grid_psi);
+				}
+				// set to zero
+				else { cudaMemset(Dev_particles_vel[i_p], 0.0, 2*particles_advected[i_p].num*sizeof(double)); }
+			}
+		}
 	}
 	// restart from previous state
 	else {
@@ -736,7 +736,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			std::cout<<message+"\n"; logger.push(message);
 		}
 
-		readMapStack(SettingsMain, Map_Stack, Grid_psi, Dev_ChiX, Dev_ChiY, Dev_Psi_real, Host_save, false, SettingsMain.getRestartLocation());
+		readMapStack(SettingsMain, Map_Stack, Grid_fine, Grid_psi, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_Psi_real, false, SettingsMain.getRestartLocation());
 
 		// output how many maps were loaded
 		if (SettingsMain.getVerbose() >= 2) {
@@ -745,7 +745,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		}
 
 		if (SettingsMain.getForwardMap()) {
-			readMapStack(SettingsMain, Map_Stack_f, Grid_psi, Dev_ChiX_f, Dev_ChiY_f, Dev_Psi_real, Host_save, true, SettingsMain.getRestartLocation());
+			readMapStack(SettingsMain, Map_Stack_f, Grid_fine, Grid_psi, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_fine_real, Dev_Psi_real, true, SettingsMain.getRestartLocation());
 			// output how many maps were loaded
 			if (SettingsMain.getVerbose() >= 2) {
 				message = "Loaded " + to_str(Map_Stack.map_stack_ctr) + " maps to forward map stack";
@@ -753,20 +753,34 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			}
 		}
 
+		// compute stream hermite with current maps
+		evaluate_stream_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
+						Dev_W_H_fine_real, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
+						Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
+
 		// compute coarse vorticity as a simulation variable, is needed for entrophy and palinstrophy
 		k_apply_map_and_sample_from_hermite<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
 				Dev_W_coarse, Dev_W_H_fine_real, Grid_coarse, Grid_coarse, Grid_fine, 0, false);
+
+		// read in particles
+		readParticlesState(SettingsMain, Dev_particles_pos, Dev_particles_vel, SettingsMain.getRestartLocation());
+		if (SettingsMain.getParticlesAdvectedNum() > 0) {
+			if (SettingsMain.getVerbose() >= 2) {
+				message = "Loaded data for particle sets";
+				std::cout<<message+"\n"; logger.push(message);
+			}
+		}
 	}
 
 
 	// save function to save variables, combined so we always save in the same way and location
     // use Dev_Hat_fine for W_fine, this works because just at the end of conservation it is overwritten
-	writeTimeStep(SettingsMain, 0.0, dt, dt, Grid_fine, Grid_coarse, Grid_psi,
-			Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
+	writeTimeStep(SettingsMain, t0, dt, dt, Grid_fine, Grid_coarse, Grid_psi,
+			Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
 
 	// compute conservation if wanted
-	message = compute_conservation_targets(SettingsMain, 0.0, dt, dt, Grid_fine, Grid_coarse, Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
+	message = compute_conservation_targets(SettingsMain, t0, dt, dt, Grid_fine, Grid_coarse, Grid_psi, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
 			cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 			Dev_Temp_C1);
 	// output status to console
@@ -776,8 +790,8 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 
 	// sample if wanted
-	message = sample_compute_and_write(SettingsMain, 0.0, dt, dt,
-			Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Host_save, Dev_Temp_2,
+	message = sample_compute_and_write(SettingsMain, t0, dt, dt,
+			Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Dev_Temp_2,
 			cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
@@ -790,30 +804,16 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
     cudaDeviceSynchronize();
 
-    // initialize velocity for inertial particles
-    for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
-    	if (particles_advected[i_p].tau != 0) {
-    		// set after current velocity
-    		if (particles_advected[i_p].init_vel) {
-				Particle_advect_inertia_init<<<particle_block[i_p], particle_thread>>>(particles_advected[i_p].num,
-									Dev_particles_pos[i_p], Dev_particles_vel[i_p],
-									Dev_Psi_real, Grid_psi);
-    		}
-    		// set to zero
-    		else { cudaMemset(Dev_particles_vel[i_p], 0.0, 2*particles_advected[i_p].num*sizeof(double)); }
-    	}
-	}
     // save particle position if interested in that
-    writeParticles(SettingsMain, 0.0, dt, dt, Host_particles, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
+    writeParticles(SettingsMain, t0, dt, dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
 
 	// zoom if wanted, has to be done after particle initialization, maybe a bit useless at first instance
-	Zoom(SettingsMain, 0.0, dt, dt,
+	Zoom(SettingsMain, t0, dt, dt,
 			Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
 			Host_particles, Dev_particles_pos,
-			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
-			Host_save);
+			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread);
 
 
 	// displaying max and min of vorticity and velocity for plotting limits and cfl condition
@@ -1038,11 +1038,11 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			*******************************************************************/
 		// save function to save variables, combined so we always save in the same way and location
 		writeTimeStep(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Grid_fine, Grid_coarse, Grid_psi,
-				Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
+				Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
 
 		// compute conservation if wanted
-		message = compute_conservation_targets(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Grid_fine, Grid_coarse, Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
+		message = compute_conservation_targets(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Grid_fine, Grid_coarse, Grid_psi, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
 				cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 				Dev_Temp_C1);
 		// output computational mesure status to console
@@ -1052,7 +1052,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 		// sample if wanted
 		message = sample_compute_and_write(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt,
-				Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Host_save, Dev_Temp_2,
+				Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Dev_Temp_2,
 				cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
 				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
@@ -1063,7 +1063,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		}
 
 	    // save particle position if interested in that
-	    writeParticles(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Host_particles, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
+	    writeParticles(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
 		
 		// zoom if wanted
 		Zoom(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt,
@@ -1071,8 +1071,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 				(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
 				Host_particles, Dev_particles_pos,
-				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
-				Host_save);
+				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread);
 
 		/*
 		 * Some small things at the end of the loop
@@ -1203,11 +1202,11 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 	// save function to save variables, combined so we always save in the same way and location
 	writeTimeStep(SettingsMain, T_MAX, dt, dt, Grid_fine, Grid_coarse, Grid_psi,
-			Host_save, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
+			Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
 
 	// compute conservation if wanted
-	message = compute_conservation_targets(SettingsMain, T_MAX, dt, dt, Grid_fine, Grid_coarse, Grid_psi, Host_save, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
+	message = compute_conservation_targets(SettingsMain, T_MAX, dt, dt, Grid_fine, Grid_coarse, Grid_psi, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
 			cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 			Dev_Temp_C1);
 	// output computational mesure status to console
@@ -1217,7 +1216,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 	// sample if wanted
 	message = sample_compute_and_write(SettingsMain, T_MAX, dt, dt,
-			Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Host_save, Dev_Temp_2,
+			Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Dev_Temp_2,
 			cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
@@ -1228,7 +1227,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	}
 
     // save particle position if interested in that
-    writeParticles(SettingsMain, T_MAX, dt, dt, Host_particles, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
+    writeParticles(SettingsMain, T_MAX, dt, dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
 
 	// zoom if wanted
 	Zoom(SettingsMain, T_MAX, dt, dt,
@@ -1236,8 +1235,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
 			Host_particles, Dev_particles_pos,
-			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
-			Host_save);
+			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread);
 
 	
 	// save map stack if wanted
@@ -1247,15 +1245,20 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 				+ " \t Total size = " + to_str((Map_Stack.map_stack_ctr+1)*map_size)
 				+ "mb \t S-time = " + to_str(t_vec[loop_ctr + SettingsMain.getLagrangeOrder() - 1], 16); std::cout<<message+"\n"; logger.push(message);
 		}
-		writeMapStack(SettingsMain, Map_Stack, Grid_psi, Dev_ChiX, Dev_ChiY, Dev_Psi_real, Host_save, false);
+		writeMapStack(SettingsMain, Map_Stack, Grid_fine, Grid_psi,
+				Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_Psi_real, false);
 
 		// save forward map stack
 		if (SettingsMain.getForwardMap()) {
 			if (SettingsMain.getVerbose() >= 2) {
 				message = "Saving forward MapStack : Maps = " + to_str(Map_Stack.map_stack_ctr) + " \t Total size = " + to_str((Map_Stack.map_stack_ctr+1)*map_size) + "mb"; std::cout<<message+"\n"; logger.push(message);
 			}
-			writeMapStack(SettingsMain, Map_Stack_f, Grid_psi, Dev_ChiX_f, Dev_ChiY_f, Dev_Psi_real, Host_save, true);
+			writeMapStack(SettingsMain, Map_Stack_f, Grid_fine, Grid_psi,
+					Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_fine_real, Dev_Psi_real, true);
 		}
+
+		// write particle state, in case no particles, then nothing is written
+		writeParticlesState(SettingsMain, Dev_particles_pos, Dev_particles_vel);
 	}
 
 	
@@ -1268,7 +1271,6 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	// Trash variable
 	cudaFree(Dev_Temp_C1);
 	if (size_max_temp_2 != 0) cudaFree(Dev_Temp_2);
-	delete [] Host_save;
 	
 	// Chi
 	cudaFree(Dev_ChiX); cudaFree(Dev_ChiY);

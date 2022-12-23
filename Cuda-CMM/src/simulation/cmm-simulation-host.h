@@ -67,14 +67,13 @@ void grad_y(TCudaGrid2D Grid, double *Dev_W, double *Dev_out, cufftDoubleComplex
 // Computation of Global conservation values
 std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 		TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
-		double *Host_save, double *Dev_Psi, double *Dev_W_coarse, double *Dev_W_H_fine,
+		double *Dev_Psi, double *Dev_W_coarse, double *Dev_W_H_fine,
 		cufftHandle cufft_plan_coarse_D2Z, cufftHandle cufft_plan_coarse_Z2D, cufftHandle cufftPlan_fine_D2Z, cufftHandle cufftPlan_fine_Z2D,
 		cufftDoubleComplex *Dev_Temp_C1);
 
 // Sample on a specific grid and save everything
 std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
-		MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D* Grid_sample, TCudaGrid2D Grid_discrete,
-		double *Host_sample, double *Dev_sample,
+		MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D* Grid_sample, TCudaGrid2D Grid_discrete, double *Dev_sample,
 		cufftHandle* cufft_plan_sample_D2Z, cufftHandle* cufft_plan_sample_Z2D, cufftDoubleComplex *Dev_Temp_C1,
 		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int* forward_particles_block, int forward_particles_thread,
 		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f,
@@ -86,8 +85,7 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f,
 		double *Dev_Temp, double *W_initial_discrete, double *psi,
 		double **Host_particles_pos, double **Dev_particles_pos,
-		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int* forward_particles_block, int forward_particles_thread,
-		double *Host_debug);
+		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int* forward_particles_block, int forward_particles_thread);
 
 // check all targets to compute the next intermediate step
 double compute_next_timestep(SettingsCMM SettingsMain, double t_now, double dt_now);

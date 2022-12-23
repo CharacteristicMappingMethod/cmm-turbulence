@@ -39,9 +39,7 @@ TCudaGrid2D::TCudaGrid2D (int NX, int NY, int NZ, double *bounds)
 	this->sizeNfft = sizeof(cufftDoubleComplex)*Nfft;  // fft D2Z and Z2D size
 
 	//block & grid
-	threadsPerBlock.x = BLOCK_SIZE;
-	threadsPerBlock.y = BLOCK_SIZE;
-	threadsPerBlock.z = 1;
+	threadsPerBlock = {BLOCK_SIZE, BLOCK_SIZE, 1};
 
 	blocksPerGrid.x = ceil(NX/(double)threadsPerBlock.x);
 	blocksPerGrid.y = ceil(NY/(double)threadsPerBlock.y);
@@ -77,9 +75,7 @@ void fill_grid(TCudaGrid2D *Grid, int NX, int NY, int NZ, double *bounds) {
 	Grid->sizeNfft = sizeof(cufftDoubleComplex)*Grid->Nfft;  // fft D2Z and Z2D size
 
 	//block & grid
-	Grid->threadsPerBlock.x = BLOCK_SIZE;
-	Grid->threadsPerBlock.y = BLOCK_SIZE;
-	Grid->threadsPerBlock.z = 1;
+	Grid->threadsPerBlock = {BLOCK_SIZE, BLOCK_SIZE, 1};
 
 	Grid->blocksPerGrid.x = ceil(NX/(double)Grid->threadsPerBlock.x);
 	Grid->blocksPerGrid.y = ceil(NY/(double)Grid->threadsPerBlock.y);
