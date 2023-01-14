@@ -1,0 +1,39 @@
+CMM Parameter file
+param_version	=	3
+
+workspace	=	./
+sim_name	=	10-4nodes-reference-bruce
+grid_coarse	=	1024
+grid_fine	=	1024
+grid_psi	=	2048
+grid_vort	=	1024
+final_time	=	1
+set_dt_by_steps	=	1
+steps_per_sec	=	512
+save_computational_num	=	2
+save_computational	=	{is_instant=1,time_start=0,var= ,conv=1}
+save_computational	=	{is_instant=1,time_start=10000,var= ,conv=1}
+mem_RAM_CPU_remaps	=	4096
+save_map_stack	=	0
+restart_time	=	0
+verbose	=	3
+initial_condition	=	4_nodes
+initial_params	=	{0,0,0,0,0,0,0,0,0,0}
+initial_discrete	=	0
+incomp_threshold	=	0.0001
+map_epsilon	=	0.001
+time_integration	=	RK3
+lagrange_override	=	-1
+lagrange_init_higher_order	=	1
+map_update_order	=	4th
+molly_stencil	=	0
+freq_cut_psi	=	2048
+skip_remapping	=	1
+save_sample_num	=	2
+save_sample	=	{is_instant=1,time_start=0,var= ,grid=2048}
+save_sample	=	{is_instant=1,time_start=10000,var=Chi_b-W,grid=2048}
+scalar_name	=	circular_ring
+scalar_discrete	=	0
+save_zoom_num	=	0
+forward_map	=	0
+particles_advected_num	=	0
