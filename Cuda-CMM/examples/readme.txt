@@ -23,8 +23,8 @@ Step-size			-   1/8
 Final time			-	1
 
 Further simulation settings can be taken from the parameter file.
-A copy of the parameter file can also be found inside the result folder in 'params.txt'
-Also, the log output to the console is also logged to the file 'log.txt'.
+The actual used parameters can be found inside the result folder in 'params.txt'
+Also, the log output to the console is logged to the file 'log.txt'.
 	It should contain some details of the simulation, ending with the line 'Memory initialization finished'
 	Afterwards, the simulation initialization starts, which should do 6 initialization steps in total,
 	ending with the line 'Simulation initialization finished'.
@@ -75,6 +75,7 @@ The parameter file set several important factors for the computations. Those wil
 	save_map_stack				-	bool, if map stack should be saved
 	verbose						-	level of output to console or log-file, going from 0 to 3
 	initial_condition			-	name of initial condition
+	initial_params				-	Settings of parameters for initial conditions
 	initial_discrete			-	bool, if initial condition is set after discrete data
 	incomp_threshold			-	incompressibility threshold for remapping condition
 	map_epsilon					-	map epsilon for GALS stencil, should be around 1-5e-4
@@ -82,7 +83,6 @@ The parameter file set several important factors for the computations. Those wil
 	lagrange_override			-	set lagrange order explicitly, should be done after time integration methods
 	lagrange_init_higher_order	-	bool, for how velocity should be initialized, is usually not changed
 	map_update_order			-	order for map update stencil, is usually not changed
-	map_update_grid				-	bool, should map update be made from grid, is usually not changed
 	molly_stencil				-	include mollification, is usually not changed
 	freq_cut_psi				-	frequency for low-pass filter, important for reducing number of remappings
 	skip_remapping				-	bool, skip remapping procedure, usefull for validation test
@@ -92,13 +92,13 @@ The parameter file set several important factors for the computations. Those wil
 	save_zoom_num				-	amount of save settings for zooms, explained later
 	forward_map					-	bool, should forward map be computed
 	particles_advected_num		-	amount of particle sets embedded in the flow, explained later
-	particles_steps				-	important for particle convergence validations, elsewise set to -1
 The Mesure values in 'Monitoring_data/Mesure' now contain 4 data points each, which can be taken from the file size of 32 byte
 Reading in those data for postprocessing to other programs is fairly easy, as the data is only encoded in binary data
 	In python, this can be read in easily using np.fromfile(location)
 The simulation also saved data at two time instants, which can be seen in the 'Time_data'-folder
 	Each saved time instant will have its one sub-folder for data in the form of 'Time_{T}'
 	Only exception: Time_final, this should usually be the final time, but can also be earlier in case the simulation quitted earlier
+	In the parameter file, Time_final is always referenced as 10000
 For this simulation, the vorticity and velocity were saved at the initial and final time
 	They are also encoded in binary data, their grid information is hinted at the end of the file names
 
@@ -113,7 +113,7 @@ Run the code inside /Cuda-CMM:
 Expected output:
 A new file will be created in the data-folder named '03-save_settings_4_nodes_C128_F128_t64_T4'.
 The log-file shows 86 remappings with remapping occuring every step at the end, hinting at a badly converged solution
-	Increasing the map size, the incompressibility treshold or the lowpass filter strength should help to stabilize the solution
+	Increasing the map size, the incompressibility treshold or decreasing the lowpass filter width should help to stabilize the solution
 	The overall computation time (c-time) on the test machine took 7s.
 	Conservation for computational (coarse) and sampled variables can be found scattered in the log-file
 The parameter-file shows several settings, which were made in order to save variables of the simulation.
@@ -224,22 +224,17 @@ Conservation is computed at beginning and every s-time, in addition the backward
 
 
 
-*****   Example 12 - Anticythere run of shear layer flow   *****
-An example of a shear layer flow to be run on anticythere. This features the computation of a developing shear layer flow.
-Usage on anticythere in resource folder: make all; nohub ./SimulationCuda2d.out param_file=[param-file-location]
+*****   Example 12 - V100 run of shear layer flow   *****
+An example of a shear layer flow to be run on V100. This features the computation of a developing shear layer flow.
+Usage on V100 in resource folder: make all; nohub ./SimulationCuda2d.out param_file=[param-file-location]
 It saves a zoom between the two emerging vortices every s-time until t=25, vortices would merge starting from t=30.
 Log features 206 maps and a final time of almost 9h of computation time.
 
 
 
-*****   Example 13 - Anticythere run of ring in isotropic turbulence using 'gaussian_blobs'   *****
+*****   Example 13 - V100 run of ring in isotropic turbulence using 'gaussian_blobs'   *****
 An example of emerging isotropic turbulence from a checkerboard-grid of gaussian vortices with small random displacement.
-Usage on anticythere in resource folder: make all; nohub ./SimulationCuda2d.out param_file=[param-file-location]
+Usage on V100 in resource folder: make all; nohub ./SimulationCuda2d.out param_file=[param-file-location]
 It saves particle positions of particles distributed in a ring starting from t=10 at every 0.5 s-time until t=30 for 4 particle sets.
 It additionally saves Vorticity and Velocity at 4096-grid every 5 s-time.
 Log featured 663 maps and a final time of roughly 25.5h of computation time.
-
-
-
-*****   Example 14 - Final state of Euler for isotropic turbulence using 'gaussian_blobs'   *****
-In development

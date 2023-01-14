@@ -25,6 +25,48 @@
 #define T_MAX 10000  // maximum time, used to simplify saving and stuff
 
 
+template <typename T>
+bool parseString(std::string str, T* arr) {
+	// Check if the string is empty or does not start and end with curly braces
+	if (str.empty() || (str[0] != '{' && str[0] != '"') || (str[str.length() - 1] != '}' && str[str.length() - 1] != '"')) {
+		return false;
+	}
+
+	// Remove the curly braces from the string
+	str.erase(0, 1); str.erase(str.length() - 1, 1);
+
+	// Create a stringstream from the modified string
+	std::stringstream ss(str);
+	int counter = 0;  // Initialize the size of the array
+
+	// Extract the values from the stringstream and insert them into the array
+	T val;
+	while (ss >> val) {
+		arr[counter++] = val;
+		if (ss.peek() == ',') {
+			ss.ignore();
+		}
+	}
+	return true;
+}
+template <typename T>
+std::string arrayToString(T* arr, int size) {
+	std::stringstream ss;
+
+	// Insert the values from the array into the stringstream
+	ss << "{";
+	for (int i = 0; i < size; i++) {
+		ss << arr[i];
+		if (i < size - 1) {
+			ss << ",";
+		}
+	}
+	ss << "}";
+
+	// Return the string from the stringstream
+	return ss.str();
+}
+
 // class to define the saving of computational variables
 class SaveComputational {
 
@@ -114,7 +156,8 @@ private:
 	// main properties, needed to be able to run
 	std::string workspace, sim_name, file_name;
 	int grid_coarse, grid_fine, grid_psi, grid_vort;
-	std::string initial_condition, initial_discrete_location;
+	std::string initial_condition; double initial_params[10] = {0};
+	std::string initial_discrete_location;
 	int initial_condition_num, initial_discrete_grid; bool initial_discrete;
 	int verbose;
 	// time stepping properties
@@ -129,6 +172,7 @@ private:
 	double map_epsilon;
 	//memory variables
 	int mem_RAM_CPU_remaps; bool save_map_stack;
+	double restart_time; std::string restart_location;
 	// specific
 	std::string time_integration; int time_integration_num;
 	int lagrange_order, lagrange_override;
@@ -176,14 +220,9 @@ public:
 	void setSaveZoom(std::string command_full, std::string delimiter, int number);
 	void setParticlesAdvected(std::string command_full, std::string delimiter, int number);
 	void setParticlesForwarded(std::string command_full, std::string delimiter, int number);
-	// work with arrays
-	void string_to_int_array(std::string s_array, int *array);
-	void string_to_double_array(std::string s_array, double *array);
-	void transcribe_int_array(int *array_in, int *array_save, int num) { for (int i_num = 0; i_num < num; ++i_num) array_save[i_num] = array_in[i_num]; }
-	void transcribe_double_array(double *array_in, double *array_save, int num) { for (int i_num = 0; i_num < num; ++i_num) array_save[i_num] = array_in[i_num]; }
+
 
 	// get and set methods for all variables, this is quite much and quite ugly, i know
-
 
 	// name
 	std::string getWorkspace() const { return workspace; }
@@ -247,6 +286,9 @@ public:
 		}
 	}
 	int getInitialConditionNum() const { return initial_condition_num; }
+	void setInitialParams(std::string initialParams) { parseString(initialParams, initial_params);}
+	std::string getInitialParams() const { return arrayToString(initial_params, 10); }
+	double* getInitialParamsPointer() { return initial_params; }
 	bool getInitialDiscrete() const { return initial_discrete; }
 	void setInitialDiscrete(bool initialDiscrete) { initial_discrete = initialDiscrete; }
 	int getInitialDiscreteGrid() const { return initial_discrete_grid; }
@@ -269,6 +311,10 @@ public:
 	void setMemRamCpuRemaps(int memRamCpuRemaps) { mem_RAM_CPU_remaps = memRamCpuRemaps; }
 	bool getSaveMapStack() const { return save_map_stack; }
 	void setSaveMapStack(bool saveMapStack) { save_map_stack = saveMapStack; }
+	double getRestartTime() const { return restart_time; }
+	void setRestartTime(double restartTime) { restart_time = restartTime; }
+	std::string getRestartLocation() const { return restart_location; }
+	void setRestartLocation(std::string restartLocation) { restart_location = restartLocation; }
 
 	// map update order handling the stencil of footpoints
 	std::string getMapUpdateOrder() const { return map_update_order; }

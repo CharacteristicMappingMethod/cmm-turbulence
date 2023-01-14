@@ -20,7 +20,7 @@
 
 #include "../numerical/cmm-particles.h"
 
-__constant__ double d_rand[1000];  // array for random numbers being used for random initial conditions
+__constant__ double d_rand[1000], d_init_params[10];  // array for random numbers being used for random initial conditions
 
 /*******************************************************************
 *			Initial condition for vorticity						   *
@@ -173,10 +173,10 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 			x -= floor(x/twoPI)*twoPI;
 			y -= floor(y/twoPI)*twoPI;
 
-			const int NB_gaus = 5;  // number of negative and positive blobs in each row
-			double sigma = twoPI*0.025;  // scaling in width
+			const int NB_gaus = 10;  // number of negative and positive blobs in each row
+			double sigma = twoPI*0.01;  // scaling in width
 			double fac = 1e0;  // strength scaling
-			double rand_offset = twoPI*0.0125;  // maximum random offset of blobs
+			double rand_offset = twoPI*0.005;  // maximum random offset of blobs
 			int border = 2;  // increase parallel domain to include values of blobs from neighbouring domains
 
 			int dir = 1;  // a bit hackery, but it works
@@ -206,7 +206,7 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 		case 9:  // shielded vortex
 		{
 			double nu = 2e-1;
-			double nu_fac = 1 / (2*nu*nu);  // 1 / (2*nu*nu*nu)
+			double nu_fac = 1 / (2*nu*nu*nu);  // 1 / (2*nu*nu*nu)
 			double nu_center = 4*nu;  // 4*nu
 			double nu_scale = 4*nu;  // 4*nu
 
@@ -228,8 +228,8 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 		// omega = exp(-(y - phi(x))^2 / (2 delta^2)) / (sqrt(2 pi) delta^2) with phi(x) sin(x)/2
 		case 11:  // vortex sheets similar to caflisch
 		{
-			double Re = 5e3;
-			double delta_Re = 1/sqrt(Re);  // rewritte for delta to reduce confusion
+			// double Re = 5e3;
+			double delta_Re = 1/sqrt(d_init_params[0]);  // rewrite for delta to reduce confusion
 			// compute distance from center
 			return exp(- (y-PI - sin(x)/2.0) * (y-PI - sin(x)/2.0) / (2 * delta_Re * delta_Re)) / sqrt(2*PI) / delta_Re;
 		}

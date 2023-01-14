@@ -1,5 +1,5 @@
 CMM Parameter file
-param_version	=	2
+param_version	=	3
 
 workspace	=	./
 sim_name	=	02-first-simulation
@@ -16,8 +16,10 @@ save_computational	=	{is_instant=1,time_start=10000,var=W-U,conv=1}
 save_computational	=	{is_instant=0,time_start=0,time_end=10000,time_step=0.5,var= ,conv=1}
 mem_RAM_CPU_remaps	=	100
 save_map_stack	=	0
+restart_time	=	0
 verbose	=	3
 initial_condition	=	4_nodes
+initial_params	=	{0,0,0,0,0,0,0,0,0,0}
 initial_discrete	=	0
 incomp_threshold	=	0.0001
 map_epsilon	=	0.001
@@ -25,7 +27,6 @@ time_integration	=	RK3
 lagrange_override	=	-1
 lagrange_init_higher_order	=	1
 map_update_order	=	4th
-map_update_grid	=	0
 molly_stencil	=	0
 freq_cut_psi	=	128
 skip_remapping	=	0
@@ -34,6 +35,4 @@ scalar_name	=	rectangle
 scalar_discrete	=	0
 save_zoom_num	=	0
 forward_map	=	0
-particles_forwarded_num	=	0
 particles_advected_num	=	0
-particles_steps	=	-1

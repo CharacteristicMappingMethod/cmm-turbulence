@@ -39,9 +39,7 @@ TCudaGrid2D::TCudaGrid2D (int NX, int NY, int NZ, double *bounds)
 	this->sizeNfft = sizeof(cufftDoubleComplex)*Nfft;  // fft D2Z and Z2D size
 
 	//block & grid
-	threadsPerBlock.x = BLOCK_SIZE;
-	threadsPerBlock.y = BLOCK_SIZE;
-	threadsPerBlock.z = 1;
+	threadsPerBlock = {BLOCK_SIZE, BLOCK_SIZE, 1};
 
 	blocksPerGrid.x = ceil(NX/(double)threadsPerBlock.x);
 	blocksPerGrid.y = ceil(NY/(double)threadsPerBlock.y);
@@ -77,9 +75,7 @@ void fill_grid(TCudaGrid2D *Grid, int NX, int NY, int NZ, double *bounds) {
 	Grid->sizeNfft = sizeof(cufftDoubleComplex)*Grid->Nfft;  // fft D2Z and Z2D size
 
 	//block & grid
-	Grid->threadsPerBlock.x = BLOCK_SIZE;
-	Grid->threadsPerBlock.y = BLOCK_SIZE;
-	Grid->threadsPerBlock.z = 1;
+	Grid->threadsPerBlock = {BLOCK_SIZE, BLOCK_SIZE, 1};
 
 	Grid->blocksPerGrid.x = ceil(NX/(double)Grid->threadsPerBlock.x);
 	Grid->blocksPerGrid.y = ceil(NY/(double)Grid->threadsPerBlock.y);
@@ -98,84 +94,46 @@ MapStack::MapStack(TCudaGrid2D *Grid, int cpu_map_num)
 
 	this->cpu_map_num = cpu_map_num;
 
-	// set values
+	// pre-set values
 	map_stack_ctr = 0;
-	Nb_array_RAM = 4;
 
-	// initialize device map stack
+	// initialize device map with host map stack
 	cudaMalloc((void **) &Dev_ChiX_stack, 4*Grid->sizeNReal);
 	cudaMalloc((void **) &Dev_ChiY_stack, 4*Grid->sizeNReal);
 
-	Host_ChiX_stack_RAM_0 = new double[cpu_map_num * 4*Grid->sizeNReal];
-	Host_ChiY_stack_RAM_0 = new double[cpu_map_num * 4*Grid->sizeNReal];
-	Host_ChiX_stack_RAM_1 = new double[cpu_map_num * 4*Grid->sizeNReal];
-	Host_ChiY_stack_RAM_1 = new double[cpu_map_num * 4*Grid->sizeNReal];
-	Host_ChiX_stack_RAM_2 = new double[cpu_map_num * 4*Grid->sizeNReal];
-	Host_ChiY_stack_RAM_2 = new double[cpu_map_num * 4*Grid->sizeNReal];
-	Host_ChiX_stack_RAM_3 = new double[cpu_map_num * 4*Grid->sizeNReal];
-	Host_ChiY_stack_RAM_3 = new double[cpu_map_num * 4*Grid->sizeNReal];
+	// host pointer array pointing to each individual map
+	Host_ChiX_stack_RAM = new double*[cpu_map_num];
+	Host_ChiY_stack_RAM = new double*[cpu_map_num];
+
+	// initialize memory for each individual map, separate so non-contigous in memory
+	for (int i_m = 0; i_m < cpu_map_num; i_m++) {
+		Host_ChiX_stack_RAM[i_m] = new double[4*Grid->sizeNReal];
+		Host_ChiY_stack_RAM[i_m] = new double[4*Grid->sizeNReal];
+	}
 }
 
 
 // copy inserted map into last position at map stack, after 1/4 of all total maps, start using new array
 void MapStack::copy_map_to_host(double *Dev_ChiX, double *Dev_ChiY) {
-    switch(map_stack_ctr / cpu_map_num){
-        case 0:
-            cudaMemcpy(&Host_ChiX_stack_RAM_0[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
-            cudaMemcpy(&Host_ChiY_stack_RAM_0[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
-            break;
-        case 1:
-            cudaMemcpy(&Host_ChiX_stack_RAM_1[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
-            cudaMemcpy(&Host_ChiY_stack_RAM_1[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
-            break;
-        case 2:
-            cudaMemcpy(&Host_ChiX_stack_RAM_2[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
-            cudaMemcpy(&Host_ChiY_stack_RAM_2[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
-            break;
-
-        case 3:
-            cudaMemcpy(&Host_ChiX_stack_RAM_3[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
-            cudaMemcpy(&Host_ChiY_stack_RAM_3[(map_stack_ctr%cpu_map_num)*4*Grid->N], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
-            break;
-    }
+	cudaMemcpy(Host_ChiX_stack_RAM[map_stack_ctr], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
+	cudaMemcpy(Host_ChiY_stack_RAM[map_stack_ctr], Dev_ChiY, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
     map_stack_ctr++;
 }
 // copy map to device, map_num decides which map to take out
 void MapStack::copy_map_to_device(int map_num) {
-	switch (map_num / cpu_map_num) {
-		case 0: {
-			cudaMemcpy(Dev_ChiX_stack, &Host_ChiX_stack_RAM_0[(map_num%cpu_map_num)*Grid->N*4], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
-			cudaMemcpy(Dev_ChiY_stack, &Host_ChiY_stack_RAM_0[(map_num%cpu_map_num)*Grid->N*4], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
-			break;
-		}
-		case 1: {
-			cudaMemcpy(Dev_ChiX_stack, &Host_ChiX_stack_RAM_1[(map_num%cpu_map_num)*Grid->N*4], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
-			cudaMemcpy(Dev_ChiY_stack, &Host_ChiY_stack_RAM_1[(map_num%cpu_map_num)*Grid->N*4], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
-			break;
-		}
-		case 2: {
-			cudaMemcpy(Dev_ChiX_stack, &Host_ChiX_stack_RAM_2[(map_num%cpu_map_num)*Grid->N*4], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
-			cudaMemcpy(Dev_ChiY_stack, &Host_ChiY_stack_RAM_2[(map_num%cpu_map_num)*Grid->N*4], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
-			break;
-		}
-		case 3: {
-			cudaMemcpy(Dev_ChiX_stack, &Host_ChiX_stack_RAM_3[(map_num%cpu_map_num)*Grid->N*4], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
-			cudaMemcpy(Dev_ChiY_stack, &Host_ChiY_stack_RAM_3[(map_num%cpu_map_num)*Grid->N*4], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
-			break;
-		}
-	}
+	cudaMemcpy(Dev_ChiX_stack, Host_ChiX_stack_RAM[map_num], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
+	cudaMemcpy(Dev_ChiY_stack, Host_ChiY_stack_RAM[map_num], 4*Grid->sizeNReal, cudaMemcpyHostToDevice);
 }
 
 // free those resources
 void MapStack::free_res() {
-	delete [] Host_ChiX_stack_RAM_0;
-	delete [] Host_ChiY_stack_RAM_0;
-	delete [] Host_ChiX_stack_RAM_1;
-	delete [] Host_ChiY_stack_RAM_1;
-	delete [] Host_ChiX_stack_RAM_2;
-	delete [] Host_ChiY_stack_RAM_2;
-	delete [] Host_ChiX_stack_RAM_3;
-	delete [] Host_ChiY_stack_RAM_3;
+	// delete memory for each individual map
+	for (int i_m = 0; i_m < cpu_map_num; i_m++) {
+		delete [] Host_ChiX_stack_RAM[i_m];
+		delete [] Host_ChiY_stack_RAM[i_m];
+	}
+	delete [] Host_ChiX_stack_RAM;
+	delete [] Host_ChiY_stack_RAM;
 	cudaFree(Dev_ChiX_stack);
 	cudaFree(Dev_ChiY_stack);
 }

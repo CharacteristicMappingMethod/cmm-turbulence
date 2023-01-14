@@ -22,7 +22,7 @@
  * parameter file version, which should be increased with every major new setting
  * maybe this is not important, however, as older parameter files could leave out settings, they might not work anymore afterwards
  */
-#define PARAM_VERSION 2
+#define PARAM_VERSION 3
 #define PARAM_HEADER_LINE "CMM Parameter file"
 #define PARAM_COMMAND "param_version"
 
@@ -78,10 +78,15 @@ void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 
 		file << write_line("mem_RAM_CPU_remaps", to_str(SettingsMain.getMemRamCpuRemaps(), 16));
 		file << write_line("save_map_stack", to_str(SettingsMain.getSaveMapStack(), 16));
+		file << write_line("restart_time", to_str(SettingsMain.getRestartTime(), 16));
+		if (SettingsMain.getRestartTime() != 0) {
+			file << write_line("restart_location", to_str(SettingsMain.getRestartLocation(), 16));
+		}
 
 		file << write_line("verbose", to_str(SettingsMain.getVerbose(), 16));
 
 		file << write_line("initial_condition", to_str(SettingsMain.getInitialCondition(), 16));
+		file << write_line("initial_params", to_str(SettingsMain.getInitialParams(), 16));
 		file << write_line("initial_discrete", to_str(SettingsMain.getInitialDiscrete(), 16));
 		if (SettingsMain.getInitialDiscrete())  {
 			file << write_line("initial_discrete_grid", to_str(SettingsMain.getInitialDiscreteGrid(), 16));
@@ -207,7 +212,11 @@ void load_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 
 					// here, future settings for newer param-file versions could be implemented for example to disable stuff by default
 					if (param_version < 2) {
-						std::cout<<"Tried to read in old file. Save settings cannot be set.\n";
+						std::cout<<"Param-file version < 2: Save settings cannot be set." << std::endl;
+					}
+					if (param_version < 3) {
+						std::cout<<"Param-file version < 3: Initial condition parameters cannot be set."
+							"Check cmm-init.cu if the initial conditions contains parameters that need to be set" << std::endl;
 					}
 				}
 			}
