@@ -46,7 +46,7 @@ void SettingsCMM::setPresets() {
 	std::string initial_condition = "4_nodes";
 	// string containing parameters for initial condition, they have to be formatted to fit {D1,D2,D3,...} or "D1,D2,D3,..."
 	// can be 10 values max, check cmm-init.cu if the initial condition needs parameter
-	std::string initial_params = "{5e4}";
+	std::string initial_params = "{0}";
 
 	// possibility to compute from discrete initial condition
 	bool initial_discrete = false;

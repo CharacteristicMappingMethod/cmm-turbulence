@@ -1,5 +1,5 @@
 CMM Parameter file
-param_version	=	2
+param_version	=	3
 
 workspace	=	./
 sim_name	=	13-anticythere-particles-in-turbulence
@@ -18,8 +18,10 @@ save_computational	=	{is_instant=0,time_start=10,time_end=30,time_step=0.5,var=P
 save_computational	=	{is_instant=0,time_start=10,time_end=30,time_step=0.5,var=PartA_04,conv=0}
 mem_RAM_CPU_remaps	=	190000
 save_map_stack	=	0
+restart_time	=	0
 verbose	=	3
 initial_condition	=	gaussian_blobs
+initial_params	=	{0,0,0,0,0,0,0,0,0,0}
 initial_discrete	=	0
 incomp_threshold	=	0.001
 map_epsilon	=	0.001
@@ -27,7 +29,6 @@ time_integration	=	RK3
 lagrange_override	=	-1
 lagrange_init_higher_order	=	1
 map_update_order	=	4th
-map_update_grid	=	0
 molly_stencil	=	0
 freq_cut_psi	=	256
 skip_remapping	=	0

@@ -421,7 +421,7 @@ void writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, doubl
 		int pos_p = save_var.find("PartA_", 0);
 
 		// create new subfolder for current timestep, doesn't matter if we try to create it several times
-		if (save_var.find("PartA_", 0) != std::string::npos and save_var.find("PartAVel_", 0) != std::string::npos) {
+		if (save_var.find("PartA_", 0) != std::string::npos or save_var.find("PartAVel_", 0) != std::string::npos) {
 			std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
 			std::string sub_folder_name = "/Particle_data/Time_" + t_s_now;
 			string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
