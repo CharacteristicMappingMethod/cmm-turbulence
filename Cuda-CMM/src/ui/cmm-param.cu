@@ -54,6 +54,7 @@ void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 
 		// now come all the parameter!
 		file << write_line("workspace", to_str(SettingsMain.getWorkspace(), 16));
+		file << write_line("simulation_type", to_str(SettingsMain.getSimulationType(), 16));
 		file << write_line("sim_name", to_str(SettingsMain.getSimName(), 16));
 
 		// grid details

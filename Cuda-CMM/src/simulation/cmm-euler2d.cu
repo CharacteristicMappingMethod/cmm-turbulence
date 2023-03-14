@@ -111,6 +111,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
     // print simulation details
     if (SettingsMain.getVerbose() >= 1) {
+		message = "Solving = " + SettingsMain.getSimulationType(); std::cout<<message+"\n"; logger.push(message);
 		message = "Initial condition = " + SettingsMain.getInitialCondition(); std::cout<<message+"\n"; logger.push(message);
 		message = "Iter max = " + to_str(iterMax); std::cout<<message+"\n"; logger.push(message);
 		message = "Name of simulation = " + SettingsMain.getFileName(); std::cout<<message+"\n"; logger.push(message);

@@ -20,6 +20,7 @@
 #include "../numerical/cmm-fft.h"
 
 #include "../ui/cmm-io.h"
+#include "../ui/globals.h"
 
 // debugging, using printf
 #include "stdio.h"
@@ -65,23 +66,25 @@ double invertibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_backward, TC
 void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi,
 		double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y,
 		double *psi, double *t, double *dt, int loop_ctr, int direction) {
+	
 	// compute lagrange coefficients from dt vector for timesteps n+dt and n+dt/2, this makes them dynamic
 	double h_L1[4], h_L12[4];  // constant memory for lagrange coefficient to be computed only once
 	int loop_ctr_l = loop_ctr + SettingsMain.getLagrangeOrder()-1;  // dt and t are shifted because of initial previous steps
+	
 	for (int i_p = 0; i_p < SettingsMain.getLagrangeOrder(); ++i_p) {
 		h_L1[i_p] = get_L_coefficient(t, t[loop_ctr_l+1], loop_ctr_l, i_p, SettingsMain.getLagrangeOrder());
 		h_L12[i_p] = get_L_coefficient(t, t[loop_ctr_l] + dt[loop_ctr_l+1]/2.0, loop_ctr_l, i_p, SettingsMain.getLagrangeOrder());
 	}
 
-	double h_c[3];  // constant memory for map update coefficient to be computed only once
+	double h_c[3];  																		// constant memory for map update coefficient to be computed only once
 	switch (SettingsMain.getMapUpdateOrderNum()) {
-		case 2: { h_c[0] = +3.0/8.0; h_c[1] = -3.0/20.0; h_c[2] = +1.0/40.0; break; }  // 6th order interpolation
-		case 1: { h_c[0] = +1.0/3.0; h_c[1] = -1.0/12.0; break; }  // 4th order interpolation
-		case 0: { h_c[0] = +1.0/4.0; break; }  // 2th order interpolation
+		case 2: { h_c[0] = +3.0/8.0; h_c[1] = -3.0/20.0; h_c[2] = +1.0/40.0; break; }  		// 6th order interpolation
+		case 1: { h_c[0] = +1.0/3.0; h_c[1] = -1.0/12.0; break; }  							// 4th order interpolation
+		case 0: { h_c[0] = +1.0/4.0; break; }  												// 2th order interpolation
 	}
 
-	double h_c1[12], h_cx[12], h_cy[12], h_cxy[12];  // compute coefficients for each direction only once
-	// already compute final coefficients with appropriate sign
+	double h_c1[12], h_cx[12], h_cy[12], h_cxy[12];  										// compute coefficients for each direction only once
+																							// already compute final coefficients with appropriate sign
 	for (int i_foot = 0; i_foot < 4+4*SettingsMain.getMapUpdateOrderNum(); ++i_foot) {
 		h_c1 [i_foot] = h_c[i_foot/4];
 		h_cx [i_foot] = h_c[i_foot/4] * (1 - 2*((i_foot/2)%2))     / SettingsMain.getMapEpsilon() / double(i_foot/4 + 1);
@@ -285,15 +288,23 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 
 void translate_initial_condition_through_map_stack(TCudaGrid2D Grid_fine, TCudaGrid2D Grid_discrete, MapStack Map_Stack, double *Dev_ChiX, double *Dev_ChiY,
 		double *W_H_real, cufftHandle cufftPlan_fine_D2Z, cufftHandle cufftPlan_fine_Z2D, cufftDoubleComplex *Dev_Temp_C1,
-		double *W_initial_discrete, int simulation_num_c, bool initial_discrete)
+		double *W_initial_discrete, int simulation_num_c, bool initial_discrete, int var_num /*=0*/)
 {
+	/*
+	@param W_H_real: real space vorticity
+	@param Dev_Temp_C1: complex space vorticity (temp)
+	@param W_initial_discrete: initial condition in discrete space
+	@param initial_discrete: if true, initial condition is in discrete space
+	@param simulation_num_c: number of simulation (inicond)
+	@param var_num: 0 vorticity (default), 1 passive scalar, 2 distribution function (optional)
+	*/
 
 	// Sample vorticity on fine grid
 	// W_H_real is used as temporary variable and output
 	apply_map_stack(Grid_fine, Map_Stack, Dev_ChiX, Dev_ChiY, W_H_real+Grid_fine.N, -1);
-	// initial condition - 0 to switch for vorticity
+	// initial condition
 	k_h_sample_from_init<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(W_H_real, W_H_real+Grid_fine.N, Grid_fine, Grid_discrete,
-			0, simulation_num_c, W_initial_discrete, initial_discrete);
+			var_num, simulation_num_c, W_initial_discrete, initial_discrete);
 
 	// go to comlex space
 	cufftExecD2Z(cufftPlan_fine_D2Z, W_H_real, Dev_Temp_C1);
@@ -316,18 +327,25 @@ void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCu
 		cufftHandle cufft_plan_coarse_Z2D, cufftHandle cufft_plan_psi, cufftHandle cufft_plan_vort,
 		cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_psi)
 {
+	/*
+	This function computes the solution to $L \psi = w $ where $w$ is the vorticity and $\psi$ is the stream function
+	@param Dev_W_H_fine_real: real space vorticity
+	@param Psi_real: real space stream function
+	@param Dev_Temp_C1: complex space vorticity (temp)
+	*/
+
 
 	// apply map to w and sample using mollifier, do it on a special grid for vorticity and apply mollification if wanted
 	k_apply_map_and_sample_from_hermite<<<Grid_vort.blocksPerGrid, Grid_vort.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
 			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_fine_real, Grid_coarse, Grid_vort, Grid_fine, molly_stencil, true);
 
-	// forward fft
+	// forward fft 
 	cufftExecD2Z(cufft_plan_vort, (cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C1);
-	k_normalize_h<<<Grid_vort.fft_blocks, Grid_vort.threadsPerBlock>>>(Dev_Temp_C1, Grid_vort);
+	k_normalize_h<<<Grid_vort.fft_blocks, Grid_vort.threadsPerBlock>>>(Dev_Temp_C1, Grid_vort);  // this is a normalization factor of FFT? if yes we dont need to do it everytime!!! 
 
 	// cut_off frequencies at N_psi/3 for turbulence (effectively 2/3) and compute smooth W
 	// use Psi grid here for intermediate storage
-//	k_fft_cut_off_scale<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_Temp_C1, Grid_coarse.NX, (double)(Grid_psi.NX)/3.0);
+	//	k_fft_cut_off_scale<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_Temp_C1, Grid_coarse.NX, (double)(Grid_psi.NX)/3.0);
 
 	// transition to stream function grid with three cases : grid_vort < grid_psi, grid_vort > grid_psi (a bit dumb) and grid_vort == grid_psi
 	// grid change because inline data movement is nasty, we can use psi_real as buffer anyways
@@ -351,6 +369,59 @@ void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCu
 // debugging lines, could be needed here to check psi
 //	cudaMemcpy(Host_Debug, Psi_real, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToHost);
 //	writeAllRealToBinaryFile(4*Grid_psi.N, Host_Debug, "psi_debug_4_nodes_C512_F2048_t64_T1", "Debug_2");
+
+
+/*******************************************************************
+*						 Computation of Psi						   *
+*******************************************************************/
+void evaluate_potential_from_density_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_phi, TCudaGrid2D Grid_vort,
+		double *Dev_ChiX, double *Dev_ChiY, double *Dev_W_H_fine_real, double *phi_real,
+		cufftHandle cufft_plan_coarse_Z2D, cufftHandle cufft_plan_phi, cufftHandle cufft_plan_dist_fun,
+		cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_phi)
+{
+	/*
+	This function computes the solution to $L_xx \phi = (1-l \int f dv) $ where $w$ is the vorticity and $\phi$ is the stream function
+	*/
+
+	// apply map to w and sample using mollifier, do it on a special grid for vorticity and apply mollification if wanted
+	k_apply_map_and_sample_from_hermite<<<Grid_vort.blocksPerGrid, Grid_vort.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
+			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_fine_real, Grid_coarse, Grid_vort, Grid_fine, molly_stencil, true);
+
+	/* forward fft: cufftExecD2Z
+	 cufft_plan_dist_fun 				...provides a simple configuration mechanism for the fft
+	 (cufftDoubleReal*)Dev_Temp_C1 		... is the input data (second argument)
+	 Dev_Temp_C1 						... is the output data (last argument)
+	*/
+	cufftExecD2Z(cufft_plan_dist_fun, (cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C1);
+	k_normalize_h<<<Grid_vort.fft_blocks, Grid_vort.threadsPerBlock>>>(Dev_Temp_C1, Grid_vort);  // this is a normalization factor of FFT? if yes we dont need to do it everytime!!! 
+
+	// cut_off frequencies at N_phi/3 for turbulence (effectively 2/3) and compute smooth W
+	// use phi grid here for intermediate storage
+//	k_fft_cut_off_scale<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_Temp_C1, Grid_coarse.NX, (double)(Grid_phi.NX)/3.0);
+
+	// transition to stream function grid with three cases : grid_vort < grid_phi, grid_vort > grid_phi (a bit dumb) and grid_vort == grid_phi
+	// grid change because inline data movement is nasty, we can use phi_real as buffer anyways
+	if (Grid_vort.NX != Grid_phi.NX || Grid_vort.NY != Grid_phi.NY) {
+		k_fft_grid_move<<<Grid_phi.fft_blocks, Grid_phi.threadsPerBlock>>>(Dev_Temp_C1, (cufftDoubleComplex*) phi_real, Grid_phi, Grid_vort);
+	}
+	// no movement needed, just copy data over
+	else {
+		cudaMemcpy(phi_real, Dev_Temp_C1, Grid_vort.sizeNfft, cudaMemcpyDeviceToDevice);
+	}
+
+	// cut high frequencies in fourier space, however not that much happens after zero move add from coarse grid
+	k_fft_cut_off_scale_h<<<Grid_phi.fft_blocks, Grid_phi.threadsPerBlock>>>((cufftDoubleComplex*) phi_real, Grid_phi, freq_cut_phi);
+
+	// inverse laplacian in fourier space - division by kx**2 and ky**2
+	// DEV_TEMP_C1 is used as buffer for the result after division
+	k_fft_iLap_h<<<Grid_phi.fft_blocks, Grid_phi.threadsPerBlock>>>((cufftDoubleComplex*) phi_real, Dev_Temp_C1, Grid_phi);
+
+	// transform fourier description of phi back to real space (fourier hermite)
+	fourier_hermite(Grid_phi, Dev_Temp_C1, phi_real, cufft_plan_phi);
+	error("evaluate_potential_from_density_hermite: not implemented yet",134);
+}
+
+
 
 
 // sample psi on a fixed grid with vorticity known - assumes periodicity is preserved (no zoom!)
@@ -418,11 +489,18 @@ void fourier_hermite(TCudaGrid2D Grid, cufftDoubleComplex *Dev_In, double *Dev_O
 	k_fft_dx_h<<<Grid.fft_blocks, Grid.threadsPerBlock>>>(Dev_In, (cufftDoubleComplex*)Dev_Out, Grid);
 	cufftExecZ2D(cufft_plan, (cufftDoubleComplex*)Dev_Out, Dev_Out + 2*Grid.Nfft);// x-derivative of the vorticity in Fourier space
 
+	/* Memory layout before shift of Dev_Out:
+	 f	 	... Dev_Out[2*Grid.Nfft-Grid.N	  , ..., 2*Grid.Nfft            - 1]
+	 d/dx 	... Dev_Out[2*Grid.Nfft			  , ..., 2*Grid.Nfft +   Grid.N - 1]
+	 d/dy 	... Dev_Out[2*Grid.Nfft +   Grid.N, ..., 2*Grid.Nfft + 2*Grid.N - 1]
+	 d/dxdy ... Dev_Out[2*Grid.Nfft + 2*Grid.N, ..., 2*Grid.Nfft + 3*Grid.N - 1]
+	*/ 
 	// shift again just before final store
 	Dev_Out += 2*Grid.Nfft - Grid.N;
 
 	// at last, store normal values
 	cufftExecZ2D(cufft_plan, Dev_In, Dev_Out);
+
 }
 
 

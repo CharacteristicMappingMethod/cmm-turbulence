@@ -36,6 +36,9 @@
 #include <thrust/device_ptr.h>
 #include "../numerical/cmm-mesure.h"
 
+// define constants:
+#define ID_DIST_FUNC 2
+
 
 extern __constant__ double d_rand[1000], d_init_params[10];  // array for random numbers being used for random initial conditions
 
@@ -51,7 +54,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	*						 	 Constants							   *
 	*******************************************************************/
 	
-	double bounds[6] = {0, twoPI, 0, twoPI, 0, 0};						// boundary information for translating
+	double bounds[6] = {0, 20*twoPI, -6, 6, 0, 0};						// boundary information for translating
 	double t0 = SettingsMain.getRestartTime();							// time - initial
 	double dt;															// time - step final
 	int iterMax;														// time - maximum iteration count for safety
@@ -593,10 +596,10 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	//setting initial conditions for vorticity by translating with initial grid
 	translate_initial_condition_through_map_stack(Grid_fine, Grid_discrete, Map_Stack, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real,
 			cufft_plan_fine_D2Z, cufft_plan_fine_Z2D, Dev_Temp_C1,
-			Dev_W_H_initial, SettingsMain.getInitialConditionNum(), SettingsMain.getInitialDiscrete());
+			Dev_W_H_initial, SettingsMain.getInitialConditionNum(), SettingsMain.getInitialDiscrete(),ID_DIST_FUNC); // 2 is for distribution function switch
 
-	// compute first psi, stream hermite from vorticity
-	evaluate_stream_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
+	// compute first phi, stream hermite from distribution function
+	evaluate_potential_from_density_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
 			Dev_W_H_fine_real, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
 			Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
 
@@ -677,7 +680,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 								   Dev_Psi_real + 4*Grid_psi.N*(i_order-(i_order==lagrange_order_init)-i_lagrange), 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToDevice);
 					}
 					// compute stream hermite from vorticity for computed time step
-					evaluate_stream_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
+					evaluate_potential_from_density_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
 							Dev_W_H_fine_real, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
 							Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
 
@@ -755,7 +758,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		}
 
 		// compute stream hermite with current maps
-		evaluate_stream_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
+		evaluate_potential_from_density_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
 						Dev_W_H_fine_real, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
 						Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
 
@@ -970,7 +973,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 				//adjusting initial conditions, compute vorticity hermite
 				translate_initial_condition_through_map_stack(Grid_fine, Grid_discrete, Map_Stack, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real,
 						cufft_plan_fine_D2Z, cufft_plan_fine_Z2D, Dev_Temp_C1,
-						Dev_W_H_initial, SettingsMain.getInitialConditionNum(), SettingsMain.getInitialDiscrete());
+						Dev_W_H_initial, SettingsMain.getInitialConditionNum(), SettingsMain.getInitialDiscrete(),2); // 2 is for distribution function switch
 
 				Map_Stack.copy_map_to_host(Dev_ChiX, Dev_ChiY);
 
@@ -1001,7 +1004,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		}
 
 		// compute stream hermite from vorticity for next time step so that particles can benefit from it
-		evaluate_stream_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
+		evaluate_potential_from_density_hermite(Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
 				Dev_W_H_fine_real, Dev_Psi_real, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
 				Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
 
