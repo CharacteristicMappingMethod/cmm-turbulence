@@ -264,7 +264,7 @@ bool readTransferFromBinaryFile(long long int Len, double *d_var, std::string da
 // hdf5 version
 #ifdef HDF5_INCLUDE
 std::string writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
-		double *Host_save, double *Dev_W_coarse, double *Dev_W_fine, double *Dev_Psi_real,
+		double *Host_save, double *Dev_W_coarse, double *Dev_Psi_real,
 		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f) {
 	}
 
@@ -272,7 +272,7 @@ std::string writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid
 #else
 	std::string writeTimeStep(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 			TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
-			double *Dev_W_coarse, double *Dev_W_fine, double *Dev_Psi_real,
+			double *Dev_W_coarse, double *Dev_Psi_real,
 			double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f) {
 
 		// check if we want to save at this time, combine all variables if so
@@ -314,9 +314,6 @@ std::string writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid
 			if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos) {
 				writeTranferToBinaryFile(Grid_coarse.N, Dev_W_coarse, SettingsMain, sub_folder_name + "/Vorticity_W_coarse", false);
 			}
-			// Vorticity on fine grid : W_fine - makes no sense as fine grid is only at position of last remapping
-	//		cudaMemcpy(Host_save, Dev_W_fine, Grid_fine.sizeNReal, cudaMemcpyDeviceToHost);
-	//	    writeAllRealToBinaryFile(Grid_fine.N, Host_save, SettingsMain, sub_folder_name + "/Vorticity_W_fine");
 
 			// Stream function on psi grid : Psi_psi
 			if (save_var.find("Stream") != std::string::npos or save_var.find("Psi") != std::string::npos) {
