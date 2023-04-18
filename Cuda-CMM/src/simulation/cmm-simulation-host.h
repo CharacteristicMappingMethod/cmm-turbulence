@@ -80,7 +80,7 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 		double *bounds, double *W_initial_discrete);
 
 // sample vorticity with mapstack at arbitrary frame
-void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
+std::string Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 		MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D* Grid_zoom, TCudaGrid2D Grid_psi, TCudaGrid2D Grid_discrete,
 		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f,
 		double *Dev_Temp, double *W_initial_discrete, double *psi,

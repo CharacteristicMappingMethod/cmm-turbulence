@@ -26,7 +26,6 @@ struct TCudaGrid2D
 	public:
 		int NX, NY, NZ, NX_fft;
 		long long int N, Nfft;
-		double h;
 
 		double hx, hy, hz;
 		double bounds[6];
