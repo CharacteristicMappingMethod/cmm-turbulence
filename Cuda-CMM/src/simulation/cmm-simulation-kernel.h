@@ -52,4 +52,9 @@ __global__ void k_compare_vorticity_with_initial(double *ChiX_stack, double *Chi
 
 __global__ void k_apply_map_and_sample_from_hermite(double *ChiX, double *ChiY, double *fs, double *H, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_vort, TCudaGrid2D Grid_fine, int molly_stencil, bool padd_inline_fft);
 
+
+// vlasov integral
+__global__ void integral_v(double *v, double *v_r, int nx, int ny, double hy);
+__global__ void k_assemble_psi(double *phi_1D, double *psi_out, TCudaGrid2D Grid);
+
 #endif

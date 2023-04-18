@@ -460,21 +460,21 @@ __device__ double d_init_distirbution_function(double x, double v, int simulatio
 	 *  "two_stream"			- similar to a double shear layer
 	 */
 
+	return 0;
 	switch (simulation_num) {
 		case 0:  // landau damping
 		{
 			double k = 0.2;  // thickness of shear layer
 			double eps = 5*1e-2;  // strength of instability
-
+			
 			return (1 + eps*cos(k*x)) * exp((v)*(v)*0.5)/sqrt(2 * PI);
 			break;
 		}
 		case 1:  // two stream
 		{
-			double v0 = 5;  // Factor to set freestream velocity
+			double v0 = 3;  // Factor to set freestream velocity
 			double k = 0.2;  // thickness of shear layer
 			double eps = 5*1e-2;  // strength of instability
-
 			return 1/(2*sqrt(2*PI)) * (1 + eps * cos(k*x))  * (exp(-(v-v0)*(v-v0)*0.5) + exp(-(v+v0)*(v+v0)*0.5));															
 			break;
 		}

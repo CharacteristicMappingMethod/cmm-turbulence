@@ -44,7 +44,6 @@ struct absto1
 double incompressibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_map, double *ChiX, double *ChiY, double *grad_Chi) {
 	// compute determinant of gradient and save in gradchi
 	k_incompressibility_check<<<Grid_check.blocksPerGrid, Grid_check.threadsPerBlock>>>(Grid_check, Grid_map, ChiX, ChiY, grad_Chi);
-
 	// compute maximum using thrust parallel reduction
 	thrust::device_ptr<double> grad_Chi_ptr = thrust::device_pointer_cast(grad_Chi);
 	return thrust::transform_reduce(grad_Chi_ptr, grad_Chi_ptr + Grid_check.N, absto1(), 0.0, thrust::maximum<double>());
@@ -374,53 +373,53 @@ void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCu
 /*******************************************************************
 *						 Computation of Psi						   *
 *******************************************************************/
-void evaluate_potential_from_density_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_phi, TCudaGrid2D Grid_vort,
-		double *Dev_ChiX, double *Dev_ChiY, double *Dev_W_H_fine_real, double *phi_real,
-		cufftHandle cufft_plan_coarse_Z2D, cufftHandle cufft_plan_phi, cufftHandle cufft_plan_dist_fun,
-		cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_phi)
-{
-	/*
-	This function computes the solution to $L_xx \phi = (1-l \int f dv) $ where $w$ is the vorticity and $\phi$ is the stream function
-	*/
 
+void evaluate_potential_from_density_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_Psi, TCudaGrid2D Grid_vort,
+		double *Dev_ChiX, double *Dev_ChiY, double *Dev_W_H_fine_real, double *Psi_real,
+		cufftHandle cufft_plan_psi_D2Z, cufftHandle cufft_plan_psi_Z2D, cufftHandle cufft_plan_phi_1D, cufftHandle cufft_plan_phi_1D_inverse,
+		cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_psi)	
+{	/*
+	This function computes the solution to $L_xx \phi = (1-l \int f dv) $ where $w$ is the vorticity and $\phi$ is the stream function
+	*/	
 	// apply map to w and sample using mollifier, do it on a special grid for vorticity and apply mollification if wanted
 	k_apply_map_and_sample_from_hermite<<<Grid_vort.blocksPerGrid, Grid_vort.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
-			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_fine_real, Grid_coarse, Grid_vort, Grid_fine, molly_stencil, true);
-
-	/* forward fft: cufftExecD2Z
-	 cufft_plan_dist_fun 				...provides a simple configuration mechanism for the fft
-	 (cufftDoubleReal*)Dev_Temp_C1 		... is the input data (second argument)
-	 Dev_Temp_C1 						... is the output data (last argument)
-	*/
-	cufftExecD2Z(cufft_plan_dist_fun, (cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C1);
-	k_normalize_h<<<Grid_vort.fft_blocks, Grid_vort.threadsPerBlock>>>(Dev_Temp_C1, Grid_vort);  // this is a normalization factor of FFT? if yes we dont need to do it everytime!!! 
-
-	// cut_off frequencies at N_phi/3 for turbulence (effectively 2/3) and compute smooth W
-	// use phi grid here for intermediate storage
-//	k_fft_cut_off_scale<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_Temp_C1, Grid_coarse.NX, (double)(Grid_phi.NX)/3.0);
-
-	// transition to stream function grid with three cases : grid_vort < grid_phi, grid_vort > grid_phi (a bit dumb) and grid_vort == grid_phi
-	// grid change because inline data movement is nasty, we can use phi_real as buffer anyways
-	if (Grid_vort.NX != Grid_phi.NX || Grid_vort.NY != Grid_phi.NY) {
-		k_fft_grid_move<<<Grid_phi.fft_blocks, Grid_phi.threadsPerBlock>>>(Dev_Temp_C1, (cufftDoubleComplex*) phi_real, Grid_phi, Grid_vort);
-	}
-	// no movement needed, just copy data over
-	else {
-		cudaMemcpy(phi_real, Dev_Temp_C1, Grid_vort.sizeNfft, cudaMemcpyDeviceToDevice);
-	}
-
-	// cut high frequencies in fourier space, however not that much happens after zero move add from coarse grid
-	k_fft_cut_off_scale_h<<<Grid_phi.fft_blocks, Grid_phi.threadsPerBlock>>>((cufftDoubleComplex*) phi_real, Grid_phi, freq_cut_phi);
-
+			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_fine_real, Grid_coarse, Grid_vort, Grid_fine, molly_stencil, false);
+	// integrate over dv of f and put it in the first row (iy=0) of the array:
+	integral_v<<<Grid_vort.blocksPerGrid.x, Grid_vort.threadsPerBlock.x >>>((cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C1, Grid_vort.NX, Grid_vort.NY, Grid_vort.hy);
+	// forward fft
+	cufftExecD2Z (cufft_plan_phi_1D, (cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C1+Grid_vort.Nfft);
+	// devide by NX to normalize FFT
+	k_normalize_1D_h<<<Grid_vort.fft_blocks.x, Grid_vort.threadsPerBlock.x>>>(Dev_Temp_C1+Grid_vort.Nfft, Grid_vort);  // this is a normalization factor of FFT? if yes we dont need to do it everytime!!! 
 	// inverse laplacian in fourier space - division by kx**2 and ky**2
-	// DEV_TEMP_C1 is used as buffer for the result after division
-	k_fft_iLap_h<<<Grid_phi.fft_blocks, Grid_phi.threadsPerBlock>>>((cufftDoubleComplex*) phi_real, Dev_Temp_C1, Grid_phi);
-
-	// transform fourier description of phi back to real space (fourier hermite)
-	fourier_hermite(Grid_phi, Dev_Temp_C1, phi_real, cufft_plan_phi);
-	error("evaluate_potential_from_density_hermite: not implemented yet",134);
+	k_fft_iLap_h_1D<<<Grid_vort.fft_blocks.x, Grid_vort.threadsPerBlock.x>>>((cufftDoubleComplex*) Dev_Temp_C1+Grid_vort.Nfft, (cufftDoubleComplex*) Dev_Temp_C1, Grid_vort);
+	// do zero padding if needed
+	if (Grid_vort.NX != Grid_Psi.NX || Grid_vort.NY != Grid_Psi.NY) {
+		zero_padding_1D<<<Grid_Psi.fft_blocks.x, Grid_Psi.threadsPerBlock.x>>>(Dev_Temp_C1, (cufftDoubleComplex*) Psi_real, Grid_Psi, Grid_vort);
+	}
+	else { // no movement needed, just copy data over
+		cudaMemcpy(Psi_real, Dev_Temp_C1, Grid_vort.NX, cudaMemcpyDeviceToDevice);
+	}
+	// inverse fft (1D)
+	cufftExecZ2D (cufft_plan_phi_1D_inverse, (cufftDoubleComplex*) Psi_real, Psi_real+Grid_Psi.Nfft);
+	// assemble psi= phi  - v^2/2
+	k_assemble_psi<<<Grid_Psi.blocksPerGrid, Grid_Psi.threadsPerBlock>>>(Psi_real+Grid_Psi.Nfft, (cufftDoubleReal*)(Dev_Temp_C1), Grid_Psi);
+	// writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Dev_Temp_C1), SettingsMain, "/Stream_function_molly", false);
+	// error("evaluate_potential_from_density_hermite: not yet",134);
+	// convert 2d psi to fourier space
+	cufftExecD2Z (cufft_plan_psi_D2Z,(cufftDoubleReal*) Dev_Temp_C1, Dev_Temp_C1+Grid_Psi.Nfft);
+	k_normalize_h<<<Grid_Psi.fft_blocks, Grid_Psi.threadsPerBlock>>>(Dev_Temp_C1+Grid_Psi.Nfft, Grid_Psi);
+	// cut high frequencies in fourier space, however not that much happens after zero move add from coarse grid
+	// k_fft_cut_off_scale_h<<<Grid_Psi.fft_blocks, Grid_Psi.threadsPerBlock>>>((cufftDoubleComplex*) Dev_Temp_C1+Grid_Psi.Nfft, Grid_Psi, freq_cut_psi);
+	// cufftExecZ2D (cufft_plan_psi_Z2D, (cufftDoubleComplex*) (Dev_Temp_C1+Grid_Psi.Nfft), (cufftDoubleReal*) Dev_Temp_C1);
+	// writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*) Dev_Temp_C1, SettingsMain, "/Stream_function_molly", false);
+	// error("evaluate_potential_from_density_hermite: not yet",134);
+	// Inverse laplacian in Fourier space
+	fourier_hermite(Grid_Psi, Dev_Temp_C1+Grid_Psi.Nfft, Psi_real, cufft_plan_psi_Z2D);
+	
+	//  writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real), SettingsMain, "/Stream_function_mollys", false);
+	//  error("evaluate_potential_from_density_hermite: not nted yet",134);
+// 
 }
-
 
 
 

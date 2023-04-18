@@ -77,6 +77,20 @@ void Compute_Palinstrophy(TCudaGrid2D Grid, double &Pal, double *W_real, cufftDo
 }
 
 
+
+
+// void integral_v(double *distribution_function, double *density, TCudaGrid2D Grid){
+// 	// parallel reduction using thrust
+// 	thrust::device_ptr<double> psi_ptr = thrust::device_pointer_cast(distribution_function);
+// 	for (int ix = 0; ix < nx; ix++) {
+// 	 	int In = iy*nx + IDX;
+// 	 	v_r[IDX] += v[In];
+// 	 }
+// 	E = Grid.hy * thrust::transform_reduce(psi_ptr + Grid.N, psi_ptr + 3*Grid.N, thrust::square<double>(), 0.0, thrust::plus<double>());
+
+// }
+
+
 //// compute palinstrophy using hermite array - cheap, but we need the vorticity hermite for that, only works for fine array, can be kernelized too actually, but not now
 //void Compute_Palinstrophy_hermite(TCudaGrid2D *Grid_fine, double *Pal, double *W_H_real){
 //

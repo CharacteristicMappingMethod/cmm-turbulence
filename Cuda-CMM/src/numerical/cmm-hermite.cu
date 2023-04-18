@@ -12,7 +12,7 @@
 ******************************************************************************************************************************/
 
 #include "cmm-hermite.h"
-
+#include "stdio.h"
 #include "../grid/cmm-grid2d.h"
 
 /*******************************************************************
@@ -464,7 +464,6 @@ __device__ double  device_diffeo_grad_2D(double *Hx, double *Hy, double x, doubl
 	device_init_ind_diff<double>(I, I_w, dxy, x, y, Grid);
 	//jump on warping
 	double L[2] = {Grid.NX*Grid.hx, Grid.NY*Grid.hy};
-
 	double Xx, Xy, Yx, Yy;  // fx/dx, fx/dy fy/dx fy/dy
 	// compute x- and y-derivatives
 	for (int i_xy = 0; i_xy <= 1; ++i_xy) {
@@ -474,9 +473,9 @@ __device__ double  device_diffeo_grad_2D(double *Hx, double *Hy, double x, doubl
 		double b[4][4]; device_build_b_mat(b, bX, bY);
 
 		int I_w_n[4] = {I_w[0], I_w[2], I_w[0], I_w[2]};  // copy I_w values for x-dir
-		double x_der =  device_hermite_mult_2D_warp<double>(Hx, b, I, I_w_n, L[0], Grid.N, Grid.h)/Grid.hx;
+		double x_der =  device_hermite_mult_2D_warp<double>(Hx, b, I, I_w_n, L[0], Grid.N, Grid.hx)/Grid.hx;
 		I_w_n[0] = I_w[1]; I_w_n[1] = I_w[1]; I_w_n[2] = I_w[3]; I_w_n[3] = I_w[3];  // copy I_w values for x-dir
-		double y_der =  device_hermite_mult_2D_warp<double>(Hy, b, I, I_w_n, L[1], Grid.N, Grid.h)/Grid.hy;
+		double y_der =  device_hermite_mult_2D_warp<double>(Hy, b, I, I_w_n, L[1], Grid.N, Grid.hy)/Grid.hy;
 
 		if (i_xy == 0) { Xx = x_der; Yx = y_der;}
 		else { Xy = x_der, Yy = y_der;}

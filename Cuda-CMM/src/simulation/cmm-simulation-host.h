@@ -50,10 +50,12 @@ void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCu
 		cufftHandle cufftPlan_coarse_Z2D, cufftHandle cufftPlan_psi, cufftHandle cufftPlan_vort,
 		cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_psi);
 
-void evaluate_potential_from_density_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_psi, TCudaGrid2D Grid_vort,
+void evaluate_potential_from_density_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_Psi, TCudaGrid2D Grid_vort,
 		double *Dev_ChiX, double *Dev_ChiY, double *Dev_W_H_fine_real, double *Psi_real,
-		cufftHandle cufftPlan_coarse_Z2D, cufftHandle cufftPlan_psi, cufftHandle cufftPlan_vort,
-		cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_psi);
+		cufftHandle cufft_plan_psi_D2Z, cufftHandle cufft_plan_psi_Z2D, cufftHandle cufft_plan_phi_1D, cufftHandle cufft_plan_phi_1D_inverse,
+		cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_phi);	
+
+
 
 
 // sample psi on a fixed grid with vorticity known
