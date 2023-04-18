@@ -552,10 +552,11 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 		writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity");
 
 		// construct message
-		message = "Coarse Cons : Energ = " + to_str(mesure[0], 8)
+		message = "Computed coarse Cons : Energ = " + to_str(mesure[0], 8)
 				+    " \t Enstr = " + to_str(mesure[1], 8)
 				+ " \t Palinstr = " + to_str(mesure[2], 8)
-				+ " \t Wmax = " + to_str(mesure[3], 8);
+				+ " \t Wmax = " + to_str(mesure[3], 8)
+				+ "\n";
 	}
 
 	return message;
@@ -670,7 +671,7 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 						t_now, Dev_sample, Grid_sample[i_save].N);
 
 				thrust::device_ptr<double> scal_ptr = thrust::device_pointer_cast(Dev_sample);
-				double scal_int = Grid_sample[i_save].h * Grid_sample[i_save].h * thrust::reduce(scal_ptr, scal_ptr + Grid_sample[i_save].N, 0.0, thrust::plus<double>());
+				double scal_int = Grid_sample[i_save].hx * Grid_sample[i_save].hy * thrust::reduce(scal_ptr, scal_ptr + Grid_sample[i_save].N, 0.0, thrust::plus<double>());
 				writeAppendToBinaryFile(1, &scal_int, SettingsMain, "/Monitoring_data/Mesure/Scalar_integral_"+ to_str(Grid_sample[i_save].NX));
 			}
 
@@ -745,10 +746,11 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 			writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity_"+ to_str(Grid_sample[i_save].NX));
 
 			// construct message
-			message = "Sample Cons : Energ = " + to_str(mesure[0], 8)
+			message = message + "Saved sample data " + to_str(i_save + 1) + " on grid " + to_str(Grid_sample[i_save].NX) + ", Cons : Energ = " + to_str(mesure[0], 8)
 					+    " \t Enstr = " + to_str(mesure[1], 8)
 					+ " \t Palinstr = " + to_str(mesure[2], 8)
-					+ " \t Wmax = " + to_str(mesure[3], 8);
+					+ " \t Wmax = " + to_str(mesure[3], 8)
+					+ "\n";
 		}
 	}
 	return message;
@@ -760,7 +762,7 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 *							   Zoom								   *
 *			sample vorticity with mapstack at arbitrary frame
 *******************************************************************/
-void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
+std::string Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 		MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D* Grid_zoom, TCudaGrid2D Grid_psi, TCudaGrid2D Grid_discrete,
 		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f,
 		double *Dev_Temp, double *W_initial_discrete, double *psi,
@@ -770,6 +772,7 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 	// check if we want to save at this time, combine all variables if so
 	std::string i_num = to_str(t_now); if (abs(t_now - T_MAX) < 1) i_num = "final";
 	SaveZoom* save_zoom = SettingsMain.getSaveZoom();
+	std::string message = "";
 	for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); ++i_save) {
 		// check each save and execute it independent
 		bool save_now = false;
@@ -785,12 +788,12 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 			|| t_now == save_zoom[i_save].time_end)) {
 			save_now = true;
 		}
-
 		if (save_now) {
 			// create folder
 			std::string sub_folder_name = "/Zoom_data/Time_" + i_num;
 			std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
 			mkdir(folder_name_now.c_str(), 0777);
+			message = message + "Saved zoom data " + to_str(i_save + 1) + " on grid " + to_str(Grid_zoom[i_save].NX) + "\n";
 
 			std::string save_var = save_zoom[i_save].var;
 
@@ -802,7 +805,7 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 			// do repetetive zooms
 			for(int zoom_ctr = 0; zoom_ctr < save_zoom[i_save].rep; zoom_ctr++){
 				// create new subfolder for current zoom
-				sub_folder_name = "/Zoom_data/Time_" + i_num + "/Zoom_" + to_str(i_save) + "_rep_" + to_str(zoom_ctr);
+				sub_folder_name = "/Zoom_data/Time_" + i_num + "/Zoom_" + to_str(i_save + 1) + "_rep_" + to_str(zoom_ctr);
 				folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
 				mkdir(folder_name_now.c_str(), 0777);
 
@@ -945,6 +948,7 @@ void Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 			}
 		}
 	}
+	return message;
 }
 
 

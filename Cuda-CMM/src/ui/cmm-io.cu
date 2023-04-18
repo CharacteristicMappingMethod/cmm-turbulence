@@ -108,7 +108,7 @@ void writeAllRealToBinaryFile(int Len, double *var, SettingsCMM SettingsMain, st
 
 	if(!file)
 	{
-		cout<<"Error saving file. Unable to open : "<<fileName<<endl;
+		cout<<"Error saving file. Unable to open : "<<fileName<< std::endl;
 		return;
 	}
 	else {
@@ -124,7 +124,7 @@ void writeAppendToBinaryFile(int Len, double *var, SettingsCMM SettingsMain, str
 
 	if(!file)
 	{
-		cout<<"Error saving file. Unable to open : "<<fileName<<endl;
+		cout<<"Error saving file. Unable to open : "<<fileName<< std::endl;
 		return;
 	}
 	else {
@@ -143,7 +143,7 @@ bool readAllRealFromBinaryFile(int Len, double *var, string data_name)
 
 	if(!file)
 	{
-		cout<<"Error reading file. Unable to open : "<<fileName<<endl;
+		cout<<"Error reading file. Unable to open : "<<fileName<< std::endl;
 		open_file = false;
 	}
 	else {
@@ -166,7 +166,7 @@ void writeTranferToBinaryFile(int Len, double *d_var, SettingsCMM SettingsMain, 
 
 	if(!file)
 	{
-		std::cout<<"Error saving file. Unable to open : "<<fileName<<endl;
+		std::cout<<"Error saving file. Unable to open : "<<fileName<< std::endl;
 		return;
 	}
 	else {
@@ -210,7 +210,7 @@ bool readTransferFromBinaryFile(long long int Len, double *d_var, std::string da
 
 	if(!file)
 	{
-		cout<<"Error reading file. Unable to open : "<<fileName<<endl;
+		cout<<"Error reading file. Unable to open : "<<fileName<< std::endl;
 		open_file = false;
 	}
 	else {
@@ -263,14 +263,14 @@ bool readTransferFromBinaryFile(long long int Len, double *d_var, std::string da
 
 // hdf5 version
 #ifdef HDF5_INCLUDE
-void writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
+std::string writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
 		double *Host_save, double *Dev_W_coarse, double *Dev_W_fine, double *Dev_Psi_real,
 		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f) {
 	}
 
 // binary version
 #else
-	void writeTimeStep(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
+	std::string writeTimeStep(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 			TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
 			double *Dev_W_coarse, double *Dev_W_fine, double *Dev_Psi_real,
 			double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f) {
@@ -292,7 +292,7 @@ void writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid2D Grid
 				save_now = true; save_var = save_var + save_comp[i_save].var;
 			}
 		}
-
+		std::string message = "";
 		if (save_now) {
 			std::string sub_folder_name;
 			if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos or
@@ -305,6 +305,9 @@ void writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid2D Grid
 				std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
 				struct stat st = {0};
 				if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
+
+				// construct message here as we are sure it is being saved something
+				message = "Saved computational data\n";
 			}
 
 			// Vorticity on coarse grid : W_coarse
@@ -359,6 +362,7 @@ void writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid2D Grid
 				writeTranferToBinaryFile(4*Grid_coarse.N, Dev_ChiY_f, SettingsMain, sub_folder_name + "/Map_ChiY_f_H_coarse", false);
 			}
 		}
+		return message;
 	}
 #endif
 
@@ -396,7 +400,7 @@ void writeTimeVariable(SettingsCMM SettingsMain, string data_name, double t_now,
  * Write particle positions
  */
 // will be with hdf5 version too at some point
-void writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, double **Dev_particles_pos, double **Dev_particles_vel,
+std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, double **Dev_particles_pos, double **Dev_particles_vel,
 		TCudaGrid2D Grid_psi, double *Dev_psi, double *Dev_Temp, int* fluid_particles_blocks, int fluid_particles_threads) {
 	// check if we want to save at this time, combine all variables if so
 	std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
@@ -415,6 +419,7 @@ void writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, doubl
 			save_now = true; save_var = save_var + save_comp[i_save].var;
 		}
 	}
+	std::string message = "";
 	if (save_now) {
 		// save for every PartA_ that is found
 		ParticlesAdvected* particles_advected = SettingsMain.getParticlesAdvected();
@@ -427,6 +432,9 @@ void writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, doubl
 			string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
 			struct stat st = {0};
 			if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
+
+			// construct message here as we are sure it is being saved something
+			message = "Saved particle data\n";
 		}
 
 		for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
@@ -448,6 +456,8 @@ void writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, doubl
 			}
 		}
 	}
+
+	return message;
 }
 
 
@@ -597,9 +607,9 @@ Logger::Logger(SettingsCMM SettingsMain)
 	else
 	{
 		// new simulation, overwrite old file if existent
-		if (SettingsMain.getRestartTime() == 0) file<<SettingsMain.getFileName()<<endl;
+		if (SettingsMain.getRestartTime() == 0) file<<SettingsMain.getFileName()<< std::endl;
 		// continue simulation
-		else file<<"\nContinuing simulation\n"<<endl;
+		else file<<"\nContinuing simulation\n"<< std::endl;
 		file.close();
 	}
 }
@@ -612,7 +622,7 @@ void Logger::push(string message)
 	if(file)
 	{
 		file<<"["<<currentDateTime()<<"]\t";
-		file<<message<<endl;
+		file<<message<< std::endl;
 		file.close();
 	}
 }

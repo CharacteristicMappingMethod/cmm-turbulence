@@ -68,7 +68,7 @@ void SettingsCMM::setPresets() {
 	double final_time = 3;  // end of computation
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
-	int steps_per_sec = 32;  // how many steps do we want per seconds?
+	int steps_per_sec = 20;  // how many steps do we want per seconds?
 	// dt will be set in cmm-euler, so that all changes can be applied there
 
 	/*
@@ -94,19 +94,13 @@ void SettingsCMM::setPresets() {
 	 * Forwarded Particles: "PartF_XX" - not for computational_var, XX is the particle computation number
 	 */
 	// time instants or intervals at what we want to save computational data, 0 for initial and T_MAX for final
-	int save_computational_num = 3;
-	std::string save_computational_s[12] = {
+	int save_computational_num = 4;
+	std::string save_computational_s[8] = {
 			"{is_instant=1,time_start=0,var=W-U,conv=1}",  // save begin
 			"{is_instant=1,time_start="+str_t(T_MAX)+",var=W-U,conv=1}",  // save end
 			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=0.5,var ,conv=1}",  // conv over simulation
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_01,conv=0}",
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_02,conv=0}",
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_03,conv=0}",
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_04,conv=0}",
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_05,conv=0}",
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_06,conv=0}",
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_07,conv=0}",
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_08,conv=0}",
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=0.5,var=PartA_01-PartA_02-PartA_03-PartA_04,conv=0}",
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_05-PartA_06-PartA_07-PartA_08,conv=0}",
 			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=PartA_Vel_01,conv=0}"
 	};
 
@@ -119,10 +113,10 @@ void SettingsCMM::setPresets() {
 
 	// set memory properties
 	int mem_RAM_CPU_remaps = 9000;  // mem_RAM_CPU_remaps in MB on the CPU
-	bool save_map_stack = false;  // possibility to save the map stack to reuse for other computations to skip initial time
+	bool save_map_stack = true;  // possibility to save the map stack to reuse for other computations to skip initial time
 	// restart simulation
 	double restart_time = 0;  // other than zero means the simulation is restarted
-	std::string restart_location = "";  // if empty, then data is read from own data folder
+	std::string restart_location = "data/debug_4_nodes_C512_F2048_t20_T2.1/MapStack";  // if empty, then data is read from own data folder
 
 
 	// set specific settings
@@ -156,7 +150,7 @@ void SettingsCMM::setPresets() {
 	// time instants or intervals at what we want to save computational data, 0 for initial and T_MAX for final
 	int save_sample_num = 1;
 	std::string save_sample_s[1] = {
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=1,var=W,grid=1024}"  // save over simulation
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=0.5,var=W,grid=1024}"  // save over simulation
 	};
 
 
@@ -223,6 +217,7 @@ void SettingsCMM::setPresets() {
 	 *  "normal", "gaussian"		-	normal / gaussian distributed around center with specific variance
 	 *  "circular_ring"				-   circular ring around specific center with particles_width as radius
 	 *  "uniform_grid"				-   uniform grid with equal amount of points in x- and y-direction in particular frame
+	 *  "sine_sheets"				-   vortex sheets initial condition
 	 *
 	 * init_time - when should the computation for the particles start
 	 * init_vel - if the inertial particles velocity should be set after the velocity or to zero
@@ -230,7 +225,7 @@ void SettingsCMM::setPresets() {
 	 */
 	int particles_advected_num = 2;
 	std::string particles_advected_s[8] = {
-			"{num=100000,tau=0,seed=0,time_integration=RK3,init_name=uniform,init_time=0,init_vel=0"
+			"{num=100000,tau=0,seed=0,time_integration=RK3,init_name=sine_sheets,init_time=0,init_vel=0"
 			",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI*2.0)+",init_param_4="+str_t(PI*2.0)+"}",
 			"{num=100000,tau=0.1,seed=0,time_integration=RK3,init_name=uniform,init_time=0,init_vel=0"
 			",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI*2.0)+",init_param_4="+str_t(PI*2.0)+"}",

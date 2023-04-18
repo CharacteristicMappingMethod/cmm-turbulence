@@ -776,17 +776,19 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 	// save function to save variables, combined so we always save in the same way and location
     // use Dev_Hat_fine for W_fine, this works because just at the end of conservation it is overwritten
-	writeTimeStep(SettingsMain, t0, dt, dt, Grid_fine, Grid_coarse, Grid_psi,
+	message = writeTimeStep(SettingsMain, t0, dt, dt, Grid_fine, Grid_coarse, Grid_psi,
 			Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
+	if (SettingsMain.getVerbose() >= 3 && message != "") {
+		std::cout<<message; logger.push(message);
+	}
 
 	// compute conservation if wanted
 	message = compute_conservation_targets(SettingsMain, t0, dt, dt, Grid_fine, Grid_coarse, Grid_psi, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
 			cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 			Dev_Temp_C1);
-	// output status to console
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
-		std::cout<<message+"\n"; logger.push(message);
+		std::cout<<message; logger.push(message);
 	}
 
 
@@ -797,24 +799,27 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 			bounds, Dev_W_H_initial);
-
-	// output status to console
-	if (SettingsMain.getVerbose() >= 3) {
-		std::cout<<message+"\n"; logger.push(message);
+	if (SettingsMain.getVerbose() >= 3 && message != "") {
+		std::cout<<message; logger.push(message);
 	}
 
-    cudaDeviceSynchronize();
-
     // save particle position if interested in that
-    writeParticles(SettingsMain, t0, dt, dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
+    message = writeParticles(SettingsMain, t0, dt, dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
+    if (SettingsMain.getVerbose() >= 3 && message != "") {
+		std::cout<<message; logger.push(message);
+	}
+
 
 	// zoom if wanted, has to be done after particle initialization, maybe a bit useless at first instance
-	Zoom(SettingsMain, t0, dt, dt,
+	message = Zoom(SettingsMain, t0, dt, dt,
 			Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
 			Host_particles, Dev_particles_pos,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread);
+	if (SettingsMain.getVerbose() >= 3 && message != "") {
+		std::cout<<message; logger.push(message);
+	}
 
 
 	// displaying max and min of vorticity and velocity for plotting limits and cfl condition
@@ -1038,17 +1043,19 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			*				Particles together with fine particles
 			*******************************************************************/
 		// save function to save variables, combined so we always save in the same way and location
-		writeTimeStep(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Grid_fine, Grid_coarse, Grid_psi,
+		message = writeTimeStep(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Grid_fine, Grid_coarse, Grid_psi,
 				Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
+		if (SettingsMain.getVerbose() >= 3 && message != "") {
+			std::cout<<message; logger.push(message);
+		}
 
 		// compute conservation if wanted
 		message = compute_conservation_targets(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Grid_fine, Grid_coarse, Grid_psi, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
 				cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 				Dev_Temp_C1);
-		// output computational mesure status to console
 		if (SettingsMain.getVerbose() >= 3 && message != "") {
-			std::cout<<message+"\n"; logger.push(message);
+			std::cout<<message; logger.push(message);
 		}
 
 		// sample if wanted
@@ -1058,21 +1065,26 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 				bounds, Dev_W_H_initial);
-		// output sample mesure status to console
 		if (SettingsMain.getVerbose() >= 3 && message != "") {
-			std::cout<<message+"\n"; logger.push(message);
+			std::cout<<message; logger.push(message);
 		}
 
 	    // save particle position if interested in that
-	    writeParticles(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
-		
+	    message = writeParticles(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
+	    if (SettingsMain.getVerbose() >= 3 && message != "") {
+			std::cout<<message; logger.push(message);
+		}
+
 		// zoom if wanted
-		Zoom(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt,
+		message = Zoom(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt,
 				Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 				(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
 				Host_particles, Dev_particles_pos,
 				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread);
+		if (SettingsMain.getVerbose() >= 3 && message != "") {
+			std::cout<<message; logger.push(message);
+		}
 
 		/*
 		 * Some small things at the end of the loop
@@ -1202,17 +1214,19 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	*******************************************************************/
 
 	// save function to save variables, combined so we always save in the same way and location
-	writeTimeStep(SettingsMain, T_MAX, dt, dt, Grid_fine, Grid_coarse, Grid_psi,
+	message = writeTimeStep(SettingsMain, T_MAX, dt, dt, Grid_fine, Grid_coarse, Grid_psi,
 			Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
+	if (SettingsMain.getVerbose() >= 3 && message != "") {
+		std::cout<<message; logger.push(message);
+	}
 
 	// compute conservation if wanted
 	message = compute_conservation_targets(SettingsMain, T_MAX, dt, dt, Grid_fine, Grid_coarse, Grid_psi, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
 			cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 			Dev_Temp_C1);
-	// output computational mesure status to console
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
-		std::cout<<message+"\n"; logger.push(message);
+		std::cout<<message; logger.push(message);
 	}
 
 	// sample if wanted
@@ -1222,22 +1236,26 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 			bounds, Dev_W_H_initial);
-	// output sample mesure status to console
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
-		std::cout<<message+"\n"; logger.push(message);
+		std::cout<<message; logger.push(message);
 	}
 
     // save particle position if interested in that
-    writeParticles(SettingsMain, T_MAX, dt, dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
+    message = writeParticles(SettingsMain, T_MAX, dt, dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
+    if (SettingsMain.getVerbose() >= 3 && message != "") {
+		std::cout<<message; logger.push(message);
+	}
 
 	// zoom if wanted
-	Zoom(SettingsMain, T_MAX, dt, dt,
+	message = Zoom(SettingsMain, T_MAX, dt, dt,
 			Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
 			Host_particles, Dev_particles_pos,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread);
-
+	if (SettingsMain.getVerbose() >= 3 && message != "") {
+		std::cout<<message; logger.push(message);
+	}
 	
 	// save map stack if wanted
 	if (SettingsMain.getSaveMapStack()) {

@@ -21,8 +21,6 @@ TCudaGrid2D::TCudaGrid2D (int NX, int NY, int NZ, double *bounds)
 	this->NY = NY;
 	this->NZ = NZ;
 
-	this->h = (bounds[1] - bounds[0]) / (float)NX;  // for quadratic problems, is used everywhere so changing it is tedious
-
 	this->hx = (bounds[1] - bounds[0]) / (float)NX;
 	this->hy = (bounds[3] - bounds[2]) / (float)NY;
 	this->hz = (bounds[5] - bounds[4]) / (float)NZ;
@@ -56,7 +54,6 @@ void fill_grid(TCudaGrid2D *Grid, int NX, int NY, int NZ, double *bounds) {
 	Grid->NX_fft = (int)(NX/2.0+1);
 	Grid->NY = NY;
 	Grid->NZ = NZ;
-	Grid->h = (bounds[1] - bounds[0]) / (float)NX;  // for quadratic problems, is used everywhere so changing it is tedious
 
 	Grid->hx = (bounds[1] - bounds[0]) / (float)NX;
 	Grid->hy = (bounds[3] - bounds[2]) / (float)NY;

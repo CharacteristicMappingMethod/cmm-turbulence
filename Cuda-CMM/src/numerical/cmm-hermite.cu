@@ -20,8 +20,15 @@
 *******************************************************************/
 // this computation is used very often, using it as a function greatL.y reduces code-redundancy
 // however, here we have 8 scattered memory accesses where I[0] - I[1] and I[2] - I[3] are paired most of the time (in theory)
+
+// for reference in 2D:
+//return b[0][0]* H[    I[0]] + b[0][1]* H[    I[1]] + b[1][0]* H[    I[2]] + b[1][1]* H[    I[3]] // Point interpolation
+//	    + (b[0][2]* H[1*N+I[0]] + b[0][3]* H[1*N+I[1]] + b[1][2]* H[1*N+I[2]] + b[1][3]* H[1*N+I[3]]) * (h)  // dx
+//	    + (b[2][0]* H[2*N+I[0]] + b[2][1]* H[2*N+I[1]] + b[3][0]* H[2*N+I[2]] + b[3][1]* H[2*N+I[3]]) * (h)  // dy
+//	    + (b[2][2]* H[3*N+I[0]] + b[2][3]* H[3*N+I[1]] + b[3][2]* H[3*N+I[2]] + b[3][3]* H[3*N+I[3]]) * (h*h);  // dx dy
+
 template<typename T>
-__device__ T device_hermite_mult_2D(T *H, T b[][4], int I[], long long int N, T h)
+__device__ T device_hermite_mult_2D(T *H, T b[][4], int I[], long long int N, T hx, T hy)
 {
 	T h_out = (T)0.0;
 	for (int i_ord = 0; i_ord < 4; ++i_ord) {
@@ -30,14 +37,14 @@ __device__ T device_hermite_mult_2D(T *H, T b[][4], int I[], long long int N, T 
 		for (int i_p = 0; i_p < 4; ++i_p) {
 			h_temp += b[((i_p >> 1) & 1) + ind_ord.x][(i_p & 1) + ind_ord.y] * H[i_ord*N + I[i_p]];
 		}
-		if (i_ord >= 1) h_temp *= h;
-		if (i_ord >= 3) h_temp *= h;
+		if ((i_ord & 1) == 1) 		 h_temp *= hx;
+		if (((i_ord >> 1) & 1) == 1) h_temp *= hy;
 		h_out += h_temp;
 	}
 	return h_out;
 }
 template<typename T>
-__device__ T device_hermite_mult_3D(T *H, T b[][4][4], int I[], long long int N, T h)
+__device__ T device_hermite_mult_3D(T *H, T b[][4][4], int I[], long long int N, T hx, T hy, T hz)
 {
 	T h_out = (T)0.0;
 	for (int i_ord = 0; i_ord < 8; ++i_ord) {
@@ -47,8 +54,9 @@ __device__ T device_hermite_mult_3D(T *H, T b[][4][4], int I[], long long int N,
 			h_temp += b[((i_p >> 2) & 1) + ind_ord.x][((i_p >> 1) & 1) + ind_ord.y][(i_p & 1) + ind_ord.z]
 					* H[i_ord*N + I[i_p]];
 		}
-		if (i_ord >= 1) h_temp *= h;
-		if (i_ord >= 4) h_temp *= h;
+		if ((i_ord & 1) == 1) 		 h_temp *= hx;
+		if (((i_ord >> 1) & 1) == 1) h_temp *= hy;
+		if (((i_ord >> 2) & 1) == 1) h_temp *= hz;
 		h_out += h_temp;
 	}
 	return h_out;
@@ -56,7 +64,7 @@ __device__ T device_hermite_mult_3D(T *H, T b[][4][4], int I[], long long int N,
 
 
 template<typename T>
-__device__ T device_hermite_mult_2D_warp(T *H, T b[][4], int I[], int I_w[], T L, long long int N, T h)
+__device__ T device_hermite_mult_2D_warp(T *H, T b[][4], int I[], int I_w[], T L, long long int N, T hx, T hy)
 {
 	T h_out = (T)0.0;
 	for (int i_ord = 0; i_ord < 4; ++i_ord) {
@@ -70,14 +78,14 @@ __device__ T device_hermite_mult_2D_warp(T *H, T b[][4], int I[], int I_w[], T L
 				h_temp += b[((i_p >> 1) & 1) + ind_ord.x][(i_p & 1) + ind_ord.y] * H[i_ord*N + I[i_p]];
 			}
 		}
-		if (i_ord >= 1) h_temp *= h;
-		if (i_ord >= 3) h_temp *= h;
+		if ((i_ord & 1) == 1) 		 h_temp *= hx;
+		if (((i_ord >> 1) & 1) == 1) h_temp *= hy;
 		h_out += h_temp;
 	}
 	return h_out;
 }
 template<typename T>
-__device__ T device_hermite_mult_3D_warp(T *H, T b[][4][4], int I[], int I_w[], T L, long long int N, T h)
+__device__ T device_hermite_mult_3D_warp(T *H, T b[][4][4], int I[], int I_w[], T L, long long int N, T hx, T hy, T hz)
 {
 	T h_out = (T)0.0;
 	for (int i_ord = 0; i_ord < 8; ++i_ord) {
@@ -93,8 +101,9 @@ __device__ T device_hermite_mult_3D_warp(T *H, T b[][4][4], int I[], int I_w[], 
 						* H[i_ord*N + I[i_p]];
 			}
 		}
-		if (i_ord >= 1) h_temp *= h;
-		if (i_ord >= 4) h_temp *= h;
+		if ((i_ord & 1) == 1) 		 h_temp *= hx;
+		if (((i_ord >> 1) & 1) == 1) h_temp *= hy;
+		if (((i_ord >> 2) & 1) == 1) h_temp *= hz;
 		h_out += h_temp;
 	}
 	return h_out;
@@ -102,7 +111,7 @@ __device__ T device_hermite_mult_3D_warp(T *H, T b[][4][4], int I[], int I_w[], 
 
 
 template<typename T>
-__device__ T device_hermite_mult_2D(T *H, T bX[], T bY[], int I[], long long int N, T h)
+__device__ T device_hermite_mult_2D(T *H, T bX[], T bY[], int I[], long long int N, T hx, T hy)
 {
 	T h_out = (T)0.0;
 	for (int i_ord = 0; i_ord < 4; ++i_ord) {
@@ -111,15 +120,15 @@ __device__ T device_hermite_mult_2D(T *H, T bX[], T bY[], int I[], long long int
 		for (int i_p = 0; i_p < 4; ++i_p) {
 			h_temp += bY[((i_p >> 1) & 1) + ind_ord.x] * bX[(i_p & 1) + ind_ord.y] * H[i_ord*N + I[i_p]];
 		}
-		if (i_ord >= 1) h_temp *= h;
-		if (i_ord >= 3) h_temp *= h;
+		if ((i_ord & 1) == 1) 		 h_temp *= hx;
+		if (((i_ord >> 1) & 1) == 1) h_temp *= hy;
 		h_out += h_temp;
 	}
 	return h_out;
 }
 // save memory by not storing the matrix b but computing it in the function
 template<typename T>
-__device__ T device_hermite_mult_3D(T *H, T bX[], T bY[], T bZ[], int I[], long long int N, T h)
+__device__ T device_hermite_mult_3D(T *H, T bX[], T bY[], T bZ[], int I[], long long int N, T hx, T hy, T hz)
 {
 	T h_out = (T)0.0;
 	for (int i_ord = 0; i_ord < 8; ++i_ord) {
@@ -129,8 +138,9 @@ __device__ T device_hermite_mult_3D(T *H, T bX[], T bY[], T bZ[], int I[], long 
 			h_temp += bX[(i_p& 1) + ind_ord.x] * bY[((i_p >> 1) & 1) + ind_ord.y] * bZ[((i_p >> 2) & 1) + ind_ord.z]
 					* H[i_ord*N + I[i_p]];
 		}
-		if (i_ord >= 1) h_temp *= h;
-		if (i_ord >= 4) h_temp *= h;
+		if ((i_ord & 1) == 1) 		 h_temp *= hx;
+		if (((i_ord >> 1) & 1) == 1) h_temp *= hy;
+		if (((i_ord >> 2) & 1) == 1) h_temp *= hz;
 		h_out += h_temp;
 	}
 	return h_out;
@@ -309,7 +319,7 @@ __device__ double device_hermite_interpolate_2D(double *H, double x, double y, T
 	device_init_ind<double>(I, dxy, x, y, Grid);
 	double bX[4], bY[4];
 	device_build_b<double>(bX, bY, dxy[0], dxy[1]);
-	return device_hermite_mult_2D<double>(H, bX, bY, I, Grid.N, Grid.h);
+	return device_hermite_mult_2D<double>(H, bX, bY, I, Grid.N, Grid.hx, Grid.hy);
 }
 __device__ float device_hermite_interpolate_2D(float *H, float x, float y, TCudaGrid2D Grid)
 {
@@ -318,7 +328,7 @@ __device__ float device_hermite_interpolate_2D(float *H, float x, float y, TCuda
 	device_init_ind<float>(I, dxy, x, y, Grid);
 	float bX[4], bY[4];
 	device_build_b<float>(bX, bY, dxy[0], dxy[1]);
-	return device_hermite_mult_2D<float>(H, bX, bY, I, Grid.N, Grid.h);
+	return device_hermite_mult_2D<float>(H, bX, bY, I, Grid.N, Grid.hx, Grid.hy);
 }
 
 
@@ -329,7 +339,7 @@ __device__ double device_hermite_interpolate_dx_2D(double *H, double x, double y
 	device_init_ind<double>(I, dxy, x, y, Grid);
 	double bX[4], bY[4];
 	device_build_bx<double>(bX, bY, dxy[0], dxy[1]);
-	return device_hermite_mult_2D<double>(H, bX, bY, I, Grid.N, Grid.h) / Grid.hx;
+	return device_hermite_mult_2D<double>(H, bX, bY, I, Grid.N, Grid.hx, Grid.hy) / Grid.hx;
 }
 __device__ float device_hermite_interpolate_dx_2D(float *H, float x, float y, TCudaGrid2D Grid)
 {
@@ -338,7 +348,7 @@ __device__ float device_hermite_interpolate_dx_2D(float *H, float x, float y, TC
 	device_init_ind<float>(I, dxy, x, y, Grid);
 	float bX[4], bY[4];
 	device_build_bx<float>(bX, bY, dxy[0], dxy[1]);
-	return device_hermite_mult_2D<float>(H, bX, bY, I, Grid.N, Grid.h) / Grid.hx;
+	return device_hermite_mult_2D<float>(H, bX, bY, I, Grid.N, Grid.hx, Grid.hy) / Grid.hx;
 }
 
 
@@ -349,7 +359,7 @@ __device__ double device_hermite_interpolate_dy_2D(double *H, double x, double y
 	device_init_ind<double>(I, dxy, x, y, Grid);
 	double bX[4], bY[4];
 	device_build_by<double>(bX, bY, dxy[0], dxy[1]);
-	return device_hermite_mult_2D<double>(H, bX, bY, I, Grid.N, Grid.h) / Grid.hy;
+	return device_hermite_mult_2D<double>(H, bX, bY, I, Grid.N, Grid.hx, Grid.hy) / Grid.hy;
 }
 __device__ float device_hermite_interpolate_dy_2D(float *H, float x, float y, TCudaGrid2D Grid)
 {
@@ -358,7 +368,7 @@ __device__ float device_hermite_interpolate_dy_2D(float *H, float x, float y, TC
 	device_init_ind<float>(I, dxy, x, y, Grid);
 	float bX[4], bY[4];
 	device_build_by<float>(bX, bY, dxy[0], dxy[1]);
-	return device_hermite_mult_2D<float>(H, bX, bY, I, Grid.N, Grid.h) / Grid.hy;
+	return device_hermite_mult_2D<float>(H, bX, bY, I, Grid.N, Grid.hx, Grid.hy) / Grid.hy;
 }
 
 
@@ -390,12 +400,12 @@ __device__ void device_hermite_interpolate_grad_2D(double *H, double *x, double 
 
 		if (i_xy == 0) {
 			for (int i_l = 0; i_l < n_l; i_l++) {
-				u[2*i_l+1] = -device_hermite_mult_2D<double>(H + 4*Grid.N*i_l, b, I, Grid.N, Grid.h)/Grid.hx;
+				u[2*i_l+1] = -device_hermite_mult_2D<double>(H + 4*Grid.N*i_l, b, I, Grid.N, Grid.hx, Grid.hy)/Grid.hx;
 			}
 		}
 		else {
 			for (int i_l = 0; i_l < n_l; i_l++) {
-				u[2*i_l  ] = device_hermite_mult_2D<double>(H + 4*Grid.N*i_l, b, I, Grid.N, Grid.h)/Grid.hy;
+				u[2*i_l  ] = device_hermite_mult_2D<double>(H + 4*Grid.N*i_l, b, I, Grid.N, Grid.hx, Grid.hy)/Grid.hy;
 			}
 		}
 	}
@@ -412,12 +422,12 @@ __device__ void device_hermite_interpolate_grad_2D(float *H, float *x, float *u,
 
 		if (i_xy == 0) {
 			for (int i_l = 0; i_l < n_l; i_l++) {
-				u[2*i_l+1] = -device_hermite_mult_2D<float>(H + 4*Grid.N*i_l, b, I, Grid.N, Grid.h)/Grid.hx;
+				u[2*i_l+1] = -device_hermite_mult_2D<float>(H + 4*Grid.N*i_l, b, I, Grid.N, Grid.hx, Grid.hy)/Grid.hx;
 			}
 		}
 		else {
 			for (int i_l = 0; i_l < n_l; i_l++) {
-				u[2*i_l  ] = device_hermite_mult_2D<float>(H + 4*Grid.N*i_l, b, I, Grid.N, Grid.h)/Grid.hy;
+				u[2*i_l  ] = device_hermite_mult_2D<float>(H + 4*Grid.N*i_l, b, I, Grid.N, Grid.hx, Grid.hy)/Grid.hy;
 			}
 		}
 	}
@@ -436,9 +446,9 @@ __device__ void device_diffeo_interpolate_2D(double *Hx, double *Hy, double x, d
 	double b[4][4]; device_build_b_mat(b, bX, bY);
 
 	int I_w_n[4] = {I_w[0], I_w[2], I_w[0], I_w[2]};  // copy I_w values for x-dir
-	*x2 = device_hermite_mult_2D_warp<double>(Hx, b, I, I_w_n, L[0], Grid.N, Grid.h);
+	*x2 = device_hermite_mult_2D_warp<double>(Hx, b, I, I_w_n, L[0], Grid.N, Grid.hx, Grid.hy);
 	I_w_n[0] = I_w[1]; I_w_n[1] = I_w[1]; I_w_n[2] = I_w[3]; I_w_n[3] = I_w[3];  // copy I_w values for x-dir
-	*y2 = device_hermite_mult_2D_warp<double>(Hy, b, I, I_w_n, L[1], Grid.N, Grid.h);
+	*y2 = device_hermite_mult_2D_warp<double>(Hy, b, I, I_w_n, L[1], Grid.N, Grid.hx, Grid.hy);
 }
 __device__ void device_diffeo_interpolate_2D(float *Hx, float *Hy, float x, float y, float *x2,  float *y2, TCudaGrid2D Grid)
 {
@@ -451,9 +461,9 @@ __device__ void device_diffeo_interpolate_2D(float *Hx, float *Hy, float x, floa
 	float b[4][4]; device_build_b_mat(b, bX, bY);
 
 	int I_w_n[4] = {I_w[0], I_w[2], I_w[0], I_w[2]};  // copy I_w values for x-dir
-	*x2 = device_hermite_mult_2D_warp<float>(Hx, b, I, I_w_n, L[0], Grid.N, Grid.h);
+	*x2 = device_hermite_mult_2D_warp<float>(Hx, b, I, I_w_n, L[0], Grid.N, Grid.hx, Grid.hy);
 	I_w_n[0] = I_w[1]; I_w_n[1] = I_w[1]; I_w_n[2] = I_w[3]; I_w_n[3] = I_w[3];  // copy I_w values for x-dir
-	*y2 = device_hermite_mult_2D_warp<float>(Hy, b, I, I_w_n, L[1], Grid.N, Grid.h);
+	*y2 = device_hermite_mult_2D_warp<float>(Hy, b, I, I_w_n, L[1], Grid.N, Grid.hx, Grid.hy);
 }
 
 
@@ -473,9 +483,9 @@ __device__ double  device_diffeo_grad_2D(double *Hx, double *Hy, double x, doubl
 		double b[4][4]; device_build_b_mat(b, bX, bY);
 
 		int I_w_n[4] = {I_w[0], I_w[2], I_w[0], I_w[2]};  // copy I_w values for x-dir
-		double x_der =  device_hermite_mult_2D_warp<double>(Hx, b, I, I_w_n, L[0], Grid.N, Grid.hx)/Grid.hx;
+		double x_der =  device_hermite_mult_2D_warp<double>(Hx, b, I, I_w_n, L[0], Grid.N, Grid.hx, Grid.hy)/Grid.hx;
 		I_w_n[0] = I_w[1]; I_w_n[1] = I_w[1]; I_w_n[2] = I_w[3]; I_w_n[3] = I_w[3];  // copy I_w values for x-dir
-		double y_der =  device_hermite_mult_2D_warp<double>(Hy, b, I, I_w_n, L[1], Grid.N, Grid.hy)/Grid.hy;
+		double y_der =  device_hermite_mult_2D_warp<double>(Hy, b, I, I_w_n, L[1], Grid.N, Grid.hx, Grid.hy)/Grid.hy;
 
 		if (i_xy == 0) { Xx = x_der; Yx = y_der;}
 		else { Xy = x_der, Yy = y_der;}
@@ -499,9 +509,9 @@ __device__ float  device_diffeo_grad_2D(float *Hx, float *Hy, float x, float y, 
 		float b[4][4]; device_build_b_mat(b, bX, bY);
 
 		int I_w_n[4] = {I_w[0], I_w[2], I_w[0], I_w[2]};  // copy I_w values for x-dir
-		float x_der =  device_hermite_mult_2D_warp<float>(Hx, b, I, I_w_n, L[0], Grid.N, Grid.h)/Grid.hx;
+		float x_der =  device_hermite_mult_2D_warp<float>(Hx, b, I, I_w_n, L[0], Grid.N, Grid.hx, Grid.hy)/Grid.hx;
 		I_w_n[0] = I_w[1]; I_w_n[1] = I_w[1]; I_w_n[2] = I_w[3]; I_w_n[3] = I_w[3];  // copy I_w values for x-dir
-		float y_der =  device_hermite_mult_2D_warp<float>(Hy, b, I, I_w_n, L[1], Grid.N, Grid.h)/Grid.hy;
+		float y_der =  device_hermite_mult_2D_warp<float>(Hy, b, I, I_w_n, L[1], Grid.N, Grid.hx, Grid.hy)/Grid.hy;
 
 		if (i_xy == 0) { Xx = x_der; Yx = y_der;}
 		else { Xy = x_der, Yy = y_der;}
