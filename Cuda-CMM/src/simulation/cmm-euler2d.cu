@@ -777,7 +777,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	// save function to save variables, combined so we always save in the same way and location
     // use Dev_Hat_fine for W_fine, this works because just at the end of conservation it is overwritten
 	message = writeTimeStep(SettingsMain, t0, dt, dt, Grid_fine, Grid_coarse, Grid_psi,
-			Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
+			Dev_W_coarse, Dev_Psi_real,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
 		std::cout<<message; logger.push(message);
@@ -1044,7 +1044,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			*******************************************************************/
 		// save function to save variables, combined so we always save in the same way and location
 		message = writeTimeStep(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Grid_fine, Grid_coarse, Grid_psi,
-				Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
+				Dev_W_coarse, Dev_Psi_real,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
 		if (SettingsMain.getVerbose() >= 3 && message != "") {
 			std::cout<<message; logger.push(message);
@@ -1215,7 +1215,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 	// save function to save variables, combined so we always save in the same way and location
 	message = writeTimeStep(SettingsMain, T_MAX, dt, dt, Grid_fine, Grid_coarse, Grid_psi,
-			Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
+			Dev_W_coarse, Dev_Psi_real,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
 		std::cout<<message; logger.push(message);

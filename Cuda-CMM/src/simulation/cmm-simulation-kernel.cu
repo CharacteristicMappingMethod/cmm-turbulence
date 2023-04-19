@@ -330,8 +330,9 @@ __global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, doub
 	double points[2];
 	double LX = Grid_map.bounds[1] - Grid_map.bounds[0]; double LY = Grid_map.bounds[3] - Grid_map.bounds[2];
 	device_diffeo_interpolate_2D(ChiX_stack, ChiY_stack, x_y[2*In], x_y[2*In+1], &points[0], &points[1], Grid_map);
-	x_y[2*In] = points[0] - floor(points[0]/LX)*LX;
-	x_y[2*In+1] = points[1] - floor(points[1]/LY)*LY;
+
+	x_y[2*In] = Grid_map.bounds[0] + points[0] - floor(points[0]/LX)*LX;
+	x_y[2*In+1] = Grid_map.bounds[2] + points[1] - floor(points[1]/LY)*LY;
 }
 // sample from initial condition
 __global__ void k_h_sample_from_init(double *Val_out, double *x_y, TCudaGrid2D Grid, TCudaGrid2D Grid_discrete, int init_var_num, int init_num, double *Val_initial_discrete, bool initial_discrete)
@@ -350,10 +351,14 @@ __global__ void k_h_sample_from_init(double *Val_out, double *x_y, TCudaGrid2D G
 
 	if (!initial_discrete) {
 		// differentiate between what variable we would like to retrieve
+		if (x_y[2*In] > Grid_discrete.bounds[1] || x_y[2*In] < Grid_discrete.bounds[0] || x_y[2*In+1] > Grid_discrete.bounds[3] || x_y[2*In+1] < Grid_discrete.bounds[2]) {
+			printf("ERROR: initial condition not defined at point (%f, %f)", x_y[2*In], x_y[2*In+1]);
+		}
 		switch (init_var_num) {
 			case 0: { Val_out[In] = d_init_vorticity(x_y[2*In], x_y[2*In+1], init_num); break; }
 			case 1: { Val_out[In] = d_init_scalar(x_y[2*In], x_y[2*In+1], init_num); break; }
 			case 2: { Val_out[In] = d_init_distirbution_function(x_y[2*In], x_y[2*In+1], init_num); break; }
+			default:{printf("ERROR initial variable number not known"); }
 		}
 	}
 	else {

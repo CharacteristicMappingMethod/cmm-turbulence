@@ -459,8 +459,7 @@ __device__ double d_init_distirbution_function(double x, double v, int simulatio
 	 *  "landau_damping" 		- similar to a single shear layer
 	 *  "two_stream"			- similar to a double shear layer
 	 */
-
-	return 0;
+	
 	switch (simulation_num) {
 		case 0:  // landau damping
 		{

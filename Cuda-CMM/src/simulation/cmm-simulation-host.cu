@@ -675,12 +675,17 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 				writeAppendToBinaryFile(1, &scal_int, SettingsMain, "/Monitoring_data/Mesure/Scalar_integral_"+ to_str(Grid_sample[i_save].NX));
 			}
 
+				// main function
+			int varnum = 0;
+			if (SettingsMain.getSimulationType() == "cmm_vlasov_poisson_1d"){
+				varnum = 2;
+			}
 			// compute vorticity - 0 to switch for vorticity
 			k_h_sample_from_init<<<Grid_sample[i_save].blocksPerGrid, Grid_sample[i_save].threadsPerBlock>>>(Dev_sample, (cufftDoubleReal*)Dev_Temp_C1,
-					Grid_sample[i_save], Grid_discrete, 0, SettingsMain.getInitialConditionNum(), W_initial_discrete, SettingsMain.getInitialDiscrete());
+					Grid_sample[i_save], Grid_discrete, varnum, SettingsMain.getInitialConditionNum(), W_initial_discrete, SettingsMain.getInitialDiscrete());
 
 			// save vorticity
-			if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos) {
+			if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos  or save_var.find("F") != std::string::npos) {
 				writeTimeVariable(SettingsMain, "Vorticity_W_"+to_str(Grid_sample[i_save].NX),
 						t_now, Dev_sample, Grid_sample[i_save].N);
 			}
@@ -755,6 +760,9 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 	}
 	return message;
 }
+
+
+
 
 
 

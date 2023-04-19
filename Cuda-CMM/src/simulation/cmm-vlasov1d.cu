@@ -615,11 +615,10 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	evaluate_potential_from_density_hermite(SettingsMain, Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
 			Dev_W_H_fine_real, Dev_Psi_real, cufft_plan_psi_D2Z, cufft_plan_psi_Z2D, plan_phi_1D, inverse_plan_phi_1D,
 			Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
+	
 	// compute coarse vorticity as a simulation variable, is needed for entrophy and palinstrophy
 	k_apply_map_and_sample_from_hermite<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
 			Dev_W_coarse, Dev_W_H_fine_real, Grid_coarse, Grid_coarse, Grid_fine, 0, false);
-
-
 	/*
 	 * Initialization of previous velocities for lagrange interpolation
 	 * Either:  Compute backwards EulerExp for all needed velocities
@@ -671,7 +670,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 							+ " \t C-Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
 					std::cout<<message+"\n"; logger.push(message);
 				}
-
+				
 				// loop for all points needed, last time is reduced by one point (final order is just repetition)
 				for (int i_step_init = 1; i_step_init <= i_order-(i_order==lagrange_order_init); i_step_init++) {
 					// map advection, always with loop_ctr=1, direction = backwards
@@ -684,9 +683,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 					cudaDeviceSynchronize();
 					// test: incompressibility error
 					double incomp_init = incompressibility_check(Grid_fine, Grid_coarse, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1);
-							 			double incop_init = incompressibility_check(Grid_fine, Grid_coarse, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1);
-	printf("\n incomp_init = %f\n", incop_init);
-	error("test",1344);
+
 					//copy Psi to previous locations, from oldest-1 upwards
 					for (int i_lagrange = 1; i_lagrange <= i_order-(i_order==lagrange_order_init); i_lagrange++) {
 						cudaMemcpy(Dev_Psi_real + 4*Grid_psi.N*(i_order-(i_order==lagrange_order_init)-i_lagrange+1),
@@ -697,6 +694,10 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 					evaluate_potential_from_density_hermite(SettingsMain, Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
 							Dev_W_H_fine_real, Dev_Psi_real,cufft_plan_psi_D2Z, cufft_plan_psi_Z2D, plan_phi_1D, inverse_plan_phi_1D,
 							Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
+
+
+	 				// writeTranferToBinaryFile(Grid_psi.N, (cufftDoubleReal*)(Dev_Psi_real), SettingsMain, "/Stream_function_mollys", false);
+	 				// error("evaluate_potential_from_density_hermite: not nted yet",134);
 
 					// output step details to console
 					if (SettingsMain.getVerbose() >= 2) {
@@ -772,16 +773,12 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		}
 
 		// compute stream hermite with current maps
-		// evaluate_potential_from_density_hermite(SettingsMain, Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
-		// 				Dev_W_H_fine_real, Dev_Psi_real,cufft_plan_psi_D2Z, cufft_plan_coarse_Z2D, cufft_plan_psi_Z2D, cufft_plan_vort_D2Z,
-		// 				Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
 		evaluate_potential_from_density_hermite(SettingsMain, Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
 			Dev_W_H_fine_real, Dev_Psi_real, cufft_plan_psi_D2Z, cufft_plan_psi_Z2D, plan_phi_1D, inverse_plan_phi_1D,
 			Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
 		// compute coarse vorticity as a simulation variable, is needed for entrophy and palinstrophy
 		k_apply_map_and_sample_from_hermite<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
 				Dev_W_coarse, Dev_W_H_fine_real, Grid_coarse, Grid_coarse, Grid_fine, 0, false);
-		error("babu431",134);
 		// read in particles
 		readParticlesState(SettingsMain, Dev_particles_pos, Dev_particles_vel, SettingsMain.getRestartLocation());
 		if (SettingsMain.getParticlesAdvectedNum() > 0) {
@@ -792,14 +789,12 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		}
 	}
 
-
 	// save function to save variables, combined so we always save in the same way and location
     // use Dev_Hat_fine for W_fine, this works because just at the end of conservation it is overwritten
 	writeTimeStep(SettingsMain, t0, dt, dt, Grid_fine, Grid_coarse, Grid_psi,
-			Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
+			Dev_W_coarse, Dev_Psi_real,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
 
-		error("babu431",134);
 	// compute conservation if wanted
 	message = compute_conservation_targets(SettingsMain, t0, dt, dt, Grid_fine, Grid_coarse, Grid_psi, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
 			cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
@@ -835,7 +830,6 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
 			Host_particles, Dev_particles_pos,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread);
-
 
 	// displaying max and min of vorticity and velocity for plotting limits and cfl condition
 	// vorticity minimum
@@ -948,8 +942,6 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		*							 Initialize variables
 		*******************************************************************/
 	    double monitor_map[5]; bool forwarded_init = false;
-			writeTranferToBinaryFile(Grid_coarse.N, (cufftDoubleReal*)Dev_ChiY, SettingsMain, "/Stream_function_molly", false);
-	error("babu431",134);
 	    monitor_map[0] = incompressibility_check(Grid_fine, Grid_coarse, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1);
 //		monitor_map[0] = incompressibility_check(Grid_coarse, Grid_coarse, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1);
 
@@ -994,7 +986,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 				//adjusting initial conditions, compute vorticity hermite
 				translate_initial_condition_through_map_stack(Grid_fine, Grid_discrete, Map_Stack, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real,
 						cufft_plan_fine_D2Z, cufft_plan_fine_Z2D, Dev_Temp_C1,
-						Dev_W_H_initial, SettingsMain.getInitialConditionNum(), SettingsMain.getInitialDiscrete(),2); // 2 is for distribution function switch
+						Dev_W_H_initial, SettingsMain.getInitialConditionNum(), SettingsMain.getInitialDiscrete(),ID_DIST_FUNC); // 2 is for distribution function switch
 
 				Map_Stack.copy_map_to_host(Dev_ChiX, Dev_ChiY);
 
@@ -1032,7 +1024,6 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		// compute coarse vorticity as a simulation variable, is needed for entrophy and palinstrophy
 		k_apply_map_and_sample_from_hermite<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
 				Dev_W_coarse, Dev_W_H_fine_real, Grid_coarse, Grid_coarse, Grid_fine, 0, false);
-
 		/*
 		 * Particles advection after velocity update to profit from nice avaiable accelerated schemes
 		 */
@@ -1062,8 +1053,14 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 			*				Particles together with fine particles
 			*******************************************************************/
 		// save function to save variables, combined so we always save in the same way and location
+		// if (loop_ctr >8) {
+		// 	 				writeTranferToBinaryFile(Grid_psi.N, (cufftDoubleReal*)(Dev_Psi_real), SettingsMain, "/Stream_function", false);
+		// 					writeTranferToBinaryFile(Grid_coarse.N, (cufftDoubleReal*)(Dev_W_coarse), SettingsMain, "/W_coarse", false);
+		// 					writeTranferToBinaryFile(Grid_fine.N, (cufftDoubleReal*)(Dev_W_H_fine_real), SettingsMain, "/W_fine", false);
+	 	// 			error("evaluate_potential_from_density_hermite: not nted yet",134);
+		// 			}
 		writeTimeStep(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Grid_fine, Grid_coarse, Grid_psi,
-				Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
+				Dev_W_coarse, Dev_Psi_real,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
 
 		// compute conservation if wanted
@@ -1089,7 +1086,12 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 
 	    // save particle position if interested in that
 	    writeParticles(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
-		
+					if((monitor_map[0] > SettingsMain.getIncompThreshold() && !SettingsMain.getSkipRemapping()) || forwarded_init)
+				{
+				writeTranferToBinaryFile(Grid_coarse.N, (cufftDoubleReal*)(Dev_W_coarse), SettingsMain, "/W_coarse", false);
+				writeTranferToBinaryFile(Grid_fine.N, (cufftDoubleReal*)(Dev_W_H_fine_real), SettingsMain, "/W_fine", false);
+	 			// error("rom_densit",134);
+				}		
 		// zoom if wanted
 		Zoom(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt,
 				Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
@@ -1097,7 +1099,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 				(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
 				Host_particles, Dev_particles_pos,
 				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread);
-
+	
 		/*
 		 * Some small things at the end of the loop
 		 *  - check for errors
@@ -1227,7 +1229,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 
 	// save function to save variables, combined so we always save in the same way and location
 	writeTimeStep(SettingsMain, T_MAX, dt, dt, Grid_fine, Grid_coarse, Grid_psi,
-			Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1, Dev_Psi_real,
+			Dev_W_coarse, Dev_Psi_real,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
 
 	// compute conservation if wanted
