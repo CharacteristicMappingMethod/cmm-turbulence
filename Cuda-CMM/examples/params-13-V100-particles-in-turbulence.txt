@@ -2,6 +2,7 @@ CMM Parameter file
 param_version	=	3
 
 workspace	=	./
+simulation_type	=	cmm_euler_2d
 sim_name	=	13-anticythere-particles-in-turbulence
 grid_coarse	=	2048
 grid_fine	=	4096

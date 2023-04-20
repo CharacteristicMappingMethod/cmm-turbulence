@@ -2,6 +2,7 @@ CMM Parameter file
 param_version	=	3
 
 workspace	=	./
+simulation_type	=	cmm_euler_2d
 sim_name	=	10-4nodes-reference-bruce
 grid_coarse	=	1024
 grid_fine	=	1024

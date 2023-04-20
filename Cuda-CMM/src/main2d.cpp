@@ -94,7 +94,9 @@ int main(int argc, char *args[])
 	} else if (SettingsMain.getSimulationType() == "cmm_vlasov_poisson_1d"){
 		cuda_vlasov_1d(SettingsMain);
 	} else {
-		std::cout << "Simulation type not recognized" << std::endl;
+		std::cout << "Simulation type not recognized, currently supported:" << std::endl;
+		std::cout << "\tcmm_euler_2d" << std::endl;
+		std::cout << "\tcmm_vlasov_poisson_1d" << std::endl;
 	}
 
 	//Zoom_load_frame("vortex_shear_1000_4", grid_scale, fine_grid_scale, "final");
