@@ -23,8 +23,11 @@
 *******************************************************************/
 
 __constant__ double d_Lp12[4];
+__constant__ double d_p_init_parameter[4];  // array for particle parameters on device memory
 
-__global__ void k_rescale(int Nb_particle, double particles_center_x, double particles_center_y, double particles_width_x, double particles_width_y, double *particles_pos, double LX, double LY) {  // Rescaling the particles uniform distribution on the square [0,s]x[0,s] (s = twoPI)
+// Rescaling the particles uniform distribution on the computation domain
+// d_p_init_parameter is [p_center_x, p_center_y, p_width_x, p_center_y]
+__global__ void k_rescale(int Nb_particle, double *particles_pos, TCudaGrid2D Grid) {
 
 	int i = (blockDim.x * blockIdx.x + threadIdx.x);  // (thread_num_max * block_num + thread_num) - gives position
 
@@ -33,11 +36,13 @@ __global__ void k_rescale(int Nb_particle, double particles_center_x, double par
 		return;
 
 	double part_pos_old[2];
-	part_pos_old[0] = particles_center_x + particles_width_x * (particles_pos[2*i  ] - 0.5);
-	part_pos_old[1] = particles_center_y + particles_width_y * (particles_pos[2*i+1] - 0.5);
+	part_pos_old[0] = d_p_init_parameter[0] + d_p_init_parameter[2] * (particles_pos[2*i  ] - 0.5);
+	part_pos_old[1] = d_p_init_parameter[1] + d_p_init_parameter[3] * (particles_pos[2*i+1] - 0.5);
 
-	particles_pos[2*i]   = part_pos_old[0] - floor(part_pos_old[0]/LX)*LX;
-	particles_pos[2*i+1] = part_pos_old[1] - floor(part_pos_old[1]/LY)*LY;
+	double LX = Grid.bounds[1] - Grid.bounds[0]; double LY = Grid.bounds[3] - Grid.bounds[2];
+	// warping - translate by domain size(s)
+	particles_pos[2*i]   = part_pos_old[0] - floor((part_pos_old[0] - Grid.bounds[0])/LX)*LX;
+	particles_pos[2*i+1] = part_pos_old[1] - floor((part_pos_old[1] - Grid.bounds[2])/LY)*LY;
 }
 
 
@@ -120,9 +125,6 @@ __global__ void Particle_advect(int Nb_particle, double dt, double *particles_po
 	// return if position is larger than particle size
 	if (i >= Nb_particle)
 		return;
-
-	double LX = Grid.NX*Grid.hx;
-	double LY = Grid.NY*Grid.hy;
 
 	// reading globally is expensive, so we only want to do it once
 	double part_pos_old[2] = { particles_pos[2*i  ], particles_pos[2*i+1] };
@@ -266,8 +268,9 @@ __global__ void Particle_advect(int Nb_particle, double dt, double *particles_po
 		default: { part_pos_old[0] = part_pos_old[1] = 0; break; }
 	}
 	// map particle position back into domain, inspired by hermite version
-	particles_pos[2*i]   = part_pos_old[0] - floor(part_pos_old[0]/LX)*LX;
-	particles_pos[2*i+1] = part_pos_old[1] - floor(part_pos_old[1]/LY)*LX;
+	double LX = Grid.bounds[1] - Grid.bounds[0]; double LY = Grid.bounds[3] - Grid.bounds[2];
+	particles_pos[2*i]   = part_pos_old[0] - floor((part_pos_old[0] - Grid.bounds[0])/LX)*LX;
+	particles_pos[2*i+1] = part_pos_old[1] - floor((part_pos_old[1] - Grid.bounds[2])/LY)*LY;
 
 	// debugging of particle position
 //	if (i < 1) printf("Particle number : %d - Position X : %f - Position Y : %f - \n", i, particles_pos[2*i], particles_pos[2*i+1]);
@@ -282,9 +285,6 @@ __global__ void Particle_advect_inertia(int Nb_particle, double dt, double *part
 	// return if position is larger than particle size
 	if (i >= Nb_particle)
 		return;
-
-	double LX = Grid.NX*Grid.hx;
-	double LY = Grid.NY*Grid.hy;
 
 	// reading globally is expensive, so we only want to do it once
 	double part_pos_old[2] = { particles_pos[2*i  ], particles_pos[2*i+1] };
@@ -542,8 +542,9 @@ __global__ void Particle_advect_inertia(int Nb_particle, double dt, double *part
 		default: { part_pos_old[0] = part_pos_old[1] = 0; particles_vel[2*i  ] = particles_vel[2*i+1] = 0; break; }
 	}
 	// map particle position back into domain, inspired by hermite version, this also now saves the values (only save)
-	particles_pos[2*i]   = part_pos_old[0] - floor(part_pos_old[0]/LX)*LX;
-	particles_pos[2*i+1] = part_pos_old[1] - floor(part_pos_old[1]/LY)*LX;
+	double LX = Grid.bounds[1] - Grid.bounds[0]; double LY = Grid.bounds[3] - Grid.bounds[2];
+	particles_pos[2*i]   = part_pos_old[0] - floor((part_pos_old[0] - Grid.bounds[0])/LX)*LX;
+	particles_pos[2*i+1] = part_pos_old[1] - floor((part_pos_old[1] - Grid.bounds[2])/LY)*LY;
 
 	// debugging of particle position
 //	if (i == 0) printf("Particle number : %d - Position X : %f - Position Y : %f - Vel X : %f - Vel Y : %f\n", i, particles_pos[2*i], particles_pos[2*i+1], particles_vel[2*i], particles_vel[2*i+1]);

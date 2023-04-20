@@ -54,7 +54,8 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	*						 	 Constants							   *
 	*******************************************************************/
 	
-	double bounds[6] = {0, 10*twoPI, -8, 8, 0, 0};						// boundary information for translating
+	// boundary information for translating, 6 coords for 3D - (x0, x1, y0, y1, z0, z1)
+	double bounds[6] = {0, 10*twoPI, -8, 8, 0, 0};
 	// the code seems to work only square domains!!! is it a bug of a feature? I think its sad
 	double t0 = SettingsMain.getRestartTime();							// time - initial
 	double dt;															// time - step final
@@ -489,7 +490,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 			mb_used_RAM_GPU += 2*particles_forwarded[i_p].num*sizeof(double) / 1e6;
 
 			// initialize particle position with 1 as forward particle type for parameters
-			init_particles(Dev_forward_particles_pos[i_p], SettingsMain, forward_particles_thread, forward_particles_block[i_p], bounds, 1, i_p);
+			init_particles(Dev_forward_particles_pos[i_p], SettingsMain, forward_particles_thread, forward_particles_block[i_p], Grid_psi, 1, i_p);
 
 			// print some output to the Console
 			if (SettingsMain.getVerbose() >= 1) {
@@ -525,7 +526,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		mb_used_RAM_GPU += 2*(1+particles_advected[i_p].tau != 0)*particles_advected[i_p].num*sizeof(double) / 1e6;
 
 		// initialize particle position with 0 as advected particle type for parameters
-		init_particles(Dev_particles_pos[i_p], SettingsMain, particle_thread, particle_block[i_p], bounds, 0, i_p);
+		init_particles(Dev_particles_pos[i_p], SettingsMain, particle_thread, particle_block[i_p], Grid_psi, 0, i_p);
 
 		// print some output to the Console
 		if (SettingsMain.getVerbose() >= 1) {
@@ -810,8 +811,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 			Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Dev_Temp_2,
 			cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
-			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
-			bounds, Dev_W_H_initial);
+			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
 
 	// output status to console
 	if (SettingsMain.getVerbose() >= 3) {
@@ -1077,8 +1077,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 				Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Dev_Temp_2,
 				cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
 				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
-				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
-				bounds, Dev_W_H_initial);
+				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
 		// output sample mesure status to console
 		if (SettingsMain.getVerbose() >= 3 && message != "") {
 			std::cout<<message+"\n"; logger.push(message);
@@ -1178,7 +1177,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		// initialize particle position
 		for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
 
-			init_particles(Dev_particles_pos[i_p], SettingsMain, particle_thread, particle_block[i_p], bounds, 0, i_p);
+			init_particles(Dev_particles_pos[i_p], SettingsMain, particle_thread, particle_block[i_p], Grid_psi, 0, i_p);
 
 			// initialize particle velocity for inertial particles
 	    	if (particles_advected[i_p].tau != 0) {
@@ -1246,8 +1245,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 			Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Dev_Temp_2,
 			cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
-			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
-			bounds, Dev_W_H_initial);
+			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
 	// output sample mesure status to console
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
 		std::cout<<message+"\n"; logger.push(message);

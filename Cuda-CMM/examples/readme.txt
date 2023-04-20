@@ -222,6 +222,7 @@ Remappings are enabled and a reference low-pass filter of 128 was used.
 The simulation takes up approximately 1GB of GPU RAM and 4GB of CPU RAM.
 Conservation is computed at beginning and every s-time, in addition the backwards map and vorticity is saved every s-time as well.
 
+Example 11b is the same but with coarser settings, this is for development tests to ensure corect outputs.
 
 
 *****   Example 12 - V100 run of shear layer flow   *****

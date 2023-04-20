@@ -29,12 +29,9 @@ __device__ double d_init_distirbution_function(double x, double v, int simulatio
 
 // initial condition for particles
 __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain,
-		int particle_thread, int particle_block, double* domain_bounds, int particle_type, int i_p);
-__global__ void k_part_init_circle(double* Dev_particles_pos, int particle_num,
-		double circle_center_x, double circle_center_y, double circle_radius_x, double circle_radius_y);
-__global__ void k_part_init_uniform_grid(double* Dev_particles_pos, int particle_num,
-		double square_center_x, double square_center_y, double square_radius_x, double square_radius_y);
-__global__ void k_part_init_sine_sheets(double* Dev_particles_pos, int particle_num,
-		double offset_x, double offset_y, double empty_x, double empty_y);
+		int particle_thread, int particle_block, TCudaGrid2D Grid, int particle_type, int i_p);
+__global__ void k_part_init_circle(int particle_num, double* Dev_particles_pos, TCudaGrid2D Grid);
+__global__ void k_part_init_uniform_grid(int particle_num, double* Dev_particles_pos, TCudaGrid2D Grid);
+__global__ void k_part_init_sine_sheets(int particle_num, double* Dev_particles_pos, TCudaGrid2D Grid);
 
 #endif
