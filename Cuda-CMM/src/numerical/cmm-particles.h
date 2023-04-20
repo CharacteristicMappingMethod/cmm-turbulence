@@ -20,7 +20,7 @@
 
 #ifdef __CUDACC__
 
-	__global__ void k_rescale(int Nb_particle, double particles_center_x, double particles_center_y, double particles_width_x, double particles_width_y, double *particles_pos, double LX, double LY);
+	__global__ void k_rescale(int Nb_particle, double *particles_pos, TCudaGrid2D Grid);
 
 
 	__global__ void Particle_advect_inertia_init(int Nb_particle, double *particles_pos, double *particles_vel,

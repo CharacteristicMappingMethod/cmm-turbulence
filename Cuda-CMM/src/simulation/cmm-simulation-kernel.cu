@@ -314,9 +314,9 @@ __global__ void k_h_sample_map_compact(double *ChiX, double *ChiY, double *x_y, 
 
 	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, Grid_map);
 
-	// save in two points in array
-	x_y[2*In  ] = Grid_map.bounds[0] + x - floor(x / LX) * LX;
-	x_y[2*In+1] = Grid_map.bounds[2] + y - floor(y / LY) * LY;
+	// save in two points in array and warp - translate by domain size(s)
+	x_y[2*In  ] = x - floor((x - Grid_map.bounds[0]) / LX) * LX;
+	x_y[2*In+1] = y - floor((y - Grid_map.bounds[2]) / LY) * LY;
 }
 // apply intermediate maps to compacted map, basically only samples in stacked form
 __global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
@@ -331,8 +331,9 @@ __global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, doub
 	double LX = Grid_map.bounds[1] - Grid_map.bounds[0]; double LY = Grid_map.bounds[3] - Grid_map.bounds[2];
 	device_diffeo_interpolate_2D(ChiX_stack, ChiY_stack, x_y[2*In], x_y[2*In+1], &points[0], &points[1], Grid_map);
 
-	x_y[2*In] = Grid_map.bounds[0] + points[0] - floor(points[0]/LX)*LX;
-	x_y[2*In+1] = Grid_map.bounds[2] + points[1] - floor(points[1]/LY)*LY;
+	// warping - translate by domain size(s)
+	x_y[2*In  ] = points[0] - floor((points[0] - Grid_map.bounds[0])/LX)*LX;
+	x_y[2*In+1] = points[1] - floor((points[1] - Grid_map.bounds[2])/LY)*LY;
 }
 // sample from initial condition
 __global__ void k_h_sample_from_init(double *Val_out, double *x_y, TCudaGrid2D Grid, TCudaGrid2D Grid_discrete, int init_var_num, int init_num, double *Val_initial_discrete, bool initial_discrete)

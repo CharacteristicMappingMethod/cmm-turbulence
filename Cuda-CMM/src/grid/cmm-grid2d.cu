@@ -25,7 +25,7 @@ TCudaGrid2D::TCudaGrid2D (int NX, int NY, int NZ, double *bounds)
 	this->hy = (bounds[3] - bounds[2]) / (float)NY;
 	this->hz = (bounds[5] - bounds[4]) / (float)NZ;
 
-	for (int i_b = 0; i_b < 4; ++i_b) {
+	for (int i_b = 0; i_b < 6; ++i_b) {
 		this->bounds[i_b] = bounds[i_b];
 	}
 

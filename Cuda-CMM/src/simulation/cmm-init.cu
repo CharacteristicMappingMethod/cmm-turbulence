@@ -21,6 +21,7 @@
 #include "../numerical/cmm-particles.h"
 
 __constant__ double d_rand[1000], d_init_params[10];  // array for random numbers being used for random initial conditions
+extern __constant__ double d_p_init_parameter[4];  // array for particle parameters on device memory
 
 /*******************************************************************
 *			Initial condition for vorticity						   *
@@ -308,7 +309,7 @@ __device__ double d_init_scalar(double x, double y, int scalar_num) {
 *******************************************************************/
 
 __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain, int particle_thread, int particle_block,
-		double* domain_bounds, int particle_type, int i_p) {
+		TCudaGrid2D Grid, int particle_type, int i_p) {
 
 	// unpack all parameters according to type
 	long long int seed;
@@ -344,6 +345,9 @@ __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain
 		}
 	}
 
+	// copy bounds and init parameters to constant memory, as we cannot pass arrays to device
+	cudaMemcpyToSymbol(d_p_init_parameter, init_parameter, sizeof(double)*4);
+
 	curandGenerator_t prng;
 	// initialize randomizer
 	curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_DEFAULT);
@@ -351,52 +355,33 @@ __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain
 	curandSetPseudoRandomGeneratorSeed(prng, seed);
 
 	switch (init_num) {
-		case 0:  // uniformly distributed in rectangle
+		case 0:  // uniformly distributed in rectangle, warped to domain
 		{
 			// create initial positions from random distribution
 			curandGenerateUniformDouble(prng, Dev_particles_pos, 2*num);
-
 			// project 0-1 onto particle frame
-			// init_param constitute to center_x, center_y, width_x, width_y
-			k_rescale<<<particle_block, particle_thread>>>(num,
-					init_parameter[0], init_parameter[1], init_parameter[2], init_parameter[3],
-					Dev_particles_pos, domain_bounds[1], domain_bounds[3]);
+			k_rescale<<<particle_block, particle_thread>>>(num, Dev_particles_pos, Grid);
 
 			break;
 		}
-		case 1:  // normally distributed with given mean and standard deviation
+		case 1:  // normally distributed with given mean and standard deviation, warped to domain
 		{
 			// create all values with standard variance around 0.5, 0.5 is subtracted later in k_rescale
 			curandGenerateNormalDouble( prng, Dev_particles_pos, 2*num, 0.5, 1.0);
-
-			// shift and scale all values to fit the desired quantities
-			// init_param constitute to center_x, center_y, variance_x, variance_y
-			k_rescale<<<particle_block, particle_thread>>>(num,
-					init_parameter[0], init_parameter[1], init_parameter[2], init_parameter[3],
-					Dev_particles_pos, domain_bounds[1], domain_bounds[3]);
-
-			break;
+			// project 0-1 onto particle frame
+			k_rescale<<<particle_block, particle_thread>>>(num, Dev_particles_pos, Grid); break;
 		}
-		case 2:  // distributed in a circle
+		case 2:  // distributed in a circle, warped to domain
 		{
-			// init_param constitute to center_x, center_y, radius_x, radius_y
-			k_part_init_circle<<<particle_block, particle_thread>>>(Dev_particles_pos, num,
-					init_parameter[0], init_parameter[1], init_parameter[2], init_parameter[3]);
-			break;
+			k_part_init_circle<<<particle_block, particle_thread>>>(num, Dev_particles_pos, Grid); break;
 		}
-		case 3:  // uniform grid with equal amount of points in x- and y-direction
+		case 3:  // uniform grid with equal amount of points in x- and y-direction, warped to domain
 		{
-			// init_param constitute to center_x, center_y, length_x/2, length_y/2
-			k_part_init_uniform_grid<<<particle_block, particle_thread>>>(Dev_particles_pos, num,
-					init_parameter[0], init_parameter[1], init_parameter[2], init_parameter[3]);
-			break;
+			k_part_init_uniform_grid<<<particle_block, particle_thread>>>(num, Dev_particles_pos, Grid); break;
 		}
-		case 4:  // sine distribution fitting for vortex sheets
+		case 4:  // sine distribution fitting for vortex sheets, warped to domain
 		{
-			// init_param constitute to offset_x, pffset_y, empty_x and empty_y
-			k_part_init_sine_sheets<<<particle_block, particle_thread>>>(Dev_particles_pos, num,
-					init_parameter[0], init_parameter[1], init_parameter[2], init_parameter[3]);
-			break;
+			k_part_init_sine_sheets<<<particle_block, particle_thread>>>(num, Dev_particles_pos, Grid); break;
 		}
 
 		default:
@@ -406,22 +391,28 @@ __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain
 
 
 // kernel to compute initial positions in a circle
-__global__ void k_part_init_circle(double* Dev_particles_pos, int particle_num,
-		double circle_center_x, double circle_center_y, double circle_radius_x, double circle_radius_y) {
+// d_p_init_parameter is [p_circle_center_x, p_circle_center_y, p_circle_radius_x, p_circle_radius_y]
+__global__ void k_part_init_circle(int particle_num, double* Dev_particles_pos, TCudaGrid2D Grid) {
 	int i = (blockDim.x * blockIdx.x + threadIdx.x);  // (thread_num_max * block_num + thread_num) - gives position
 
 	// return if position is larger than particle size
 	if (i >= particle_num)
 		return;
 
-	Dev_particles_pos[2*i]   = circle_center_x + circle_radius_x * cos(i/(double)particle_num*twoPI);
-	Dev_particles_pos[2*i+1] = circle_center_y + circle_radius_y * sin(i/(double)particle_num*twoPI);
+	double part_pos_old[2];
+	part_pos_old[0] = d_p_init_parameter[0] + d_p_init_parameter[2] * cos(i/(double)particle_num*twoPI);
+	part_pos_old[1] = d_p_init_parameter[1] + d_p_init_parameter[3] * sin(i/(double)particle_num*twoPI);
+
+	double LX = Grid.bounds[1] - Grid.bounds[0]; double LY = Grid.bounds[3] - Grid.bounds[2];
+	// warping - translate by domain size(s)
+	Dev_particles_pos[2*i]   = part_pos_old[0] - floor((part_pos_old[0] - Grid.bounds[0])/LX)*LX;
+	Dev_particles_pos[2*i+1] = part_pos_old[1] - floor((part_pos_old[1] - Grid.bounds[2])/LY)*LY;
 }
 
 
 // kernel to compute initial positions in a uniform grid, points are distributed as a square for now
-__global__ void k_part_init_uniform_grid(double* Dev_particles_pos, int particle_num,
-		double square_center_x, double square_center_y, double square_radius_x, double square_radius_y) {
+// d_p_init_parameter is [p_square_center_x, p_square_center_y, p_square_length_x/2, p_square_length_y/2]
+__global__ void k_part_init_uniform_grid(int particle_num, double* Dev_particles_pos, TCudaGrid2D Grid) {
 	int i = (blockDim.x * blockIdx.x + threadIdx.x);  // (thread_num_max * block_num + thread_num) - gives position
 
 	// return if position is larger than particle size
@@ -430,22 +421,34 @@ __global__ void k_part_init_uniform_grid(double* Dev_particles_pos, int particle
 
 	int length = ceil(sqrt((double)particle_num));  // distribute all points with equal points num in x- and y-direction
 
-	Dev_particles_pos[2*i]   = square_center_x + square_radius_x * (-1 + 2*(i % length)/(double)length);
-	Dev_particles_pos[2*i+1] = square_center_y + square_radius_y * (-1 + 2*(i / length)/(double)length);
+	double part_pos_old[2];
+	part_pos_old[0] = d_p_init_parameter[0] + d_p_init_parameter[2] * (-1 + 2*(i % length)/(double)length);
+	part_pos_old[1] = d_p_init_parameter[1] + d_p_init_parameter[3] * (-1 + 2*(i / length)/(double)length);
+
+	double LX = Grid.bounds[1] - Grid.bounds[0]; double LY = Grid.bounds[3] - Grid.bounds[2];
+	// warping - translate by domain size(s)
+	Dev_particles_pos[2*i]   = part_pos_old[0] - floor((part_pos_old[0] - Grid.bounds[0])/LX)*LX;
+	Dev_particles_pos[2*i+1] = part_pos_old[1] - floor((part_pos_old[1] - Grid.bounds[2])/LY)*LY;
 }
 
 
 // kernel to compute initial positions for vortex sheets center line? I'm not sure if thats whats wanted though
-__global__ void k_part_init_sine_sheets(double* Dev_particles_pos, int particle_num,
-		double offset_x, double offset_y, double empty_x, double empty_y) {
+// d_p_init_parameter is [p_offset_x, p_offset_y, empty, empty]
+__global__ void k_part_init_sine_sheets(int particle_num, double* Dev_particles_pos, TCudaGrid2D Grid) {
 	int i = (blockDim.x * blockIdx.x + threadIdx.x);  // (thread_num_max * block_num + thread_num) - gives position
 
 	// return if position is larger than particle size
 	if (i >= particle_num)
 		return;
 
-	Dev_particles_pos[2*i]   = i/(double)particle_num*twoPI + offset_x;
-	Dev_particles_pos[2*i+1] = sin(i/(double)particle_num*twoPI)/2.0 + offset_y;
+	double part_pos_old[2];
+	part_pos_old[0] = i/(double)particle_num*twoPI + d_p_init_parameter[0];
+	part_pos_old[1] = sin(i/(double)particle_num*twoPI)/2.0 + d_p_init_parameter[1];
+
+	double LX = Grid.bounds[1] - Grid.bounds[0]; double LY = Grid.bounds[3] - Grid.bounds[2];
+	// warping - translate by domain size(s)
+	Dev_particles_pos[2*i]   = part_pos_old[0] - floor((part_pos_old[0] - Grid.bounds[0])/LX)*LX;
+	Dev_particles_pos[2*i+1] = part_pos_old[1] - floor((part_pos_old[1] - Grid.bounds[2])/LY)*LY;
 }
 
 /*******************************************************************

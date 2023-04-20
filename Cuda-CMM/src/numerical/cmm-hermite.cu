@@ -151,13 +151,13 @@ __device__ T device_hermite_mult_3D(T *H, T bX[], T bY[], T bZ[], int I[], long 
 template<typename T>
 __device__ void device_init_ind(int *I, T *dxy, T x, T y, TCudaGrid2D Grid) {
 	//cell index
-	int Ix0 = floor(x/Grid.hx); int Iy0 = floor(y/Grid.hy);
+	int Ix0 = floor((x-Grid.bounds[0])/Grid.hx); int Iy0 = floor((y-Grid.bounds[2])/Grid.hy);
 	int Ix1 = Ix0 + 1; int Iy1 = Iy0 + 1;
 
 	//dx, dy
-	dxy[0] = x/Grid.hx - Ix0; dxy[1] = y/Grid.hy - Iy0;
+	dxy[0] = (x-Grid.bounds[0])/Grid.hx - Ix0; dxy[1] = (y-Grid.bounds[2])/Grid.hy - Iy0;
 
-	// project into domain, < 0 check is needed as integer division rounds towards 0
+	// project into domain, < bounds[0/2] check is needed as integer division rounds towards 0
 	Ix0 -= (Ix0/Grid.NX - (Ix0 < 0))*Grid.NX; Iy0 -= (Iy0/Grid.NY - (Iy0 < 0))*Grid.NY;
 	Ix1 -= (Ix1/Grid.NX - (Ix1 < 0))*Grid.NX; Iy1 -= (Iy1/Grid.NY - (Iy1 < 0))*Grid.NY;
 
@@ -167,13 +167,17 @@ __device__ void device_init_ind(int *I, T *dxy, T x, T y, TCudaGrid2D Grid) {
 template<typename T>
 __device__ void device_init_ind(int *I, T *dxyz, T x, T y, T z, TCudaGrid2D Grid) {
 	//cell index
-	int Ix0 = floor(x/Grid.hx); int Iy0 = floor(y/Grid.hy); int Iz0 = floor(z/Grid.hz);
+	int Ix0 = floor((x-Grid.bounds[0])/Grid.hx);
+	int Iy0 = floor((y-Grid.bounds[2])/Grid.hy);
+	int Iz0 = floor((z-Grid.bounds[4])/Grid.hz);
 	int Ix1 = Ix0 + 1; int Iy1 = Iy0 + 1; int Iz1 = Iz0 + 1;
 
-	//dx, dy
-	dxyz[0] = x/Grid.hx - Ix0; dxyz[1] = y/Grid.hy - Iy0; dxyz[2] = z/Grid.hz - Iz0;
+	//dx, dy, dz
+	dxyz[0] = (x-Grid.bounds[0])/Grid.hx - Ix0;
+	dxyz[1] = (y-Grid.bounds[2])/Grid.hy - Iy0;
+	dxyz[1] = (z-Grid.bounds[4])/Grid.hz - Iz0;
 
-	// project into domain, < 0 check is needed as integer division rounds towards 0
+	// project into domain, < bounds[0/2] check is needed as integer division rounds towards 0
 	Ix0 -= (Ix0/Grid.NX - (Ix0 < 0))*Grid.NX; Iy0 -= (Iy0/Grid.NY - (Iy0 < 0))*Grid.NY; Iz0 -= (Iz0/Grid.NZ - (Iz0 < 0))*Grid.NZ;
 	Ix1 -= (Ix1/Grid.NX - (Ix1 < 0))*Grid.NX; Iy1 -= (Iy1/Grid.NY - (Iy1 < 0))*Grid.NY; Iz1 -= (Iz1/Grid.NZ - (Iz1 < 0))*Grid.NZ;
 
@@ -186,11 +190,11 @@ __device__ void device_init_ind(int *I, T *dxyz, T x, T y, T z, TCudaGrid2D Grid
 template<typename T>
 __device__ void device_init_ind_diff(int *I, int *I_w, T *dxy, T x, T y, TCudaGrid2D Grid) {
 	// cell index
-	int Ix0 = floor(x/Grid.hx); int Iy0 = floor(y/Grid.hy);
+	int Ix0 = floor((x-Grid.bounds[0])/Grid.hx); int Iy0 = floor((y-Grid.bounds[2])/Grid.hy);
 	int Ix1 = Ix0 + 1; int Iy1 = Iy0 + 1;
 
-	//dx, dy, distance to footpoints
-	dxy[0] = x/Grid.hx - Ix0; dxy[1] = y/Grid.hy - Iy0;
+	//dx, dy
+	dxy[0] = (x-Grid.bounds[0])/Grid.hx - Ix0; dxy[1] = (y-Grid.bounds[2])/Grid.hy - Iy0;
 
 	//warping, compute projection needed to map onto L.x/L.y domain, add 1 for negative values to accommodate sign
 	I_w[0] = Ix0/Grid.NX - (Ix0 < 0); I_w[1] = Iy0/Grid.NY - (Iy0 < 0);
@@ -205,11 +209,15 @@ __device__ void device_init_ind_diff(int *I, int *I_w, T *dxy, T x, T y, TCudaGr
 template<typename T>
 __device__ void device_init_ind_diff(int *I, int *I_w, T *dxyz, T x, T y, T z, TCudaGrid2D Grid) {
 	// cell index
-	int Ix0 = floor(x/Grid.hx); int Iy0 = floor(y/Grid.hy); int Iz0 = floor(z/Grid.hz);
+	int Ix0 = floor((x-Grid.bounds[0])/Grid.hx);
+	int Iy0 = floor((y-Grid.bounds[2])/Grid.hy);
+	int Iz0 = floor((z-Grid.bounds[4])/Grid.hz);
 	int Ix1 = Ix0 + 1; int Iy1 = Iy0 + 1; int Iz1 = Iz0 + 1;
 
 	//dx, dy
-	dxyz[0] = x/Grid.hx - Ix0; dxyz[1] = y/Grid.hy - Iy0; dxyz[2] = z/Grid.hz - Iz0;
+	dxyz[0] = (x-Grid.bounds[0])/Grid.hx - Ix0;
+	dxyz[1] = (y-Grid.bounds[2])/Grid.hy - Iy0;
+	dxyz[1] = (z-Grid.bounds[4])/Grid.hz - Iz0;
 
 	//warping, compute projection needed to map onto L.x/L.y domain, add 1 for negative values to accommodate sign
 	I_w[0] = Ix0/Grid.NX - (Ix0 < 0); I_w[1] = Iy0/Grid.NY - (Iy0 < 0);

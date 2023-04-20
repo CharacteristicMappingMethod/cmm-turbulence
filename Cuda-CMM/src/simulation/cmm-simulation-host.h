@@ -84,8 +84,7 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 		MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D* Grid_sample, TCudaGrid2D Grid_discrete, double *Dev_sample,
 		cufftHandle* cufft_plan_sample_D2Z, cufftHandle* cufft_plan_sample_Z2D, cufftDoubleComplex *Dev_Temp_C1,
 		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int* forward_particles_block, int forward_particles_thread,
-		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f,
-		double *bounds, double *W_initial_discrete);
+		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f, double *W_initial_discrete);
 
 // sample vorticity with mapstack at arbitrary frame
 std::string Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
