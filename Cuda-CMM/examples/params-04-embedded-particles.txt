@@ -2,6 +2,7 @@ CMM Parameter file
 param_version	=	3
 
 workspace	=	./
+simulation_type	=	cmm_euler_2d
 sim_name	=	04-embedded-particles
 grid_coarse	=	128
 grid_fine	=	128
