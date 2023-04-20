@@ -2,6 +2,7 @@ CMM Parameter file
 param_version	=	3
 
 workspace	=	./
+simulation_type	=	cmm_euler_2d
 sim_name	=	01-working-test
 grid_coarse	=	32
 grid_fine	=	32

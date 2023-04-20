@@ -18,7 +18,7 @@
 void SettingsCMM::setPresets() {
 	// naming and saving settings of the simulation
 	std::string workspace = "./"; // where should the files be saved? "./" or "" means at the run location, has to end with backslash
-	std::string simulation_type = "cmm_euler_2d";  // which equation do we want to solve? "euler" or "vlasov-poisson"
+	std::string simulation_type = "cmm_euler_2d";  // which equation do we want to solve? "cmm_euler_2d" or "cmm_vlasov_poisson_1d"
 	std::string sim_name = "debug";  // unique identifier to differentiate simulations
 
 	// grid settings for coarse and fine grid

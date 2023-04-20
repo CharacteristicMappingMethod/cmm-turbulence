@@ -22,14 +22,15 @@
  * parameter file version, which should be increased with every major new setting
  * maybe this is not important, however, as older parameter files could leave out settings, they might not work anymore afterwards
  */
-#define PARAM_VERSION 3
-#define PARAM_HEADER_LINE "CMM Parameter file"
-#define PARAM_COMMAND "param_version"
+const int param_version = 3;
+const std::string param_header_line = "CMM Parameter file";
+const std::string param_command = "param_version";
+const std::string param_delimiter = "\t=\t";
 
 // because I have to use this many times, this just makes it easier and more readable
 std::string write_line(std::string param_name, std::string param_value) {
 	ostringstream os;
-	os << param_name << "\t=\t" << param_value << "\n";
+	os << param_name << param_delimiter << param_value << "\n";
 	return os.str ();
 }
 
@@ -48,8 +49,8 @@ void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 	else
 	{
 		// first three lines as setting lines for some details
-		file << PARAM_HEADER_LINE << "\n";  // header
-		file << write_line(PARAM_COMMAND, to_str(PARAM_VERSION, 16));  // give it a version number
+		file << param_header_line << "\n";  // header
+		file << write_line(param_command, to_str(param_version, 16));  // give it a version number
 		file << "\n";  // empty dummy line, for now as a separator, but maybe it comes in handy later
 
 		// now come all the parameter!
@@ -157,20 +158,19 @@ void load_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 	{
 		std::string file_line;
 		int param_version;
-		std::string delimiter = "\t=\t";
 
 		// check first line, this has to be equal to be accepted as param file
 		getline(file, file_line);
-		if (file_line == PARAM_HEADER_LINE) {
+		if (file_line == param_header_line) {
 			// check for version with next line
 			getline(file, file_line);
-			int pos_equal = file_line.find(delimiter);
+			int pos_equal = file_line.find(param_delimiter);
 			if (pos_equal != std::string::npos) {
 				// construct two substrings
 				std::string command = file_line.substr(0, pos_equal);
-				std::string value = file_line.substr(pos_equal+delimiter.length(), file_line.length());
+				std::string value = file_line.substr(pos_equal+param_delimiter.length(), file_line.length());
 
-				if (command == PARAM_COMMAND) {
+				if (command == param_command) {
 					param_version = std::stoi(value);
 
 					// skip third line
@@ -178,35 +178,35 @@ void load_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 
 					// now read in all the values
 					while(getline(file, file_line)){ //read data from file object and put it into string.
-						int set_save = SettingsMain.setVariable(file_line, delimiter);
+						int set_save = SettingsMain.setVariable(file_line, param_delimiter);
 						if (set_save == 1) {
 							for (int i_save = 0; i_save < SettingsMain.getSaveComputationalNum(); ++i_save) {
 								getline(file, file_line);
-								SettingsMain.setSaveComputational(file_line, delimiter, i_save);
+								SettingsMain.setSaveComputational(file_line, param_delimiter, i_save);
 							}
 						}
 						else if (set_save == 2) {
 							for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
 								getline(file, file_line);
-								SettingsMain.setSaveSample(file_line, delimiter, i_save);
+								SettingsMain.setSaveSample(file_line, param_delimiter, i_save);
 							}
 						}
 						else if (set_save == 3) {
 							for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); ++i_save) {
 								getline(file, file_line);
-								SettingsMain.setSaveZoom(file_line, delimiter, i_save);
+								SettingsMain.setSaveZoom(file_line, param_delimiter, i_save);
 							}
 						}
 						else if (set_save == 4) {
 							for (int i_save = 0; i_save < SettingsMain.getParticlesAdvectedNum(); ++i_save) {
 								getline(file, file_line);
-								SettingsMain.setParticlesAdvected(file_line, delimiter, i_save);
+								SettingsMain.setParticlesAdvected(file_line, param_delimiter, i_save);
 							}
 						}
 						else if (set_save == 5) {
 							for (int i_save = 0; i_save < SettingsMain.getParticlesForwardedNum(); ++i_save) {
 								getline(file, file_line);
-								SettingsMain.setParticlesForwarded(file_line, delimiter, i_save);
+								SettingsMain.setParticlesForwarded(file_line, param_delimiter, i_save);
 							}
 						}
 					}
