@@ -42,13 +42,21 @@ void fourier_hermite(TCudaGrid2D Grid, cufftDoubleComplex *Dev_In, double *Dev_O
 // Compute fine vorticity hermite
 void translate_initial_condition_through_map_stack(TCudaGrid2D Grid_fine, TCudaGrid2D Grid_discrete, MapStack Map_Stack, double *Dev_ChiX, double *Dev_ChiY,
 		double *W_H_real, cufftHandle cufft_plan_fine_D2Z, cufftHandle cufft_plan_fine_Z2D, cufftDoubleComplex *Dev_Temp_C1,
-		double *W_initial, int simulation_num_c, bool initial_discrete);
+		double *W_initial, int simulation_num_c, bool initial_discretem, int var_num=0);
 
 // computation of psi - sampling vorticity from fine vorticity hermite as initial condition
 void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_psi, TCudaGrid2D Grid_vort,
 		double *Dev_ChiX, double *Dev_ChiY, double *Dev_W_H_fine_real, double *Psi_real,
 		cufftHandle cufftPlan_coarse_Z2D, cufftHandle cufftPlan_psi, cufftHandle cufftPlan_vort,
 		cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_psi);
+
+void evaluate_potential_from_density_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_Psi, TCudaGrid2D Grid_vort,
+		double *Dev_ChiX, double *Dev_ChiY, double *Dev_W_H_fine_real, double *Psi_real,
+		cufftHandle cufft_plan_psi_D2Z, cufftHandle cufft_plan_psi_Z2D, cufftHandle cufft_plan_phi_1D, cufftHandle cufft_plan_phi_1D_inverse,
+		cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_phi);	
+
+
+
 
 // sample psi on a fixed grid with vorticity known
 void psi_upsampling(TCudaGrid2D Grid, double *Dev_W,cufftDoubleComplex *Dev_Temp_C1,

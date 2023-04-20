@@ -57,6 +57,7 @@
 ******************************************************************************************************************************/
 
 #include "simulation/cmm-euler2d.h"
+#include "simulation/cmm-vlasov1d.h"
 #include "ui/settings.h"
 #include "ui/cmm-param.h"
 
@@ -88,12 +89,19 @@ int main(int argc, char *args[])
 	SettingsMain.applyCommands(argc, args);
 
 	// main function
-	cuda_euler_2d(SettingsMain);
+	if (SettingsMain.getSimulationType() == "cmm_euler_2d") {
+		cuda_euler_2d(SettingsMain);
+	} else if (SettingsMain.getSimulationType() == "cmm_vlasov_poisson_1d"){
+		cuda_vlasov_1d(SettingsMain);
+	} else {
+		std::cout << "Simulation type not recognized" << std::endl;
+	}
 
 	//Zoom_load_frame("vortex_shear_1000_4", grid_scale, fine_grid_scale, "final");
 	
 	return 0;
 }
+
 
 
 

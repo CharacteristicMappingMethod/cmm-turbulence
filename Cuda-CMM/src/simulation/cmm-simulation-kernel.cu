@@ -32,15 +32,14 @@ __global__ void k_init_diffeo(double *ChiX, double *ChiY, TCudaGrid2D Grid)
 	if(iX >= Grid.NX || iY >= Grid.NY) return;
 	int In = iY*Grid.NX + iX;
 
-	ChiX[In] = iX*Grid.hx; ChiY[In] = iY*Grid.hy;
-
+	ChiX[In] =Grid.bounds[0] + iX*Grid.hx; ChiY[In] = Grid.bounds[2] + iY*Grid.hy;
 	// x dx = y dy = 1
 	ChiX[1*Grid.N+In] = ChiY[2*Grid.N+In] = 1;
 
 	// x dy = y dx = dxdy = 0
 	ChiX[2*Grid.N+In] = ChiY[1*Grid.N+In] = ChiX[3*Grid.N+In] = ChiY[3*Grid.N+In] = 0;
 }
-// double2 variant
+// double2 variant (not used)
 __global__ void k_init_diffeo(double2 *Chi, TCudaGrid2D Grid)
 {
 	//index
@@ -49,8 +48,7 @@ __global__ void k_init_diffeo(double2 *Chi, TCudaGrid2D Grid)
 	if(iX >= Grid.NX || iY >= Grid.NY) return;
 	int In = iY*Grid.NX + iX;
 
-	Chi[In].x = iX*Grid.hx; Chi[In].y = iY*Grid.hy;
-
+	Chi[In].x =Grid.bounds[0] + iX*Grid.hx; Chi[In].y = Grid.bounds[2] + iY*Grid.hy;
 	// x dx = y dy = 1
 	Chi[1*Grid.N+In].x = Chi[2*Grid.N+In].y = 1;
 
@@ -168,10 +166,9 @@ __global__ void k_incompressibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Gr
 	int In = iY*Grid_check.NX + iX;
 
 	//position shifted by half a point to compute at off-grid, i'm not tooo sure if its important though
-	double x = iX*Grid_check.hx + 0.5*Grid_check.hx;
-	double y = iY*Grid_check.hy + 0.5*Grid_check.hy;
-//	double x = iX*Grid_check.hx;
-//	double y = iY*Grid_check.hy;
+	double x = Grid_map.bounds[0] + iX*Grid_check.hx + 0.5*Grid_check.hx;
+	double y = Grid_map.bounds[2] + iY*Grid_check.hy + 0.5*Grid_check.hy;
+	// printf("x: %f, y: %f  \n", ChiX,ChiY);
 	grad_Chi[In] = device_diffeo_grad_2D(ChiX, ChiY, x, y, Grid_map);
 }
 
@@ -187,8 +184,8 @@ __global__ void k_invertibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_b
 	int In = iY*Grid_check.NX + iX;
 
 	//position shifted by half a point to compute at off-grid, i'm not tooo sure if its important though
-	double x = iX*Grid_check.hx + 0.5*Grid_check.hx;
-	double y = iY*Grid_check.hy + 0.5*Grid_check.hy;
+	double x =  Grid_check.bounds[0] + iX*Grid_check.hx + 0.5*Grid_check.hx;
+	double y =  Grid_check.bounds[2] + iY*Grid_check.hy + 0.5*Grid_check.hy;
 //	double x = iX*Grid_check.hx;
 //	double y = iY*Grid_check.hy;
 
@@ -300,7 +297,6 @@ __global__ void k_advect_using_stream_hermite(double *ChiX, double *ChiY, double
 	Chi_new_X[3*Grid_map.N+In] = Chi_full_x[3];	Chi_new_Y[3*Grid_map.N+In] = Chi_full_y[3];
 }
 
-
 // apply first map
 // like k_h_sample_map but saves all results in one array next to each other
 __global__ void k_h_sample_map_compact(double *ChiX, double *ChiY, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
@@ -312,15 +308,15 @@ __global__ void k_h_sample_map_compact(double *ChiX, double *ChiY, double *x_y, 
 	int In = iY*Grid.NX + iX;
 
 	//position
-	double x = Grid.bounds[0] + iX*Grid.hx;
-	double y = Grid.bounds[2] + iY*Grid.hy;
-	double LX = Grid_map.bounds[1] - Grid_map.bounds[0]; double LY = Grid_map.bounds[3] - Grid_map.bounds[2];
+	double x =  Grid.bounds[0] + iX*Grid.hx;
+	double y =  Grid.bounds[2] + iY*Grid.hy;
+	double LX = Grid.bounds[1] - Grid.bounds[0]; double LY = Grid.bounds[3] - Grid.bounds[2];
 
 	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, Grid_map);
 
 	// save in two points in array
-	x_y[2*In  ] = x - floor(x / LX) * LX;
-	x_y[2*In+1] = y - floor(y / LY) * LY;
+	x_y[2*In  ] = Grid_map.bounds[0] + x - floor(x / LX) * LX;
+	x_y[2*In+1] = Grid_map.bounds[2] + y - floor(y / LY) * LY;
 }
 // apply intermediate maps to compacted map, basically only samples in stacked form
 __global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
@@ -334,12 +330,19 @@ __global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, doub
 	double points[2];
 	double LX = Grid_map.bounds[1] - Grid_map.bounds[0]; double LY = Grid_map.bounds[3] - Grid_map.bounds[2];
 	device_diffeo_interpolate_2D(ChiX_stack, ChiY_stack, x_y[2*In], x_y[2*In+1], &points[0], &points[1], Grid_map);
-	x_y[2*In] = points[0] - floor(points[0]/LX)*LX;
-	x_y[2*In+1] = points[1] - floor(points[1]/LY)*LY;
+
+	x_y[2*In] = Grid_map.bounds[0] + points[0] - floor(points[0]/LX)*LX;
+	x_y[2*In+1] = Grid_map.bounds[2] + points[1] - floor(points[1]/LY)*LY;
 }
 // sample from initial condition
 __global__ void k_h_sample_from_init(double *Val_out, double *x_y, TCudaGrid2D Grid, TCudaGrid2D Grid_discrete, int init_var_num, int init_num, double *Val_initial_discrete, bool initial_discrete)
 {
+	/* 
+	@params 
+	val_out 		 ... output array
+	initial_discrete ... boolean flag to indicate whether we sample from a discrete initial condition or not
+	*/
+
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
@@ -348,9 +351,14 @@ __global__ void k_h_sample_from_init(double *Val_out, double *x_y, TCudaGrid2D G
 
 	if (!initial_discrete) {
 		// differentiate between what variable we would like to retrieve
+		if (x_y[2*In] > Grid_discrete.bounds[1] || x_y[2*In] < Grid_discrete.bounds[0] || x_y[2*In+1] > Grid_discrete.bounds[3] || x_y[2*In+1] < Grid_discrete.bounds[2]) {
+			printf("ERROR: initial condition not defined at point (%f, %f)", x_y[2*In], x_y[2*In+1]);
+		}
 		switch (init_var_num) {
 			case 0: { Val_out[In] = d_init_vorticity(x_y[2*In], x_y[2*In+1], init_num); break; }
 			case 1: { Val_out[In] = d_init_scalar(x_y[2*In], x_y[2*In+1], init_num); break; }
+			case 2: { Val_out[In] = d_init_distirbution_function(x_y[2*In], x_y[2*In+1], init_num); break; }
+			default:{printf("ERROR initial variable number not known"); }
 		}
 	}
 	else {
@@ -398,7 +406,7 @@ __global__ void k_apply_map_and_sample_from_hermite(double *ChiX, double *ChiY, 
 	else In = iY*Grid_vort.NX_fft*2 + iX;
 
 	//position
-	double x = iX*Grid_vort.hx; double y = iY*Grid_vort.hy;
+	double x = Grid_map.bounds[0] + iX*Grid_vort.hx; double y = Grid_map.bounds[2] + iY*Grid_vort.hy;
 
 	// mollification to act as a lowpass filter
 	double x2, y2;
@@ -444,4 +452,98 @@ __global__ void k_apply_map_and_sample_from_hermite(double *ChiX, double *ChiY, 
 		device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, Grid_map);
 		fs[In] = device_hermite_interpolate_2D(H, x, y, Grid_fine);
 	}
+}
+
+
+// __global__ void sum_reduction(int *v, int *v_r) {
+// 	// Allocate shared memory
+// 	__shared__ int partial_sum[SHMEM_SIZE];
+
+// 	// Calculate thread ID
+// 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+// 	// Load elements into shared memory
+// 	partial_sum[threadIdx.x] = v[tid];
+// 	__syncthreads();
+
+// 	// Start at 1/2 block stride and divide by two each iteration
+// 	for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+// 		// Each thread does work unless it is further than the stride
+// 		if (threadIdx.x < s) {
+// 			partial_sum[threadIdx.x] += partial_sum[threadIdx.x + s];
+// 		}
+// 		__syncthreads();
+// 	}
+
+// 	// Let the thread 0 for this block write it's result to main memory
+// 	// Result is inexed by this block
+// 	if (threadIdx.x == 0) {
+// 		v_r[blockIdx.x] = partial_sum[0];
+// 	}
+// }
+
+__global__ void k_assemble_psi(double *phi_1D, double *psi_out, TCudaGrid2D Grid)
+{
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+	if(iX >= Grid.NX || iY >= Grid.NY) return;
+
+	int In;
+	In = iY*Grid.NX + iX;
+	double v = Grid.bounds[2] + iY*Grid.hy;
+	// double x =  Grid.bounds[0] + iX*Grid.hx;
+
+	psi_out[In] = phi_1D[iX]-0.5*v*v;
+
+}
+
+
+__global__ void integral_v(double *v, double *v_r, int nx, int ny, double hy) {
+	
+
+	// Calculate thread ID
+	int IDX = blockIdx.x * blockDim.x + threadIdx.x;
+
+	for (int iy = 0; iy < ny; iy++) {
+		int In = iy*nx + IDX;
+		v_r[IDX] += v[In];
+	}
+	v_r[IDX] *= hy;
+	
+	
+	// int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	// int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+    // if(iX >= Grid_map.NX || iY >= Grid_map.NY) return;
+    // int In = iY*Grid_map.NX + iX;
+
+
+	// const int tid = threadIdx.x;
+
+	// auto step_size = 1;
+	// int number_of_threads = blockDim.x;
+
+	// while (number_of_threads > 0)
+	// {
+	// 	if (tid < number_of_threads) // still alive?
+	// 	{
+	// 		const auto fst = tid * step_size * 2;
+	// 		const auto snd = fst + step_size;
+	// 		input[fst] += input[snd];
+	// 	}
+
+	// 	step_size <<= 1; 
+	// 	number_of_threads >>= 1;
+	// }
+    // // Your calculations first so that each thread holds its result
+	// if (iX == 0){
+	
+	// }
+	// if (threadIdx.x == 0) {
+	
+	// }
+    // // Block wise reduction so that one thread in each block holds sum of thread results
+
+    // // The one thread holding the adds the block result to the global iteration result
+    // if (threadIdx.x == 0)
+    //     atomicAdd(iter_result + iter_num, block_ressult);
 }

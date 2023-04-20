@@ -77,6 +77,29 @@ __global__ void k_fft_iLap_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val
 	val_out[In].y = -val_in[In].y / k2;
 }
 
+// inverse laplacian in fourier space - division by kx**2
+__global__ void k_fft_iLap_h_1D(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
+{
+	//index
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	if(iX >= Grid.NX_fft)
+		return;
+
+	if(iX == 0)
+	{
+		val_out[0].x = val_out[0].y = 0.0;
+		return;
+	}
+
+	int In = iX;
+
+	double kx = twoPI/(Grid.hx*Grid.NX) * (iX - (iX>Grid.NX/2)*Grid.NX);
+	double k2 = kx*kx;
+
+    val_out[In].x = - val_in[In].x /k2;
+    val_out[In].y = - val_in[In].y /k2;
+}
+
 
 // x derivative in fourier space, multiplication by kx
 __global__ void k_fft_dx_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
@@ -274,6 +297,48 @@ __global__ void k_normalize_h(cufftDoubleComplex *F, TCudaGrid2D Grid)
 }
 
 
+// divide all values by grid size
+__global__ void k_normalize_1D_h(cufftDoubleComplex *F, TCudaGrid2D Grid)
+{
+	//index
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+
+	int In = iX;
+
+	F[In].x /= (double)Grid.NX;
+	F[In].y /= (double)Grid.NX;
+}
+
+
+__global__ void zero_padding_1D(cufftDoubleComplex *In, cufftDoubleComplex *Out, TCudaGrid2D Grid_out, TCudaGrid2D Grid_in) {
+	int iXc = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iYc = 0;
+
+	if(iXc >= Grid_out.NX_fft || iXc < 0 )
+		return;
+
+	int Inc = iXc;
+
+	// check if we have to set values to 0, transform index to lower half and compare to gridsize
+	if ((iXc + (iXc > Grid_out.NX/2.0) * (Grid_out.NX - 2*iXc) > Grid_in.NX/2.0)) {
+		Out[Inc].x = Out[Inc].y = 0;
+	}
+	else {
+		// get new positions and shift upper half to the outer edge
+		int iXs = iXc + (iXc > Grid_out.NX/2.0) * (Grid_in.NX - Grid_out.NX);
+		// get index in new system
+		int Ins = iXs;
+
+		// transcribe, add values and leave hole in the middle
+		double2 temp = In[Ins];
+		Out[Inc].x = temp.x;
+		Out[Inc].y = temp.y;
+
+//		if (blockIdx.x+blockIdx.y == 0) {
+//			printf("In - %d \t iXc - %d \t iYc - %d \t iXs - %d \t iYs - %d \n", Inc, iXc, iYc, iXs, iYs);
+//		}
+	}
+}
 
 /*******************************************************************
 *								Test NDFT						   *

@@ -18,6 +18,7 @@
 void SettingsCMM::setPresets() {
 	// naming and saving settings of the simulation
 	std::string workspace = "./"; // where should the files be saved? "./" or "" means at the run location, has to end with backslash
+	std::string simulation_type = "cmm_euler_2d";  // which equation do we want to solve? "euler" or "vlasov-poisson"
 	std::string sim_name = "debug";  // unique identifier to differentiate simulations
 
 	// grid settings for coarse and fine grid
@@ -247,7 +248,7 @@ void SettingsCMM::setPresets() {
 	// make sure that not initialized values are set
 	lagrange_order = 0;
 	// now set everything
-	setWorkspace(workspace); setSimName(sim_name);
+	setWorkspace(workspace); setSimName(sim_name); setSimulationType(simulation_type);
 	setGridCoarse(grid_coarse); setGridFine(grid_fine);
 	setGridPsi(grid_psi); setGridVort(grid_vort);
 	setFinalTime(final_time);
@@ -345,6 +346,7 @@ int SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		// this beast is becoming larger and larger, i should convert it to something more automatic
 		// link to site for that: https://stackoverflow.com/questions/4480788/c-c-switch-case-with-string
 		if (command == "workspace") setWorkspace(value);
+		else if (command == "simulation_type") setSimulationType(value);
 		else if (command == "sim_name") setSimName(value);
 		else if (command == "grid_coarse") setGridCoarse(std::stoi(value));
 		else if (command == "grid_fine") setGridFine(std::stoi(value));

@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <iostream>
 #include <sstream>
+#include "globals.h"
 
 #define T_MAX 10000  // maximum time, used to simplify saving and stuff
 
@@ -154,7 +155,7 @@ class SettingsCMM {
 
 private:
 	// main properties, needed to be able to run
-	std::string workspace, sim_name, file_name;
+	std::string workspace, sim_name, file_name, simulation_type;
 	int grid_coarse, grid_fine, grid_psi, grid_vort;
 	std::string initial_condition; double initial_params[10] = {0};
 	std::string initial_discrete_location;
@@ -227,6 +228,8 @@ public:
 	// name
 	std::string getWorkspace() const { return workspace; }
 	void setWorkspace(std::string Workspace) { workspace = Workspace; }
+	std::string getSimulationType() const { return simulation_type; }
+	void setSimulationType(std::string SimulationType) { simulation_type = SimulationType; }
 	std::string getSimName() const { return sim_name; }
 	void setSimName(std::string simName) { sim_name = simName; }
 	std::string getFileName() const { return file_name; }
@@ -268,21 +271,36 @@ public:
 	void setInitialCondition(std::string initialCondition) {
 		initial_condition = initialCondition;
 		// tied to num, for faster handling
-		if(initialCondition == "4_nodes") initial_condition_num = 0;
-		else if(initialCondition == "quadropole") initial_condition_num = 1;
-		else if(initialCondition == "one_vortex") initial_condition_num = 2;
-		else if(initialCondition == "two_votices") initial_condition_num = 3;
-		else if(initialCondition == "three_vortices") initial_condition_num = 4;
-		else if(initialCondition == "single_shear_layer") initial_condition_num = 5;
-		else if(initialCondition == "tanh_shear_layer") initial_condition_num = 6;
-		else if(initialCondition == "turbulence_gaussienne") initial_condition_num = 7;
-		else if(initialCondition == "gaussian_blobs") initial_condition_num = 8;
-		else if(initialCondition == "shielded_vortex") initial_condition_num = 9;
-		else if(initialCondition == "two_cosine") initial_condition_num = 10;
-		else if(initialCondition == "vortex_sheets") initial_condition_num = 11;
-		else {
-			initial_condition = "zero";  // make clear, that setting the initial condition failed
-			initial_condition_num = -1;
+		if (simulation_type=="cmm_vlasov_poisson_1d"){
+			if(initialCondition == "landau_damping") initial_condition_num = 0;
+			else if(initialCondition == "two_stream") initial_condition_num = 1;
+			else {
+				initial_condition = "zero";  // make clear, that setting the initial condition failed
+				initial_condition_num = -1;
+				error("Ok, try it again please with an existing initial condition.! Currently: " + initialCondition, 230304);
+				// throw runtime_error("test");
+			}
+		}
+		else
+		{
+			if(initialCondition == "4_nodes") initial_condition_num = 0;
+			else if(initialCondition == "quadropole") initial_condition_num = 1;
+			else if(initialCondition == "one_vortex") initial_condition_num = 2;
+			else if(initialCondition == "two_votices") initial_condition_num = 3;
+			else if(initialCondition == "three_vortices") initial_condition_num = 4;
+			else if(initialCondition == "single_shear_layer") initial_condition_num = 5;
+			else if(initialCondition == "tanh_shear_layer") initial_condition_num = 6;
+			else if(initialCondition == "turbulence_gaussienne") initial_condition_num = 7;
+			else if(initialCondition == "gaussian_blobs") initial_condition_num = 8;
+			else if(initialCondition == "shielded_vortex") initial_condition_num = 9;
+			else if(initialCondition == "two_cosine") initial_condition_num = 10;
+			else if(initialCondition == "vortex_sheets") initial_condition_num = 11;
+			else {
+				initial_condition = "zero";  // make clear, that setting the initial condition failed
+				initial_condition_num = -1;
+				error("Ok, try it again please with an existing initial condition.! Currently: " + initialCondition,230305);
+
+			}
 		}
 	}
 	int getInitialConditionNum() const { return initial_condition_num; }

@@ -24,6 +24,9 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num);
 // initial condition for scalars
 __device__ double d_init_scalar(double x, double y, int scalar_num);
 
+// initial condition for vlassov poisson density distribution function
+__device__ double d_init_distirbution_function(double x, double v, int simulation_num);
+
 // initial condition for particles
 __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain,
 		int particle_thread, int particle_block, double* domain_bounds, int particle_type, int i_p);
