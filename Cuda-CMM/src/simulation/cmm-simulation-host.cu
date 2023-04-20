@@ -544,18 +544,23 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 		double w_min = thrust::reduce(w_ptr, w_ptr + Grid_coarse.N, 0.0, thrust::minimum<double>());
 		mesure[3] = std::max(w_max, -w_min);
 
+		// hash of vorticity
+		double w_hash[2]; Hash_array(Grid_coarse, (char*)w_hash, Dev_W_coarse);
+
 		// save
 		writeAppendToBinaryFile(1, &t_now, SettingsMain, "/Monitoring_data/Mesure/Time_s");  // time vector for data
 		writeAppendToBinaryFile(1, mesure, SettingsMain, "/Monitoring_data/Mesure/Energy");
 		writeAppendToBinaryFile(1, mesure+1, SettingsMain, "/Monitoring_data/Mesure/Enstrophy");
 		writeAppendToBinaryFile(1, mesure+2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy");
 		writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity");
+		writeAppendToBinaryFile(2, w_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_vorticity");
 
 		// construct message
 		message = "Computed coarse Cons : Energ = " + to_str(mesure[0], 8)
 				+    " \t Enstr = " + to_str(mesure[1], 8)
 				+ " \t Palinstr = " + to_str(mesure[2], 8)
 				+ " \t Wmax = " + to_str(mesure[3], 8)
+				+ " \t Hash Vort = " + hash_to_str(w_hash, sizeof(w_hash))
 				+ "\n";
 	}
 
@@ -699,6 +704,9 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 			double w_min = thrust::reduce(w_ptr, w_ptr + Grid_sample[i_save].N, 0.0, thrust::minimum<double>());
 			mesure[3] = std::max(w_max, -w_min);
 
+			// hash of vorticity
+			double w_hash[2]; Hash_array(Grid_sample[i_save], (char*)w_hash, Dev_sample);
+
 			// compute laplacian of vorticity
 			if (save_var.find("Laplacian_W") != std::string::npos) {
 				laplacian(Grid_sample[i_save], Dev_sample, Dev_sample+Grid_sample[i_save].N, Dev_Temp_C1, cufft_plan_sample_D2Z[i_save], cufft_plan_sample_Z2D[i_save]);
@@ -748,12 +756,14 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 			writeAppendToBinaryFile(1, mesure+1, SettingsMain, "/Monitoring_data/Mesure/Enstrophy_"+ to_str(Grid_sample[i_save].NX));
 			writeAppendToBinaryFile(1, mesure+2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy_"+ to_str(Grid_sample[i_save].NX));
 			writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity_"+ to_str(Grid_sample[i_save].NX));
+			writeAppendToBinaryFile(2, w_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_vorticity_"+ to_str(Grid_sample[i_save].NX));
 
 			// construct message
 			message = message + "Saved sample data " + to_str(i_save + 1) + " on grid " + to_str(Grid_sample[i_save].NX) + ", Cons : Energ = " + to_str(mesure[0], 8)
 					+    " \t Enstr = " + to_str(mesure[1], 8)
 					+ " \t Palinstr = " + to_str(mesure[2], 8)
 					+ " \t Wmax = " + to_str(mesure[3], 8)
+					+ " \t Hash Vort = " + hash_to_str(w_hash, sizeof(w_hash))
 					+ "\n";
 		}
 	}

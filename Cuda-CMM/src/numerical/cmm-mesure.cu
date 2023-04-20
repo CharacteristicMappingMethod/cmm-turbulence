@@ -18,6 +18,11 @@
 #include <thrust/functional.h>
 #include <thrust/device_ptr.h>
 
+// hashing algorithm
+#include "murmur3.cu"
+
+#include "stdio.h"
+
 
 void Compute_Energy(double &E, double *psi, TCudaGrid2D Grid){
 	// parallel reduction using thrust
@@ -74,6 +79,32 @@ void Compute_Palinstrophy(TCudaGrid2D Grid, double &Pal, double *W_real, cufftDo
 	Pal += 0.5*Grid.hx*Grid.hy * thrust::transform_reduce(Pal_ptr + 2*Grid.Nfft, Pal_ptr + 2*Grid.Nfft + Grid.N, thrust::square<double>(), 0.0, thrust::plus<double>());
 
 //	printf("Pal : %f\n", *Pal);
+}
+
+
+// Hash an array
+__global__ void k_hash_array(long long int n, int thread_num, double *in, char *out) {
+    int iN = (blockIdx.x * blockDim.x + threadIdx.x);
+    long long int hash_size = n/thread_num;
+    if (iN * hash_size > n) return;
+    if ((iN + 1) * hash_size > n) hash_size = n - iN * hash_size;  // check to match exactly the array size
+
+    // now do the hashing
+    MurmurHash3_x64_128((char*)(in + (iN * thread_num)), hash_size*8, 0, out + (iN * 16));
+
+//	printf("Hash in kernel - ");
+//	for (int i=0; i<16; i++) printf("%c", out[i]);
+//	printf("\n");
+}
+
+void Hash_array(TCudaGrid2D Grid, char *Hash, double *dev_array) {
+	char *d_hash; cudaMalloc((void**)&d_hash, 16);
+	k_hash_array<<<1, 1>>>(Grid.N, 1, dev_array, d_hash);
+	cudaMemcpy(Hash, d_hash, 16*sizeof(char), cudaMemcpyDeviceToHost);
+
+//	printf("Hash in host - ");
+//	for (int i=0; i<2; i++) printf("%c", Hash[i]);
+//	printf("\n");
 }
 
 

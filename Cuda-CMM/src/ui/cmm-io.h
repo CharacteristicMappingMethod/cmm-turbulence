@@ -112,6 +112,8 @@ template<typename Type> string to_str (const Type & t, int prec)
 }
 // little function to print integer with leading zeros
 std::string to_str_0 (int t, int width);
+// function to convert hash to hex
+std::string hash_to_str(const void* hash, size_t size);
 
 // little function to format array datatype to string
 template<typename Type> string array_to_str (const Type & array, const int length)

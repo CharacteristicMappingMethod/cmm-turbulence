@@ -54,19 +54,20 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax
 		mkdir(folder_name_tdata.c_str(), 0777);
 	}
 
-	// empty all monitoring data so that we can later flush every value
-	std::string monitoring_names[10] = {"/Error_incompressibility", "/Map_counter", "/Map_gaps", "/Time_s", "/Time_c",
-			"/Mesure/Time_s", "/Mesure/Energy", "/Mesure/Enstrophy", "/Mesure/Palinstrophy", "/Mesure/Max_vorticity",
-	};
-	for ( const auto &i_mon_names : monitoring_names) {
-		std::string fileName = folder_name + "/Monitoring_data" + i_mon_names + ".data";
-		ofstream file(fileName.c_str(), std::ios::out | std::ios::trunc);
-		file.close();
-	}
-	// empty out mesure file for sample if we do not restart
-	if (SettingsMain.getRestartTime() != 0) {
+	// empty out monitoring data, only if we do not restart
+	if (SettingsMain.getRestartTime() == 0) {
+		// empty all monitoring data so that we can later flush every value
+		std::string monitoring_names[11] = {"/Error_incompressibility", "/Map_counter", "/Map_gaps", "/Time_s", "/Time_c",
+				"/Mesure/Time_s", "/Mesure/Energy", "/Mesure/Enstrophy", "/Mesure/Palinstrophy", "/Mesure/Max_vorticity", "/Mesure/Hash_vorticity",
+		};
+		for ( const auto &i_mon_names : monitoring_names) {
+			std::string fileName = folder_name + "/Monitoring_data" + i_mon_names + ".data";
+			ofstream file(fileName.c_str(), std::ios::out | std::ios::trunc);
+			file.close();
+		}
+		// empty out mesure file for sample
 		if (SettingsMain.getSaveSampleNum() > 0) {
-			std::string monitoring_names[5] = {"/Time_s_", "/Energy_", "/Enstrophy_", "/Palinstrophy_", "/Max_vorticity_",
+			std::string monitoring_names[6] = {"/Time_s_", "/Energy_", "/Enstrophy_", "/Palinstrophy_", "/Max_vorticity_", "/Hash_vorticity_"
 			};
 			for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
 				int grid_i = SettingsMain.getSaveSample()[i_save].grid;
@@ -636,6 +637,17 @@ std::string to_str_0 (int t, int width)
   ostringstream os;
   os << std::setfill('0') << std::setw(width) << t;
   return os.str ();
+}
+
+std::string hash_to_str(const void* hash, size_t size)
+{
+    ostringstream os;
+    os << std::hex << std::setfill('0');
+    const uint8_t* data = static_cast<const uint8_t*>(hash);
+    for (size_t i = 0; i < size; ++i) {
+        os << std::setw(2) << static_cast<unsigned>(data[i]);
+    }
+    return os.str();
 }
 
 
