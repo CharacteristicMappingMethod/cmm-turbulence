@@ -468,8 +468,7 @@ __device__ double d_init_distirbution_function(double x, double v, int simulatio
 		{
 			double k = 0.2;  // thickness of shear layer
 			double eps = 5*1e-2;  // strength of instability
-			
-			return (1 + eps*cos(k*x)) * exp((v)*(v)*0.5)/sqrt(2 * PI);
+			return (1 + eps*cos(k*x)) * exp(-(v)*(v)*0.5)/sqrt(2 * PI);
 			break;
 		}
 		case 1:  // two stream

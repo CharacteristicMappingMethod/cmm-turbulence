@@ -76,6 +76,70 @@ void Compute_Palinstrophy(TCudaGrid2D Grid, double &Pal, double *W_real, cufftDo
 //	printf("Pal : %f\n", *Pal);
 }
 
+/*
+##############################################################################
+Vlasov Poisson 
+##############################################################################
+*/ 
+
+void Compute_Mass(double &mass, double *f_in, TCudaGrid2D Grid){
+	// #############################################################################################
+	//   this function computes the electrical energy of the system defined by the potential psi
+	//		 \Ekin(t) =\frac{1}{2}\int_{\Omega_v} \int_{\Omega_x} f(x,v,t) \abs{v}^2 \d x\, \d v\,.
+	// #############################################################################################
+	
+	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(f_in);
+	mass = Grid.hy * Grid.hx * thrust::reduce( ptr, ptr + Grid.N, 0.0, thrust::plus<double>());
+}
+
+__global__ void generate_gridvalues_f_times_v_square(cufftDoubleReal *v2,cufftDoubleReal *f, TCudaGrid2D Grid) {
+	// #############################################################################################
+	// This function creates a NX time NV grid of values f(ix,iv) *v[iv]^2
+	// #############################################################################################
+	
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+	if(iX >= Grid.NX || iY >= Grid.NY) return;
+
+	int In;
+	In = iY*Grid.NX + iX;
+	double v_temp = Grid.bounds[2] + iY*Grid.hy;
+	v2[In] = v_temp*v_temp*f[In];
+}
+
+void Compute_Kinetic_Energy(double &E_out, double *f_in, cufftDoubleReal *Dev_Temp_C1, TCudaGrid2D Grid){
+	// #############################################################################################
+	//   this function computes the electrical energy of the system defined by the potential psi
+	//		 \Ekin(t) =\frac{1}{2}\int_{\Omega_v} \int_{\Omega_x} f(x,v,t) \abs{v}^2 \d x\, \d v\,.
+	// #############################################################################################
+	
+	generate_gridvalues_f_times_v_square<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, f_in, Grid);
+	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Dev_Temp_C1);
+	E_out = 0.5 * Grid.hy * Grid.hx * thrust::reduce( ptr, ptr + Grid.N, 0.0, thrust::plus<double>());
+}
+
+void Compute_Potential_Energy(double &E_out, double *psi_in, TCudaGrid2D Grid){
+	// #############################################################################################
+	// this function computes the electrical energy of the system defined by the potential psi
+	// 		 \Epot(t) =\frac{1}{2}\int_{\Omega_x} \abs{E(x,t)}^2 \d x \,.
+	// 	 where E(x,t) = -\frac{\partial \psi(x,t)}{\partial x}
+	// #############################################################################################
+
+	// parallel reduction using thrust
+	thrust::device_ptr<double> psi_ptr = thrust::device_pointer_cast(psi_in);
+	E_out = 0.5 * Grid.hx * thrust::transform_reduce(psi_ptr + 1*Grid.N, psi_ptr + Grid.N + Grid.NX, thrust::square<double>(), 0.0, thrust::plus<double>());
+}
+
+
+void Compute_Total_Energy(double &E_tot, double &E_kin, double &E_pot, double *psi_in, double *f_in, cufftDoubleReal *Dev_Temp_C1, TCudaGrid2D Grid){
+	// #############################################################################################
+	//  this function computes the total energy of the vlasov poisson system defined by the potential psi and the distribution function f
+	// #############################################################################################
+	Compute_Kinetic_Energy(E_kin, f_in, Dev_Temp_C1, Grid);
+	Compute_Potential_Energy(E_pot, psi_in, Grid);
+	E_tot = E_kin + E_pot;
+}
+
 
 
 

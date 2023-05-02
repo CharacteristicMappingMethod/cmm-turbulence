@@ -55,7 +55,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	*******************************************************************/
 	
 	// boundary information for translating, 6 coords for 3D - (x0, x1, y0, y1, z0, z1)
-	double bounds[6] = {0, 10*twoPI, -8, 8, 0, 0};
+	double bounds[6] = {0, 10*PI, -2.5*PI, 2.5*PI, 0, 0};
 	// the code seems to work only square domains!!! is it a bug of a feature? I think its sad
 	double t0 = SettingsMain.getRestartTime();							// time - initial
 	double dt;															// time - step final
@@ -165,16 +165,23 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	cufftHandle cufft_plan_fine_D2Z, cufft_plan_fine_Z2D;
 	cufftHandle cufft_plan_vort_D2Z, cufft_plan_psi_Z2D;  // used for psi, but work on different grid for forward and backward
 	cufftHandle cufft_plan_psi_D2Z;
-	cufftHandle* cufft_plan_sample_D2Z = (cufftHandle*)malloc(sizeof(cufftHandle) * SettingsMain.getSaveSampleNum());
-	cufftHandle* cufft_plan_sample_Z2D = (cufftHandle*)malloc(sizeof(cufftHandle) * SettingsMain.getSaveSampleNum());
+	cufftHandle* cufft_plan_sample_1D_D2Z = (cufftHandle*)malloc(sizeof(cufftHandle) * SettingsMain.getSaveSampleNum());
+	cufftHandle* cufft_plan_sample_1D_Z2D = (cufftHandle*)malloc(sizeof(cufftHandle) * SettingsMain.getSaveSampleNum());
+	cufftHandle* cufft_plan_sample_2D_D2Z = (cufftHandle*)malloc(sizeof(cufftHandle) * SettingsMain.getSaveSampleNum());
+	cufftHandle* cufft_plan_sample_2D_Z2D = (cufftHandle*)malloc(sizeof(cufftHandle) * SettingsMain.getSaveSampleNum());
 	cufftHandle cufft_plan_discrete_D2Z, cufft_plan_discrete_Z2D;
+	// allocate memory for fft plans of 1D phi field
+	cufftHandle plan_phi_1D;
+	cufftHandle inverse_plan_phi_1D;
+	cufftResult res_phi;
+	cufftResult res_phi_inverse;
 
 	// preinitialize handles
 	cufftCreate(&cufft_plan_coarse_D2Z); cufftCreate(&cufft_plan_coarse_Z2D);
 	cufftCreate(&cufft_plan_fine_D2Z);   cufftCreate(&cufft_plan_fine_Z2D);
 	cufftCreate(&cufft_plan_vort_D2Z);   cufftCreate(&cufft_plan_psi_Z2D); cufftCreate(&cufft_plan_psi_D2Z);
 	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
-		cufftCreate(&cufft_plan_sample_D2Z[i_save]); cufftCreate(&cufft_plan_sample_Z2D[i_save]);
+		cufftCreate(&cufft_plan_sample_2D_D2Z[i_save]); cufftCreate(&cufft_plan_sample_2D_Z2D[i_save]);
 	}
 	cufftCreate(&cufft_plan_discrete_D2Z); cufftCreate(&cufft_plan_discrete_Z2D);
 
@@ -183,7 +190,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	cufftSetAutoAllocation(cufft_plan_fine_D2Z, 0);   cufftSetAutoAllocation(cufft_plan_fine_Z2D, 0);
 	cufftSetAutoAllocation(cufft_plan_vort_D2Z, 0);   cufftSetAutoAllocation(cufft_plan_psi_Z2D, 0); cufftSetAutoAllocation(cufft_plan_psi_D2Z, 0);
 	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
-		cufftSetAutoAllocation(cufft_plan_sample_D2Z[i_save], 0); cufftSetAutoAllocation(cufft_plan_sample_Z2D[i_save], 0);
+		cufftSetAutoAllocation(cufft_plan_sample_2D_D2Z[i_save], 0); cufftSetAutoAllocation(cufft_plan_sample_2D_Z2D[i_save], 0);
 	}
 	cufftSetAutoAllocation(cufft_plan_discrete_D2Z, 0); cufftSetAutoAllocation(cufft_plan_discrete_Z2D, 0);
 
@@ -204,16 +211,18 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	}
 	size_t size_max_fft = 0; size_t workSize_sample[2];
 	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
-	    cufftMakePlan2d(cufft_plan_sample_D2Z[i_save], Grid_sample[i_save].NX,   Grid_sample[i_save].NY,   CUFFT_D2Z, &workSize_sample[0]);
-	    cufftMakePlan2d(cufft_plan_sample_Z2D[i_save], Grid_sample[i_save].NX,   Grid_sample[i_save].NY,   CUFFT_Z2D, &workSize_sample[1]);
+	    // 1D fft plans for sample mesh
+		res_phi 		= cufftPlan1d(&cufft_plan_sample_1D_D2Z[i_save], Grid_sample[i_save].NX,   CUFFT_D2Z, 1);
+	    res_phi_inverse = cufftPlan1d(&cufft_plan_sample_1D_Z2D[i_save], Grid_sample[i_save].NX,   CUFFT_Z2D, 1);
+		assert(res_phi == CUFFT_SUCCESS);
+		assert(res_phi_inverse == CUFFT_SUCCESS);
+		// 2D fft plans for sample mesh
+		cufftMakePlan2d(cufft_plan_sample_2D_D2Z[i_save], Grid_sample[i_save].NX,   Grid_sample[i_save].NY,   CUFFT_D2Z, &workSize_sample[0]);
+	    cufftMakePlan2d(cufft_plan_sample_2D_Z2D[i_save], Grid_sample[i_save].NX,   Grid_sample[i_save].NY,   CUFFT_Z2D, &workSize_sample[1]);
 	    size_max_fft = std::max(size_max_fft, workSize_sample[0]); size_max_fft = std::max(size_max_fft, workSize_sample[1]);
 	}
 
-	// allocate memory for fft plans of 1D phi field
-	cufftHandle plan_phi_1D;
-	cufftHandle inverse_plan_phi_1D;
-	cufftResult res_phi;
-	cufftResult res_phi_inverse;
+
 	 // Create cuFFT plans
     res_phi=cufftPlan1d(&plan_phi_1D, Grid_vort.NX, CUFFT_D2Z, 1);
     res_phi_inverse=cufftPlan1d(&inverse_plan_phi_1D, Grid_psi.NX, CUFFT_Z2D, 1);
@@ -237,7 +246,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	cufftSetWorkArea(cufft_plan_vort_D2Z, fft_work_area);   cufftSetWorkArea(cufft_plan_psi_Z2D, fft_work_area);
 	cufftSetWorkArea(cufft_plan_psi_D2Z, fft_work_area);
 	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
-		cufftSetWorkArea(cufft_plan_sample_D2Z[i_save], fft_work_area); cufftSetWorkArea(cufft_plan_sample_Z2D[i_save], fft_work_area);
+		cufftSetWorkArea(cufft_plan_sample_2D_D2Z[i_save], fft_work_area); cufftSetWorkArea(cufft_plan_sample_2D_Z2D[i_save], fft_work_area);
 	}
 	if (SettingsMain.getInitialDiscrete()) {
 		cufftSetWorkArea(cufft_plan_discrete_D2Z, fft_work_area); cufftSetWorkArea(cufft_plan_discrete_Z2D, fft_work_area);
@@ -616,7 +625,6 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	evaluate_potential_from_density_hermite(SettingsMain, Grid_coarse, Grid_fine, Grid_psi, Grid_vort, Dev_ChiX, Dev_ChiY,
 			Dev_W_H_fine_real, Dev_Psi_real, cufft_plan_psi_D2Z, cufft_plan_psi_Z2D, plan_phi_1D, inverse_plan_phi_1D,
 			Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
-	
 	// compute coarse vorticity as a simulation variable, is needed for entrophy and palinstrophy
 	k_apply_map_and_sample_from_hermite<<<Grid_coarse.blocksPerGrid, Grid_coarse.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
 			Dev_W_coarse, Dev_W_H_fine_real, Grid_coarse, Grid_coarse, Grid_fine, 0, false);
@@ -679,6 +687,8 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 							(cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)(Dev_Temp_C1) + 4*Grid_coarse.N,
 							Dev_Psi_real, t_init, dt_init, 0, -1);
 
+
+					
 					cudaMemcpyAsync(Dev_ChiX, (cufftDoubleReal*)(Dev_Temp_C1), 			   		 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice, streams[2]);
 					cudaMemcpyAsync(Dev_ChiY, (cufftDoubleReal*)(Dev_Temp_C1) + 4*Grid_coarse.N, 4*Grid_coarse.sizeNReal, cudaMemcpyDeviceToDevice, streams[3]);
 					cudaDeviceSynchronize();
@@ -807,9 +817,9 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 
 
 	// sample if wanted
-	message = sample_compute_and_write(SettingsMain, t0, dt, dt,
+	message = sample_compute_and_write_vlasov(SettingsMain, t0, dt, dt,
 			Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Dev_Temp_2,
-			cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
+			cufft_plan_sample_1D_D2Z, cufft_plan_sample_1D_Z2D, cufft_plan_sample_2D_D2Z, cufft_plan_sample_2D_Z2D, Dev_Temp_C1,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
 
@@ -1073,9 +1083,9 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		}
 
 		// sample if wanted
-		message = sample_compute_and_write(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt,
+		message = sample_compute_and_write_vlasov(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt,
 				Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Dev_Temp_2,
-				cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
+				cufft_plan_sample_1D_D2Z, cufft_plan_sample_1D_Z2D, cufft_plan_sample_2D_D2Z, cufft_plan_sample_2D_Z2D, Dev_Temp_C1,
 				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
 		// output sample mesure status to console
@@ -1241,9 +1251,9 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	}
 
 	// sample if wanted
-	message = sample_compute_and_write(SettingsMain, T_MAX, dt, dt,
+	message = sample_compute_and_write_vlasov(SettingsMain, T_MAX, dt, dt,
 			Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Dev_Temp_2,
-			cufft_plan_sample_D2Z, cufft_plan_sample_Z2D, Dev_Temp_C1,
+			cufft_plan_sample_1D_D2Z, cufft_plan_sample_1D_Z2D, cufft_plan_sample_2D_D2Z, cufft_plan_sample_2D_Z2D, Dev_Temp_C1,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
 	// output sample mesure status to console
@@ -1319,7 +1329,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	cufftDestroy(cufft_plan_fine_D2Z);   cufftDestroy(cufft_plan_fine_Z2D);
 	cufftDestroy(cufft_plan_vort_D2Z);   cufftDestroy(cufft_plan_psi_Z2D);
 	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
-		cufftDestroy(cufft_plan_sample_D2Z[i_save]); cufftDestroy(cufft_plan_sample_Z2D[i_save]);
+		cufftDestroy(cufft_plan_sample_2D_D2Z[i_save]); cufftDestroy(cufft_plan_sample_2D_Z2D[i_save]);
 	}
 	cudaFree(fft_work_area);
 

@@ -495,58 +495,23 @@ __global__ void k_assemble_psi(double *phi_1D, double *psi_out, TCudaGrid2D Grid
 	In = iY*Grid.NX + iX;
 	double v = Grid.bounds[2] + iY*Grid.hy;
 	// double x =  Grid.bounds[0] + iX*Grid.hx;
-
-	psi_out[In] = phi_1D[iX]-0.5*v*v;
+	psi_out[In] = phi_1D[iX] - 0.5*v*v;
 
 }
 
 
-__global__ void integral_v(double *v, double *v_r, int nx, int ny, double hy) {
+__global__ void integral_v(double *v_in, double *v_out, int nx, int ny, double hy) {
+	// ##########################################################################
+	// This function takes a 2D array v_in and integrates it in the y-direction.
+	// The result is stored in the first row of v_out.
+	// ##########################################################################
 	
-
 	// Calculate thread ID
 	int IDX = blockIdx.x * blockDim.x + threadIdx.x;
 
 	for (int iy = 0; iy < ny; iy++) {
 		int In = iy*nx + IDX;
-		v_r[IDX] += v[In];
+		v_out[IDX] += v_in[In];
 	}
-	v_r[IDX] *= hy;
-	
-	
-	// int iX = (blockDim.x * blockIdx.x + threadIdx.x);
-	// int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-    // if(iX >= Grid_map.NX || iY >= Grid_map.NY) return;
-    // int In = iY*Grid_map.NX + iX;
-
-
-	// const int tid = threadIdx.x;
-
-	// auto step_size = 1;
-	// int number_of_threads = blockDim.x;
-
-	// while (number_of_threads > 0)
-	// {
-	// 	if (tid < number_of_threads) // still alive?
-	// 	{
-	// 		const auto fst = tid * step_size * 2;
-	// 		const auto snd = fst + step_size;
-	// 		input[fst] += input[snd];
-	// 	}
-
-	// 	step_size <<= 1; 
-	// 	number_of_threads >>= 1;
-	// }
-    // // Your calculations first so that each thread holds its result
-	// if (iX == 0){
-	
-	// }
-	// if (threadIdx.x == 0) {
-	
-	// }
-    // // Block wise reduction so that one thread in each block holds sum of thread results
-
-    // // The one thread holding the adds the block result to the global iteration result
-    // if (threadIdx.x == 0)
-    //     atomicAdd(iter_result + iter_num, block_ressult);
+	v_out[IDX] *= hy;
 }
