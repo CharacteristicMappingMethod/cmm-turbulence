@@ -61,7 +61,10 @@ void evaluate_potential_from_density_hermite(SettingsCMM SettingsMain, TCudaGrid
 // sample psi on a fixed grid with vorticity known
 void psi_upsampling(TCudaGrid2D Grid, double *Dev_W,cufftDoubleComplex *Dev_Temp_C1,
 		double *Dev_Psi, cufftHandle cufft_plan_D2Z, cufftHandle cufft_plan_Z2D);
-
+// compute psi on a given Grid_psi from distribution function defined on Grid using a 1D fft
+void get_psi_hermite_from_distribution_function(double *Psi_real_out, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1,
+		cufftHandle cufft_plan_phi_1D, cufftHandle cufft_plan_phi_1D_inverse, cufftHandle cufft_plan_psi_D2Z, cufftHandle cufft_plan_psi_Z2D,
+		TCudaGrid2D Grid, TCudaGrid2D Grid_psi);
 // compute laplacian
 void laplacian(TCudaGrid2D Grid, double *Dev_W, double *Dev_out, cufftDoubleComplex *Dev_Temp_C1,
 		cufftHandle cufft_plan_D2Z, cufftHandle cufft_plan_Z2D);
@@ -85,6 +88,14 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 		cufftHandle* cufft_plan_sample_D2Z, cufftHandle* cufft_plan_sample_Z2D, cufftDoubleComplex *Dev_Temp_C1,
 		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int* forward_particles_block, int forward_particles_thread,
 		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f, double *W_initial_discrete);
+
+std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
+		MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D* Grid_sample, TCudaGrid2D Grid_discrete, double *Dev_sample,
+		cufftHandle* cufft_plan_sample_phi_1D, cufftHandle* cufft_plan_sample_phi_1D_inverse, 
+		cufftHandle* cufft_plan_sample_phi_2D, cufftHandle* cufft_plan_sample_phi_2D_inverse, 
+		cufftDoubleComplex *Dev_Temp_C1, double **Host_forward_particles_pos, double **Dev_forward_particles_pos, 
+		int *forward_particles_block, int forward_particles_thread, double *Dev_ChiX, double *Dev_ChiY,
+		double *Dev_ChiX_f, double *Dev_ChiY_f, double *W_initial_discrete);
 
 // sample vorticity with mapstack at arbitrary frame
 std::string Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
