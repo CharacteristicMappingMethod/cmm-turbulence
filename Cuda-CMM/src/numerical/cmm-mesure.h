@@ -7,7 +7,7 @@
 *   and distribute verbatim copies of this license document, but changing it is not allowed.
 *
 *   Documentation and further information can be taken from the GitHub page, located at:
-*   https://github.com/Arcadia197/cmm-turbulence
+*   https://github.com/CharacteristicMappingMethod/cmm-turbulence
 *
 ******************************************************************************************************************************/
 
@@ -24,6 +24,7 @@ void Compute_Energy(double &E, double *psi, TCudaGrid2D Grid);
 void Compute_Enstrophy(double &E, double *W, TCudaGrid2D Grid);
 void Compute_Enstrophy_fourier(double &E, cufftDoubleComplex *W, TCudaGrid2D Grid);
 void Compute_Palinstrophy(TCudaGrid2D Grid, double &Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftHandle cufft_plan_D2Z, cufftHandle cufft_plan_Z2D);
+void Hash_array(long long int n, char *Hash, double *dev_array);
 
 // vlasov poisson
 void Compute_Mass(double &mass, double *f_in, TCudaGrid2D Grid);

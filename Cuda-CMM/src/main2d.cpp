@@ -9,7 +9,7 @@
 *   and distribute verbatim copies of this license document, but changing it is not allowed.
 *
 *   Documentation and further information can be taken from the GitHub page, located at:
-*   https://github.com/Arcadia197/cmm-turbulence
+*   https://github.com/CharacteristicMappingMethod/cmm-turbulence
 *
 *
 *	Code contributions:

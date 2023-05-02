@@ -7,7 +7,7 @@
 *   and distribute verbatim copies of this license document, but changing it is not allowed.
 *
 *   Documentation and further information can be taken from the GitHub page, located at:
-*   https://github.com/Arcadia197/cmm-turbulence
+*   https://github.com/CharacteristicMappingMethod/cmm-turbulence
 *
 ******************************************************************************************************************************/
 
@@ -29,7 +29,7 @@ const std::string param_delimiter = "\t=\t";
 
 // because I have to use this many times, this just makes it easier and more readable
 std::string write_line(std::string param_name, std::string param_value) {
-	ostringstream os;
+	std::ostringstream os;
 	os << param_name << param_delimiter << param_value << "\n";
 	return os.str ();
 }
@@ -40,7 +40,7 @@ void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 	std::ofstream file;
 
 //	std::string file_name = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/params.txt";
-	file.open(param_name.c_str(), ios::out);
+	file.open(param_name.c_str(), std::ios::out);
 
 	if(!file)
 	{
@@ -146,9 +146,9 @@ void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 
 // function to load parameter file, pass-by-reference
 void load_param_file(SettingsCMM& SettingsMain, std::string param_name) {
-	ifstream file;
+	std::ifstream file;
 
-	file.open(param_name.c_str(), ios::in);
+	file.open(param_name.c_str(), std::ios::in);
 
 	if(!file)
 	{

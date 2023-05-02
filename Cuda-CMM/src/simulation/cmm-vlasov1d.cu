@@ -7,7 +7,7 @@
 *   and distribute verbatim copies of this license document, but changing it is not allowed.
 *
 *   Documentation and further information can be taken from the GitHub page, located at:
-*   https://github.com/Arcadia197/cmm-turbulence
+*   https://github.com/CharacteristicMappingMethod/cmm-turbulence
 *
 ******************************************************************************************************************************/
 
@@ -766,7 +766,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 			std::cout<<message+"\n"; logger.push(message);
 		}
 
-		readMapStack(SettingsMain, Map_Stack, Grid_fine, Grid_psi, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_Psi_real, false, SettingsMain.getRestartLocation());
+		readMapStack(SettingsMain, Map_Stack, Grid_psi, Dev_ChiX, Dev_ChiY, Dev_Psi_real, false, SettingsMain.getRestartLocation());
 
 		// output how many maps were loaded
 		if (SettingsMain.getVerbose() >= 2) {
@@ -775,7 +775,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		}
 
 		if (SettingsMain.getForwardMap()) {
-			readMapStack(SettingsMain, Map_Stack_f, Grid_fine, Grid_psi, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_fine_real, Dev_Psi_real, true, SettingsMain.getRestartLocation());
+			readMapStack(SettingsMain, Map_Stack_f, Grid_psi, Dev_ChiX_f, Dev_ChiY_f, Dev_Psi_real, true, SettingsMain.getRestartLocation());
 			// output how many maps were loaded
 			if (SettingsMain.getVerbose() >= 2) {
 				message = "Loaded " + to_str(Map_Stack.map_stack_ctr) + " maps to forward map stack";
@@ -802,44 +802,45 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 
 	// save function to save variables, combined so we always save in the same way and location
     // use Dev_Hat_fine for W_fine, this works because just at the end of conservation it is overwritten
-	writeTimeStep(SettingsMain, t0, dt, dt, Grid_fine, Grid_coarse, Grid_psi,
+	message = writeTimeStep(SettingsMain, t0, dt, dt, Grid_fine, Grid_coarse, Grid_psi,
 			Dev_W_coarse, Dev_Psi_real,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
-
+	if (SettingsMain.getVerbose() >= 3 && message != "") {
+		std::cout<<message+"\n"; logger.push(message);
+	}
 	// compute conservation if wanted
 	message = compute_conservation_targets(SettingsMain, t0, dt, dt, Grid_fine, Grid_coarse, Grid_psi, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
 			cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 			Dev_Temp_C1);
-	// output status to console
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
 		std::cout<<message+"\n"; logger.push(message);
 	}
-
-
 	// sample if wanted
 	message = sample_compute_and_write_vlasov(SettingsMain, t0, dt, dt,
 			Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Dev_Temp_2,
 			cufft_plan_sample_1D_D2Z, cufft_plan_sample_1D_Z2D, cufft_plan_sample_2D_D2Z, cufft_plan_sample_2D_Z2D, Dev_Temp_C1,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
-
-	// output status to console
-	if (SettingsMain.getVerbose() >= 3) {
+	if (SettingsMain.getVerbose() >= 3 && message != "") {
 		std::cout<<message+"\n"; logger.push(message);
 	}
 
     cudaDeviceSynchronize();
 
     // save particle position if interested in that
-    writeParticles(SettingsMain, t0, dt, dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
+    message = writeParticles(SettingsMain, t0, dt, dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
+	if (SettingsMain.getVerbose() >= 3 && message != "") std::cout<<message+"\n"; logger.push(message);
 
 	// zoom if wanted, has to be done after particle initialization, maybe a bit useless at first instance
-	Zoom(SettingsMain, t0, dt, dt,
+	message = Zoom(SettingsMain, t0, dt, dt,
 			Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
 			Host_particles, Dev_particles_pos,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread);
+	if (SettingsMain.getVerbose() >= 3 && message != "") {
+		std::cout<<message+"\n"; logger.push(message);
+	}
 
 	// displaying max and min of vorticity and velocity for plotting limits and cfl condition
 	// vorticity minimum
@@ -1069,15 +1070,16 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		// 					writeTranferToBinaryFile(Grid_fine.N, (cufftDoubleReal*)(Dev_W_H_fine_real), SettingsMain, "/W_fine", false);
 	 	// 			error("evaluate_potential_from_density_hermite: not nted yet",134);
 		// 			}
-		writeTimeStep(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Grid_fine, Grid_coarse, Grid_psi,
+		message = writeTimeStep(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Grid_fine, Grid_coarse, Grid_psi,
 				Dev_W_coarse, Dev_Psi_real,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
-
+		if (SettingsMain.getVerbose() >= 3 && message != "") {
+			std::cout<<message+"\n"; logger.push(message);
+		}
 		// compute conservation if wanted
 		message = compute_conservation_targets(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Grid_fine, Grid_coarse, Grid_psi, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
 				cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 				Dev_Temp_C1);
-		// output computational mesure status to console
 		if (SettingsMain.getVerbose() >= 3 && message != "") {
 			std::cout<<message+"\n"; logger.push(message);
 		}
@@ -1088,27 +1090,33 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 				cufft_plan_sample_1D_D2Z, cufft_plan_sample_1D_Z2D, cufft_plan_sample_2D_D2Z, cufft_plan_sample_2D_Z2D, Dev_Temp_C1,
 				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
-		// output sample mesure status to console
 		if (SettingsMain.getVerbose() >= 3 && message != "") {
 			std::cout<<message+"\n"; logger.push(message);
 		}
 
 	    // save particle position if interested in that
-	    writeParticles(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
+	    message = writeParticles(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
 					if((monitor_map[0] > SettingsMain.getIncompThreshold() && !SettingsMain.getSkipRemapping()) || forwarded_init)
 				{
 				writeTranferToBinaryFile(Grid_coarse.N, (cufftDoubleReal*)(Dev_W_coarse), SettingsMain, "/W_coarse", false);
 				writeTranferToBinaryFile(Grid_fine.N, (cufftDoubleReal*)(Dev_W_H_fine_real), SettingsMain, "/W_fine", false);
 	 			// error("rom_densit",134);
-				}		
+				}
+		if (SettingsMain.getVerbose() >= 3 && message != "") {
+			std::cout<<message+"\n"; logger.push(message);
+		}
+
 		// zoom if wanted
-		Zoom(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt,
+		message = Zoom(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt,
 				Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 				(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
 				Host_particles, Dev_particles_pos,
 				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread);
-	
+		if (SettingsMain.getVerbose() >= 3 && message != "") {
+			std::cout<<message+"\n"; logger.push(message);
+		}
+
 		/*
 		 * Some small things at the end of the loop
 		 *  - check for errors
@@ -1176,7 +1184,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	if (SettingsMain.getParticlesSteps() != -1) {
 
 		// make folder for particle time
-		string folder_name = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/Particle_data/Time_C1";
+		std::string folder_name = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/Particle_data/Time_C1";
 		mkdir(folder_name.c_str(), 0777);
 
 		// copy velocity to old values to be uniform and constant in time
@@ -1237,15 +1245,17 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	*******************************************************************/
 
 	// save function to save variables, combined so we always save in the same way and location
-	writeTimeStep(SettingsMain, T_MAX, dt, dt, Grid_fine, Grid_coarse, Grid_psi,
+	message = writeTimeStep(SettingsMain, T_MAX, dt, dt, Grid_fine, Grid_coarse, Grid_psi,
 			Dev_W_coarse, Dev_Psi_real,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
+	if (SettingsMain.getVerbose() >= 3 && message != "") {
+		std::cout<<message+"\n"; logger.push(message);
+	}
 
 	// compute conservation if wanted
 	message = compute_conservation_targets(SettingsMain, T_MAX, dt, dt, Grid_fine, Grid_coarse, Grid_psi, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
 			cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 			Dev_Temp_C1);
-	// output computational mesure status to console
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
 		std::cout<<message+"\n"; logger.push(message);
 	}
@@ -1256,22 +1266,26 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 			cufft_plan_sample_1D_D2Z, cufft_plan_sample_1D_Z2D, cufft_plan_sample_2D_D2Z, cufft_plan_sample_2D_Z2D, Dev_Temp_C1,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
-	// output sample mesure status to console
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
 		std::cout<<message+"\n"; logger.push(message);
 	}
 
     // save particle position if interested in that
-    writeParticles(SettingsMain, T_MAX, dt, dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
+    message = writeParticles(SettingsMain, T_MAX, dt, dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
+	if (SettingsMain.getVerbose() >= 3 && message != "") {
+		std::cout<<message+"\n"; logger.push(message);
+	}
 
 	// zoom if wanted
-	Zoom(SettingsMain, T_MAX, dt, dt,
+	message = Zoom(SettingsMain, T_MAX, dt, dt,
 			Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
 			Host_particles, Dev_particles_pos,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread);
-
+	if (SettingsMain.getVerbose() >= 3 && message != "") {
+		std::cout<<message+"\n"; logger.push(message);
+	}
 	
 	// save map stack if wanted
 	if (SettingsMain.getSaveMapStack()) {
@@ -1280,16 +1294,14 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 				+ " \t Total size = " + to_str((Map_Stack.map_stack_ctr+1)*map_size)
 				+ "mb \t S-time = " + to_str(t_vec[loop_ctr + SettingsMain.getLagrangeOrder() - 1], 16); std::cout<<message+"\n"; logger.push(message);
 		}
-		writeMapStack(SettingsMain, Map_Stack, Grid_fine, Grid_psi,
-				Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_Psi_real, false);
+		writeMapStack(SettingsMain, Map_Stack, Grid_psi, Dev_ChiX, Dev_ChiY, Dev_Psi_real, false);
 
 		// save forward map stack
 		if (SettingsMain.getForwardMap()) {
 			if (SettingsMain.getVerbose() >= 2) {
 				message = "Saving forward MapStack : Maps = " + to_str(Map_Stack.map_stack_ctr) + " \t Total size = " + to_str((Map_Stack.map_stack_ctr+1)*map_size) + "mb"; std::cout<<message+"\n"; logger.push(message);
 			}
-			writeMapStack(SettingsMain, Map_Stack_f, Grid_fine, Grid_psi,
-					Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_fine_real, Dev_Psi_real, true);
+			writeMapStack(SettingsMain, Map_Stack_f, Grid_psi, Dev_ChiX_f, Dev_ChiY_f, Dev_Psi_real, true);
 		}
 
 		// write particle state, in case no particles, then nothing is written

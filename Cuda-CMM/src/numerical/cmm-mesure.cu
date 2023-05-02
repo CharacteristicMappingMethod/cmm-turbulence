@@ -7,7 +7,7 @@
 *   and distribute verbatim copies of this license document, but changing it is not allowed.
 *
 *   Documentation and further information can be taken from the GitHub page, located at:
-*   https://github.com/Arcadia197/cmm-turbulence
+*   https://github.com/CharacteristicMappingMethod/cmm-turbulence
 *
 ******************************************************************************************************************************/
 
@@ -17,6 +17,11 @@
 #include <thrust/transform_reduce.h>
 #include <thrust/functional.h>
 #include <thrust/device_ptr.h>
+
+// hashing algorithm
+#include "murmur3.cu"
+
+#include "stdio.h"
 
 
 void Compute_Energy(double &E, double *psi, TCudaGrid2D Grid){
@@ -138,6 +143,32 @@ void Compute_Total_Energy(double &E_tot, double &E_kin, double &E_pot, double *p
 	Compute_Kinetic_Energy(E_kin, f_in, Dev_Temp_C1, Grid);
 	Compute_Potential_Energy(E_pot, psi_in, Grid);
 	E_tot = E_kin + E_pot;
+}
+
+
+// Hash an array
+__global__ void k_hash_array(long long int n, int thread_num, double *in, char *out) {
+    int iN = (blockIdx.x * blockDim.x + threadIdx.x);
+    long long int hash_size = n/thread_num;
+    if (iN * hash_size > n) return;
+    if ((iN + 1) * hash_size > n) hash_size = n - iN * hash_size;  // check to match exactly the array size
+
+    // now do the hashing
+    MurmurHash3_x64_128((char*)(in + (iN * thread_num)), hash_size*8, 0, out + (iN * 16));
+
+//	printf("Hash in kernel - ");
+//	for (int i=0; i<16; i++) printf("%c", out[i]);
+//	printf("\n");
+}
+
+void Hash_array(long long int n, char *Hash, double *dev_array) {
+	char *d_hash; cudaMalloc((void**)&d_hash, 16);
+	k_hash_array<<<1, 1>>>(n, 1, dev_array, d_hash);
+	cudaMemcpy(Hash, d_hash, 16*sizeof(char), cudaMemcpyDeviceToHost);
+
+//	printf("Hash in host - ");
+//	for (int i=0; i<2; i++) printf("%c", Hash[i]);
+//	printf("\n");
 }
 
 

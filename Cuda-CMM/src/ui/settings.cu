@@ -7,7 +7,7 @@
 *   and distribute verbatim copies of this license document, but changing it is not allowed.
 *
 *   Documentation and further information can be taken from the GitHub page, located at:
-*   https://github.com/Arcadia197/cmm-turbulence
+*   https://github.com/CharacteristicMappingMethod/cmm-turbulence
 *
 ******************************************************************************************************************************/
 
@@ -518,8 +518,7 @@ void SettingsCMM::setParticlesAdvected(std::string command_full, std::string del
 
 		particles_advected[number] = ParticlesAdvected();
 		particles_advected[number].setAllVariables(value);
-
-		std::cout << "PartA read in: " << value << "\n";
+		// std::cout << "PartA read in: " << value << "\n";
 	}
 }
 
