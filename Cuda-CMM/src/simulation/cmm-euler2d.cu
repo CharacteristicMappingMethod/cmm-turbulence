@@ -7,7 +7,7 @@
 *   and distribute verbatim copies of this license document, but changing it is not allowed.
 *
 *   Documentation and further information can be taken from the GitHub page, located at:
-*   https://github.com/Arcadia197/cmm-turbulence
+*   https://github.com/CharacteristicMappingMethod/cmm-turbulence
 *
 ******************************************************************************************************************************/
 
@@ -786,15 +786,14 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			Dev_W_coarse, Dev_Psi_real,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
-		std::cout<<message; logger.push(message);
+		std::cout<<message+"\n"; logger.push(message);
 	}
-
 	// compute conservation if wanted
 	message = compute_conservation_targets(SettingsMain, t0, dt, dt, Grid_fine, Grid_coarse, Grid_psi, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
 			cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 			Dev_Temp_C1);
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
-		std::cout<<message; logger.push(message);
+		std::cout<<message+"\n"; logger.push(message);
 	}
 
 
@@ -805,13 +804,12 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
-		std::cout<<message; logger.push(message);
+		std::cout<<message+"\n"; logger.push(message);
 	}
-
     // save particle position if interested in that
     message = writeParticles(SettingsMain, t0, dt, dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
-    if (SettingsMain.getVerbose() >= 3 && message != "") {
-		std::cout<<message; logger.push(message);
+	if (SettingsMain.getVerbose() >= 3 && message != "") {
+		std::cout<<message+"\n"; logger.push(message);
 	}
 
 
@@ -823,7 +821,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			Host_particles, Dev_particles_pos,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread);
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
-		std::cout<<message; logger.push(message);
+		std::cout<<message+"\n"; logger.push(message);
 	}
 
 
@@ -1052,7 +1050,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 				Dev_W_coarse, Dev_Psi_real,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
 		if (SettingsMain.getVerbose() >= 3 && message != "") {
-			std::cout<<message; logger.push(message);
+			std::cout<<message+"\n"; logger.push(message);
 		}
 
 		// compute conservation if wanted
@@ -1060,7 +1058,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 				cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 				Dev_Temp_C1);
 		if (SettingsMain.getVerbose() >= 3 && message != "") {
-			std::cout<<message; logger.push(message);
+			std::cout<<message+"\n"; logger.push(message);
 		}
 
 		// sample if wanted
@@ -1070,13 +1068,13 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
 		if (SettingsMain.getVerbose() >= 3 && message != "") {
-			std::cout<<message; logger.push(message);
+			std::cout<<message+"\n"; logger.push(message);
 		}
 
 	    // save particle position if interested in that
 	    message = writeParticles(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
-	    if (SettingsMain.getVerbose() >= 3 && message != "") {
-			std::cout<<message; logger.push(message);
+		if (SettingsMain.getVerbose() >= 3 && message != "") {
+			std::cout<<message+"\n"; logger.push(message);
 		}
 
 		// zoom if wanted
@@ -1087,7 +1085,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 				Host_particles, Dev_particles_pos,
 				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread);
 		if (SettingsMain.getVerbose() >= 3 && message != "") {
-			std::cout<<message; logger.push(message);
+			std::cout<<message+"\n"; logger.push(message);
 		}
 
 		/*
@@ -1157,7 +1155,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	if (SettingsMain.getParticlesSteps() != -1) {
 
 		// make folder for particle time
-		string folder_name = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/Particle_data/Time_C1";
+		std::string folder_name = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/Particle_data/Time_C1";
 		mkdir(folder_name.c_str(), 0777);
 
 		// copy velocity to old values to be uniform and constant in time
@@ -1222,7 +1220,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			Dev_W_coarse, Dev_Psi_real,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f);
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
-		std::cout<<message; logger.push(message);
+		std::cout<<message+"\n"; logger.push(message);
 	}
 
 	// compute conservation if wanted
@@ -1230,8 +1228,9 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 			Dev_Temp_C1);
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
-		std::cout<<message; logger.push(message);
+		std::cout<<message+"\n"; logger.push(message);
 	}
+
 
 	// sample if wanted
 	message = sample_compute_and_write(SettingsMain, T_MAX, dt, dt,
@@ -1240,13 +1239,13 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
-		std::cout<<message; logger.push(message);
+		std::cout<<message+"\n"; logger.push(message);
 	}
 
     // save particle position if interested in that
     message = writeParticles(SettingsMain, T_MAX, dt, dt, Dev_particles_pos, Dev_particles_vel, Grid_psi, Dev_Psi_real, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
-    if (SettingsMain.getVerbose() >= 3 && message != "") {
-		std::cout<<message; logger.push(message);
+	if (SettingsMain.getVerbose() >= 3 && message != "") {
+		std::cout<<message+"\n"; logger.push(message);
 	}
 
 	// zoom if wanted
@@ -1257,7 +1256,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			Host_particles, Dev_particles_pos,
 			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread);
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
-		std::cout<<message; logger.push(message);
+		std::cout<<message+"\n"; logger.push(message);
 	}
 	
 	// save map stack if wanted

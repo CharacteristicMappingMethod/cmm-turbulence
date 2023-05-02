@@ -7,7 +7,7 @@
 *   and distribute verbatim copies of this license document, but changing it is not allowed.
 *
 *   Documentation and further information can be taken from the GitHub page, located at:
-*   https://github.com/Arcadia197/cmm-turbulence
+*   https://github.com/CharacteristicMappingMethod/cmm-turbulence
 *
 ******************************************************************************************************************************/
 
@@ -324,7 +324,7 @@ std::string writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid
 				if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
 
 				// construct message here as we are sure it is being saved something
-				message = "Saved computational data\n";
+				message = "Processed computational data";
 			}
 
 			// Vorticity on coarse grid : W_coarse
@@ -448,7 +448,7 @@ std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now
 			if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
 
 			// construct message here as we are sure it is being saved something
-			message = "Processed particle data\n";
+			message = "Processed particle data";
 		}
 
 		for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {

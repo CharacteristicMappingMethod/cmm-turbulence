@@ -7,7 +7,7 @@
 *   and distribute verbatim copies of this license document, but changing it is not allowed.
 *
 *   Documentation and further information can be taken from the GitHub page, located at:
-*   https://github.com/Arcadia197/cmm-turbulence
+*   https://github.com/CharacteristicMappingMethod/cmm-turbulence
 *
 ******************************************************************************************************************************/
 
@@ -426,17 +426,19 @@ void get_psi_hermite_from_distribution_function(double *Psi_real_out, double *De
 	else { // no movement needed, just copy data over
 		cudaMemcpy(Psi_real_out, Dev_Temp_C1, Grid.NX, cudaMemcpyDeviceToDevice);
 	}
+
 	// inverse fft (1D)
 	cufftExecZ2D (cufft_plan_phi_1D_inverse, (cufftDoubleComplex*) Psi_real_out, (cufftDoubleReal*)(Dev_Temp_C1));
+
 	// assemble psi= phi  - v^2/2
-	k_assemble_psi<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>((cufftDoubleReal*)(Dev_Temp_C1), Psi_real_out, Grid_psi);	
+	k_assemble_psi<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>((cufftDoubleReal*)(Dev_Temp_C1), Psi_real_out, Grid_psi);
 	// convert 2d psi to fourier space
-	cufftExecD2Z (cufft_plan_psi_D2Z,(cufftDoubleReal*) Psi_real_out, Dev_Temp_C1);
+	cufftExecD2Z (cufft_plan_psi_D2Z, Psi_real_out, Dev_Temp_C1);
 	k_normalize_h<<<Grid_psi.fft_blocks, Grid_psi.threadsPerBlock>>>(Dev_Temp_C1, Grid_psi);
 	// cut high frequencies in fourier space, however not that much happens after zero move add from coarse grid
 	// k_fft_cut_off_scale_h<<<Grid_Psi.fft_blocks, Grid_Psi.threadsPerBlock>>>((cufftDoubleComplex*) Dev_Temp_C1+Grid_Psi.Nfft, Grid_Psi, freq_cut_psi);
 	// Inverse laplacian in Fourier space
-	fourier_hermite(Grid_psi, Dev_Temp_C1, Psi_real_out, cufft_plan_psi_Z2D);	
+	fourier_hermite(Grid_psi, Dev_Temp_C1, Psi_real_out, cufft_plan_psi_Z2D);
 }
 
 
@@ -556,8 +558,7 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 			message = "Computed coarse Cons : Etot = " + to_str(mesure[0], 8)
 					+    " \t Ekin = " + to_str(mesure[1], 8)
 					+ " \t Epot = " + to_str(mesure[2], 8)
-					+ " \t Mass = " + to_str(mesure[3], 8)
-					+ "\n";
+					+ " \t Mass = " + to_str(mesure[3], 8);
 		}
 		else{
 			Compute_Energy(mesure[0], Dev_Psi, Grid_psi);
@@ -587,8 +588,7 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 			message = "Computed coarse Cons : Energ = " + to_str(mesure[0], 8)
 					+    " \t Enstr = " + to_str(mesure[1], 8)
 					+ " \t Palinstr = " + to_str(mesure[2], 8)
-					+ " \t Wmax = " + to_str(mesure[3], 8)
-					+ "\n";
+					+ " \t Wmax = " + to_str(mesure[3], 8);
 		}
 	}
 
@@ -792,11 +792,7 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 			message = message + "Processed sample data " + to_str(i_save + 1) + " on grid " + to_str(Grid_sample[i_save].NX) + ", Cons : Energ = " + to_str(mesure[0], 8)
 					+    " \t Enstr = " + to_str(mesure[1], 8)
 					+ " \t Palinstr = " + to_str(mesure[2], 8)
-					+ " \t Wmax = " + to_str(mesure[3], 8)
-					+ "\n";
-			
-
-
+					+ " \t Wmax = " + to_str(mesure[3], 8);
 		}
 	}
 	return message;
@@ -934,9 +930,7 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 			message = message + "Saved sample data " + to_str(i_save + 1) + " on grid " + to_str(Grid_sample[i_save].NX) + ", Cons : Etot = " + to_str(mesure[0], 8)
 					+    " \t Ekin = " + to_str(mesure[1], 8)
 					+ " \t Epot = " + to_str(mesure[2], 8)
-					+ " \t Mass = " + to_str(mesure[3], 8)
-					+ "\n";
-
+					+ " \t Mass = " + to_str(mesure[3], 8);
 		}
 	}
 	return message;
@@ -979,7 +973,7 @@ std::string Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double d
 			std::string sub_folder_name = "/Zoom_data/Time_" + i_num;
 			std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
 			mkdir(folder_name_now.c_str(), 0777);
-			message = message + "Processed zoom data " + to_str(i_save + 1) + " on grid " + to_str(Grid_zoom[i_save].NX) + "\n";
+			message = message + "Processed zoom data " + to_str(i_save + 1) + " on grid " + to_str(Grid_zoom[i_save].NX);
 
 			std::string save_var = save_zoom[i_save].var;
 

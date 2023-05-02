@@ -14,7 +14,7 @@ set_dt_by_steps	=	0
 factor_dt_by_grid	=	4
 save_computational_num	=	1
 save_computational	=	{is_instant=0,time_start=0,time_end=100,time_step=0.01,var= ,conv=1}
-mem_RAM_CPU_remaps	=	50000
+mem_RAM_CPU_remaps	=	5000
 save_map_stack	=	0
 restart_time	=	0
 verbose	=	3

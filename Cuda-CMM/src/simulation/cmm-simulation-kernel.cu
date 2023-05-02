@@ -7,7 +7,7 @@
 *   and distribute verbatim copies of this license document, but changing it is not allowed.
 *
 *   Documentation and further information can be taken from the GitHub page, located at:
-*   https://github.com/Arcadia197/cmm-turbulence
+*   https://github.com/CharacteristicMappingMethod/cmm-turbulence
 *
 ******************************************************************************************************************************/
 
@@ -490,13 +490,11 @@ __global__ void k_assemble_psi(double *phi_1D, double *psi_out, TCudaGrid2D Grid
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 	if(iX >= Grid.NX || iY >= Grid.NY) return;
+	int In = iY*Grid.NX + iX;
 
-	int In;
-	In = iY*Grid.NX + iX;
 	double v = Grid.bounds[2] + iY*Grid.hy;
 	// double x =  Grid.bounds[0] + iX*Grid.hx;
 	psi_out[In] = phi_1D[iX] - 0.5*v*v;
-
 }
 
 
