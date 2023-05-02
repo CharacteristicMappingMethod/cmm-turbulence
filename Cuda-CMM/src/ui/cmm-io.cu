@@ -33,7 +33,6 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax
 	// delete monitoring data, only if we do not restart, cause then its appended
 	if (SettingsMain.getRestartTime() == 0) {
 		int del = recursive_delete(folder_name + "/Monitoring_data", 0);
-		std::cout << "Deletion output: "<< to_str(del) << "\n";
 	}
 	// create general subfolder for other data
 	std::string folder_name_tdata = folder_name + "/Monitoring_data";
