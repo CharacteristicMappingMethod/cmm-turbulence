@@ -97,9 +97,9 @@ __global__ void k_hash_array(long long int n, int thread_num, double *in, char *
 //	printf("\n");
 }
 
-void Hash_array(TCudaGrid2D Grid, char *Hash, double *dev_array) {
+void Hash_array(long long int n, char *Hash, double *dev_array) {
 	char *d_hash; cudaMalloc((void**)&d_hash, 16);
-	k_hash_array<<<1, 1>>>(Grid.N, 1, dev_array, d_hash);
+	k_hash_array<<<1, 1>>>(n, 1, dev_array, d_hash);
 	cudaMemcpy(Hash, d_hash, 16*sizeof(char), cudaMemcpyDeviceToHost);
 
 //	printf("Hash in host - ");

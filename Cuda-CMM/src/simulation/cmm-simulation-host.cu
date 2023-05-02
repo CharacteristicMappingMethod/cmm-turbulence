@@ -544,8 +544,9 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 		double w_min = thrust::reduce(w_ptr, w_ptr + Grid_coarse.N, 0.0, thrust::minimum<double>());
 		mesure[3] = std::max(w_max, -w_min);
 
-		// hash of vorticity
-		double w_hash[2]; Hash_array(Grid_coarse, (char*)w_hash, Dev_W_coarse);
+		// hash of vorticity and stream function
+		double w_hash[2]; Hash_array(Grid_coarse.N, (char*)w_hash, Dev_W_coarse);
+		double psi_hash[2]; Hash_array(Grid_psi.N, (char*)psi_hash, Dev_Psi);
 
 		// save
 		writeAppendToBinaryFile(1, &t_now, SettingsMain, "/Monitoring_data/Mesure/Time_s");  // time vector for data
@@ -554,13 +555,13 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 		writeAppendToBinaryFile(1, mesure+2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy");
 		writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity");
 		writeAppendToBinaryFile(2, w_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_vorticity");
+		writeAppendToBinaryFile(2, psi_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_stream_function");
 
 		// construct message
 		message = "Computed coarse Cons : Energ = " + to_str(mesure[0], 8)
 				+    " \t Enstr = " + to_str(mesure[1], 8)
 				+ " \t Palinstr = " + to_str(mesure[2], 8)
 				+ " \t Wmax = " + to_str(mesure[3], 8)
-				+ " \t Hash Vort = " + hash_to_str(w_hash, sizeof(w_hash))
 				+ "\n";
 	}
 
@@ -637,7 +638,7 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 							// create particles folder if necessary
 							std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
 							std::string sub_folder_name = "/Particle_data/Time_" + t_s_now;
-							string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
+							std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
 							struct stat st = {0};
 							if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
 							// copy data to host and save
@@ -705,7 +706,7 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 			mesure[3] = std::max(w_max, -w_min);
 
 			// hash of vorticity
-			double w_hash[2]; Hash_array(Grid_sample[i_save], (char*)w_hash, Dev_sample);
+			double w_hash[2]; Hash_array(Grid_sample[i_save].N, (char*)w_hash, Dev_sample);
 
 			// compute laplacian of vorticity
 			if (save_var.find("Laplacian_W") != std::string::npos) {
@@ -732,6 +733,9 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 			long int shift = 2*Grid_sample[i_save].Nfft - Grid_sample[i_save].N;
 			psi_upsampling(Grid_sample[i_save], Dev_sample, Dev_Temp_C1, Dev_sample+shift, cufft_plan_sample_D2Z[i_save], cufft_plan_sample_Z2D[i_save]);
 
+			// hash of stream function
+			double psi_hash[2]; Hash_array(Grid_sample[i_save].N, (char*)psi_hash, Dev_sample+shift);
+
 			if (save_var.find("Stream") != std::string::npos or save_var.find("Psi") != std::string::npos) {
 				writeTimeVariable(SettingsMain, "Stream_function_Psi_"+to_str(Grid_sample[i_save].NX),
 						t_now, Dev_sample+shift, Grid_sample[i_save].N);
@@ -757,13 +761,13 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 			writeAppendToBinaryFile(1, mesure+2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy_"+ to_str(Grid_sample[i_save].NX));
 			writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity_"+ to_str(Grid_sample[i_save].NX));
 			writeAppendToBinaryFile(2, w_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_vorticity_"+ to_str(Grid_sample[i_save].NX));
+			writeAppendToBinaryFile(2, psi_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_stream_function_"+ to_str(Grid_sample[i_save].NX));
 
 			// construct message
-			message = message + "Saved sample data " + to_str(i_save + 1) + " on grid " + to_str(Grid_sample[i_save].NX) + ", Cons : Energ = " + to_str(mesure[0], 8)
+			message = message + "Processed sample data " + to_str(i_save + 1) + " on grid " + to_str(Grid_sample[i_save].NX) + ", Cons : Energ = " + to_str(mesure[0], 8)
 					+    " \t Enstr = " + to_str(mesure[1], 8)
 					+ " \t Palinstr = " + to_str(mesure[2], 8)
 					+ " \t Wmax = " + to_str(mesure[3], 8)
-					+ " \t Hash Vort = " + hash_to_str(w_hash, sizeof(w_hash))
 					+ "\n";
 		}
 	}
@@ -810,7 +814,7 @@ std::string Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double d
 			std::string sub_folder_name = "/Zoom_data/Time_" + i_num;
 			std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
 			mkdir(folder_name_now.c_str(), 0777);
-			message = message + "Saved zoom data " + to_str(i_save + 1) + " on grid " + to_str(Grid_zoom[i_save].NX) + "\n";
+			message = message + "Processed zoom data " + to_str(i_save + 1) + " on grid " + to_str(Grid_zoom[i_save].NX) + "\n";
 
 			std::string save_var = save_zoom[i_save].var;
 
@@ -923,6 +927,10 @@ std::string Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double d
 							Grid_zoom_i, Grid_discrete, 0, SettingsMain.getInitialConditionNum(), W_initial_discrete, SettingsMain.getInitialDiscrete());
 
 					writeTranferToBinaryFile(Grid_zoom_i.N, Dev_Temp, SettingsMain, sub_folder_name+"/Vorticity_W_"+to_str(Grid_zoom_i.NX), false);
+
+					// hash
+					double w_hash[2]; Hash_array(Grid_zoom_i.N, (char*)w_hash, Dev_Temp);
+					writeAppendToBinaryFile(2, w_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_vorticity_Zoom_" + to_str(i_save + 1) + "_rep_" + to_str(zoom_ctr));
 				}
 
 				// compute sample of stream function - it's not a zoom though!
@@ -932,6 +940,11 @@ std::string Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double d
 
 					// save psi zoom
 					writeTranferToBinaryFile(Grid_zoom_i.N, Dev_Temp, SettingsMain, sub_folder_name+"/Stream_function_Psi_"+to_str(Grid_zoom_i.NX), false);
+
+					// hash
+					double psi_hash[2]; Hash_array(Grid_zoom_i.N, (char*)psi_hash, Dev_Temp);
+					writeAppendToBinaryFile(2, psi_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_vorticity_Zoom_" + to_str(i_save + 1) + "_rep_" + to_str(zoom_ctr));
+
 				}
 
 				// safe particles in zoomframe if wanted

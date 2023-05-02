@@ -25,7 +25,7 @@ void Compute_Enstrophy(double &E, double *W, TCudaGrid2D Grid);
 void Compute_Enstrophy_fourier(double &E, cufftDoubleComplex *W, TCudaGrid2D Grid);
 void Compute_Palinstrophy(TCudaGrid2D Grid, double &Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftHandle cufft_plan_D2Z, cufftHandle cufft_plan_Z2D);
 
-void Hash_array(TCudaGrid2D Grid, char *Hash, double *dev_array);
+void Hash_array(long long int n, char *Hash, double *dev_array);
 
 void NDFT_1D(cufftDoubleComplex *X_k, double *x_n, double *p_n, double *f_k, int N);
 void iNDFT_1D(cufftDoubleComplex *X_k, double *x_n, double *p_n, double *f_k, int N);

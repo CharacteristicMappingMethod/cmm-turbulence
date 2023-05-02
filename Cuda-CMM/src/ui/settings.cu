@@ -518,8 +518,7 @@ void SettingsCMM::setParticlesAdvected(std::string command_full, std::string del
 
 		particles_advected[number] = ParticlesAdvected();
 		particles_advected[number].setAllVariables(value);
-
-		std::cout << "PartA read in: " << value << "\n";
+		// std::cout << "PartA read in: " << value << "\n";
 	}
 }
 

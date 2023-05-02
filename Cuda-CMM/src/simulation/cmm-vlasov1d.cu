@@ -756,7 +756,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 			std::cout<<message+"\n"; logger.push(message);
 		}
 
-		readMapStack(SettingsMain, Map_Stack, Grid_fine, Grid_psi, Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_Psi_real, false, SettingsMain.getRestartLocation());
+		readMapStack(SettingsMain, Map_Stack, Grid_psi, Dev_ChiX, Dev_ChiY, Dev_Psi_real, false, SettingsMain.getRestartLocation());
 
 		// output how many maps were loaded
 		if (SettingsMain.getVerbose() >= 2) {
@@ -765,7 +765,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		}
 
 		if (SettingsMain.getForwardMap()) {
-			readMapStack(SettingsMain, Map_Stack_f, Grid_fine, Grid_psi, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_fine_real, Dev_Psi_real, true, SettingsMain.getRestartLocation());
+			readMapStack(SettingsMain, Map_Stack_f, Grid_psi, Dev_ChiX_f, Dev_ChiY_f, Dev_Psi_real, true, SettingsMain.getRestartLocation());
 			// output how many maps were loaded
 			if (SettingsMain.getVerbose() >= 2) {
 				message = "Loaded " + to_str(Map_Stack.map_stack_ctr) + " maps to forward map stack";
@@ -1270,16 +1270,14 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 				+ " \t Total size = " + to_str((Map_Stack.map_stack_ctr+1)*map_size)
 				+ "mb \t S-time = " + to_str(t_vec[loop_ctr + SettingsMain.getLagrangeOrder() - 1], 16); std::cout<<message+"\n"; logger.push(message);
 		}
-		writeMapStack(SettingsMain, Map_Stack, Grid_fine, Grid_psi,
-				Dev_ChiX, Dev_ChiY, Dev_W_H_fine_real, Dev_Psi_real, false);
+		writeMapStack(SettingsMain, Map_Stack, Grid_psi, Dev_ChiX, Dev_ChiY, Dev_Psi_real, false);
 
 		// save forward map stack
 		if (SettingsMain.getForwardMap()) {
 			if (SettingsMain.getVerbose() >= 2) {
 				message = "Saving forward MapStack : Maps = " + to_str(Map_Stack.map_stack_ctr) + " \t Total size = " + to_str((Map_Stack.map_stack_ctr+1)*map_size) + "mb"; std::cout<<message+"\n"; logger.push(message);
 			}
-			writeMapStack(SettingsMain, Map_Stack_f, Grid_fine, Grid_psi,
-					Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_fine_real, Dev_Psi_real, true);
+			writeMapStack(SettingsMain, Map_Stack_f, Grid_psi, Dev_ChiX_f, Dev_ChiY_f, Dev_Psi_real, true);
 		}
 
 		// write particle state, in case no particles, then nothing is written
