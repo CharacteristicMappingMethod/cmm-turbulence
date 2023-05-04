@@ -551,8 +551,7 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 		// compute quantities
 		if (SettingsMain.getSimulationType() == "cmm_vlasov_poisson_1d"){
 			Compute_Total_Energy(mesure[0], mesure[1], mesure[2], Dev_Psi, Dev_W_coarse, (cufftDoubleReal*) Dev_Temp_C1, Grid_psi);
-			Compute_Mass(mesure[3], Dev_W_coarse, Grid_coarse); // is simply the mass in vlasov poisson (times 0.5)
-
+			Compute_Mass(mesure[3], Dev_W_coarse, Grid_coarse); 
 			// save
 			writeAppendToBinaryFile(1, &t_now, SettingsMain, "/Monitoring_data/Mesure/Time_s");  // time vector for data
 			writeAppendToBinaryFile(1, mesure, SettingsMain, "/Monitoring_data/Mesure/Etot");
@@ -926,11 +925,11 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 			mesure[0] = mesure[1] + mesure[2]; // total energy
 			// printf("DEBUG:    Etot = %.4f, Ekin = %.4f, Epot = %.4f, Mass = %.4f\n", mesure[0], mesure[1], mesure[2], mesure[3]);
 			// error("babu", 1014);
-			writeAppendToBinaryFile(1, &t_now, SettingsMain, "/Monitoring_data/Mesure/Time_s");  // time vector for data
-			writeAppendToBinaryFile(1, mesure, SettingsMain, "/Monitoring_data/Mesure/Etot");
-			writeAppendToBinaryFile(1, mesure+1, SettingsMain, "/Monitoring_data/Mesure/Ekin");
-			writeAppendToBinaryFile(1, mesure+2, SettingsMain, "/Monitoring_data/Mesure/Epot");
-			writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Mass");
+			writeAppendToBinaryFile(1, &t_now, SettingsMain, "/Monitoring_data/Mesure/Time_s_"+ to_str(Grid_sample[i_save].NX));  // time vector for data
+			writeAppendToBinaryFile(1, mesure, SettingsMain, "/Monitoring_data/Mesure/Etot_"+ to_str(Grid_sample[i_save].NX));
+			writeAppendToBinaryFile(1, mesure+1, SettingsMain, "/Monitoring_data/Mesure/Ekin_"+ to_str(Grid_sample[i_save].NX));
+			writeAppendToBinaryFile(1, mesure+2, SettingsMain, "/Monitoring_data/Mesure/Epot_"+ to_str(Grid_sample[i_save].NX));
+			writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Mass_"+ to_str(Grid_sample[i_save].NX));
 
 				// construct message
 			message = message + "Saved sample data " + to_str(i_save + 1) + " on grid " + to_str(Grid_sample[i_save].NX) + ", Cons : Etot = " + to_str(mesure[0], 8)
