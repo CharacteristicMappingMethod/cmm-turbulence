@@ -498,6 +498,59 @@ __global__ void k_assemble_psi(double *phi_1D, double *psi_out, TCudaGrid2D Grid
 }
 
 
+// copy 1D array to 2D array
+__global__ void copy_first_row_to_all_rows_in_grid(cufftDoubleReal *val_in, cufftDoubleReal *val_out, TCudaGrid2D Grid)
+{
+	// #############################################################################################
+	// This function copys the following val_out(iv,ix) = val_in(0,ix)
+	// NOTE: VAL_IN SHOULD NOT BE THE SAME AS VAL_OUT TO MAKE THIS WORK (NO INPLACE TRANSFORMS)
+	// #############################################################################################
+		
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+
+	if(iX >= Grid.NX || iY >= Grid.NY)
+		return;
+
+	int In = iY*Grid.NX + iX;
+
+	val_out[In] = val_in[iX];
+}
+
+__global__ void set_value(cufftDoubleReal *array, cufftDoubleReal value, TCudaGrid2D Grid){
+	// #############################################################################################
+	// This function creates a NX time NV grid of values f(ix,iv) = value
+	// #############################################################################################
+	
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+
+	if(iX >= Grid.NX || iY >= Grid.NY)
+			return;
+
+	int In = iY*Grid.NX + iX;
+
+	array[In] = value;
+
+}
+
+__global__ void generate_gridvalues_v(cufftDoubleReal *v, double prefactor, TCudaGrid2D Grid) {
+	// #############################################################################################
+	// This function creates a NX time NV grid of values f(ix,iv) = *v[iv]^2*prefactor
+	// prefactor is used to scale the values or switch the sign
+	// #############################################################################################
+	
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+	if(iX >= Grid.NX || iY >= Grid.NY) return;
+
+	int In;
+	In = iY*Grid.NX + iX;
+	double v_temp = Grid.bounds[2] + iY*Grid.hy;
+	v[In] = v_temp*prefactor;
+}
+
+
 __global__ void integral_v(double *v_in, double *v_out, int nx, int ny, double hy) {
 	// ##########################################################################
 	// This function takes a 2D array v_in and integrates it in the y-direction.

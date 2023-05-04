@@ -101,6 +101,25 @@ __global__ void k_fft_iLap_h_1D(cufftDoubleComplex *val_in, cufftDoubleComplex *
 }
 
 
+
+// 1D x derivative in fourier space, multiplication by kx
+__global__ void k_fft_dx_h_1D(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
+{
+	//index
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	
+	if(iX >= Grid.NX_fft)
+		return;
+
+	double kx = twoPI/(Grid.hx*Grid.NX) * (iX - (iX>Grid.NX/2)*Grid.NX);
+
+	double2 temp = val_in[iX];
+//	temp.x = val_in[In].x; temp.y = val_in[In].y;
+
+	val_out[iX].x = -temp.y * kx;
+	val_out[iX].y =  temp.x * kx;
+}
+
 // x derivative in fourier space, multiplication by kx
 __global__ void k_fft_dx_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
 {

@@ -55,7 +55,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	*******************************************************************/
 	
 	// boundary information for translating, 6 coords for 3D - (x0, x1, y0, y1, z0, z1)
-	double bounds[6] = {0, 10*PI, -2.5*PI, 2.5*PI, 0, 0};
+	double bounds[6] = {0, 4.0*PI, -2.5*PI, 2.5*PI, 0, 0};
 	// the code seems to work only square domains!!! is it a bug of a feature? I think its sad
 	double t0 = SettingsMain.getRestartTime();							// time - initial
 	double dt;															// time - step final
@@ -215,8 +215,6 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		cufftMakePlan2d(cufft_plan_sample_2D_D2Z[i_save], Grid_sample[i_save].NX,   Grid_sample[i_save].NY,   CUFFT_D2Z, &workSize_sample[0]);
 	    cufftMakePlan2d(cufft_plan_sample_2D_Z2D[i_save], Grid_sample[i_save].NX,   Grid_sample[i_save].NY,   CUFFT_Z2D, &workSize_sample[1]);
 	    size_max_fft = std::max(size_max_fft, workSize_sample[0]); size_max_fft = std::max(size_max_fft, workSize_sample[1]);
-	}
-	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
 	    // 1D fft plans for sample mesh
 		res_phi 		= cufftPlan1d(&cufft_plan_sample_1D_D2Z[i_save], Grid_sample[i_save].NX,   CUFFT_D2Z, 1);
 	    res_phi_inverse = cufftPlan1d(&cufft_plan_sample_1D_Z2D[i_save], Grid_sample[i_save].NX,   CUFFT_Z2D, 1);
@@ -817,11 +815,11 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		std::cout<<message+"\n"; logger.push(message);
 	}
 	// sample if wanted
-	// message = sample_compute_and_write_vlasov(SettingsMain, t0, dt, dt,
-	// 		Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Dev_Temp_2,
-	// 		cufft_plan_sample_1D_D2Z, cufft_plan_sample_1D_Z2D, cufft_plan_sample_2D_D2Z, cufft_plan_sample_2D_Z2D, Dev_Temp_C1,
-	// 		Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
-	// 		Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
+	message = sample_compute_and_write_vlasov(SettingsMain, t0, dt, dt,
+			Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Dev_Temp_2,
+			cufft_plan_sample_1D_D2Z, cufft_plan_sample_1D_Z2D, cufft_plan_sample_2D_D2Z, cufft_plan_sample_2D_Z2D, Dev_Temp_C1,
+			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
+			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
 		std::cout<<message+"\n"; logger.push(message);
 	}
@@ -1089,11 +1087,11 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		}
 
 		// sample if wanted
-		// message = sample_compute_and_write_vlasov(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt,
-		// 		Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Dev_Temp_2,
-		// 		cufft_plan_sample_1D_D2Z, cufft_plan_sample_1D_Z2D, cufft_plan_sample_2D_D2Z, cufft_plan_sample_2D_Z2D, Dev_Temp_C1,
-		// 		Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
-		// 		Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
+		message = sample_compute_and_write_vlasov(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt,
+				Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Dev_Temp_2,
+				cufft_plan_sample_1D_D2Z, cufft_plan_sample_1D_Z2D, cufft_plan_sample_2D_D2Z, cufft_plan_sample_2D_Z2D, Dev_Temp_C1,
+				Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
+				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
 		if (SettingsMain.getVerbose() >= 3 && message != "") {
 			std::cout<<message+"\n"; logger.push(message);
 		}
@@ -1266,11 +1264,11 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	}
 
 	// sample if wanted
-	// message = sample_compute_and_write_vlasov(SettingsMain, T_MAX, dt, dt,
-	// 		Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Dev_Temp_2,
-	// 		cufft_plan_sample_1D_D2Z, cufft_plan_sample_1D_Z2D, cufft_plan_sample_2D_D2Z, cufft_plan_sample_2D_Z2D, Dev_Temp_C1,
-	// 		Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
-	// 		Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
+	message = sample_compute_and_write_vlasov(SettingsMain, T_MAX, dt, dt,
+			Map_Stack, Map_Stack_f, Grid_sample, Grid_discrete, Dev_Temp_2,
+			cufft_plan_sample_1D_D2Z, cufft_plan_sample_1D_Z2D, cufft_plan_sample_2D_D2Z, cufft_plan_sample_2D_Z2D, Dev_Temp_C1,
+			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread,
+			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f, Dev_W_H_initial);
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
 		std::cout<<message+"\n"; logger.push(message);
 	}

@@ -29,7 +29,7 @@ __global__ void k_fft_iLap_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val
 __global__ void k_fft_iLap_h_1D(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
 __global__ void k_fft_dx_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
 __global__ void k_fft_dy_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
-
+__global__ void k_fft_dx_h_1D(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
 //variable type conversion
 __global__ void k_copy_shift(double *varR, TCudaGrid2D Grid, int shift, long int length);
 void real_to_comp(double *varR, cufftDoubleComplex *varC, long int N);

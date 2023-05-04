@@ -387,9 +387,12 @@ void evaluate_potential_from_density_hermite(SettingsCMM SettingsMain, TCudaGrid
 	// this function solves the 1D laplace equation on the Grid_vort (coarse) and upsamples to Grid_Psi (fine)
 	get_psi_hermite_from_distribution_function(Psi_real, (cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C1, cufft_plan_phi_1D, cufft_plan_phi_1D_inverse, 
 	cufft_plan_psi_D2Z, cufft_plan_psi_Z2D  ,Grid_vort, Grid_Psi);
-	//  writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real), SettingsMain, "/Stream_function_mollys", false);
-	//  error("evaluate_potential_from_density_hermite: not nted yet",134);
-// 
+// 	writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real), SettingsMain, "/Stream_function_molly", false);
+// 	writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real+1*Grid_Psi.N), SettingsMain, "/Stream_function_mollyx", false);
+// 	writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real+2*Grid_Psi.N), SettingsMain, "/Stream_function_mollyy", false);
+// 	writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real+3*Grid_Psi.N), SettingsMain, "/Stream_function_mollys", false);
+// 	  error("evaluate_potential_from_density_hermite: not nted yet",134);
+// // 
 }
 
 
@@ -412,33 +415,36 @@ void get_psi_hermite_from_distribution_function(double *Psi_real_out, double *De
 	// #################################################################################################################			
 	// this function solves the 1D laplace equation on the Grid_vort (coarse) and upsamples to Grid_Psi (fine)
 	// #################################################################################################################
-	integral_v<<<Grid.blocksPerGrid.x, Grid.threadsPerBlock.x >>>((cufftDoubleReal*)Dev_f_in, (cufftDoubleReal*)Dev_Temp_C1, Grid.NX, Grid.NY, Grid.hy);
+	integral_v<<<Grid.blocksPerGrid.x, Grid.threadsPerBlock.x >>>((cufftDoubleReal*)Dev_f_in, (cufftDoubleReal*)Dev_Temp_C1+Grid.N, Grid.NX, Grid.NY, Grid.hy);
 	// forward fft
-	cufftExecD2Z (cufft_plan_phi_1D, (cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C1+Grid.Nfft);
+	cufftExecD2Z (cufft_plan_phi_1D, (cufftDoubleReal*)Dev_Temp_C1+Grid.N, (cufftDoubleComplex*) Psi_real_out);
 	// devide by NX to normalize FFT
-	k_normalize_1D_h<<<Grid.fft_blocks.x, Grid.threadsPerBlock.x>>>(Dev_Temp_C1+Grid.Nfft, Grid);  // this is a normalization factor of FFT? if yes we dont need to do it everytime!!! 
+	k_normalize_1D_h<<<Grid.fft_blocks.x, Grid.threadsPerBlock.x>>>((cufftDoubleComplex*) Psi_real_out, Grid);  // this is a normalization factor of FFT? if yes we dont need to do it everytime!!! 
 	// inverse laplacian in fourier space - division by kx**2 and ky**2
-	k_fft_iLap_h_1D<<<Grid.fft_blocks.x, Grid.threadsPerBlock.x>>>((cufftDoubleComplex*) Dev_Temp_C1+Grid.Nfft, (cufftDoubleComplex*) Dev_Temp_C1, Grid);
+	k_fft_iLap_h_1D<<<Grid.fft_blocks.x, Grid.threadsPerBlock.x>>>((cufftDoubleComplex*) Psi_real_out, (cufftDoubleComplex*) Dev_Temp_C1, Grid);
 	// do zero padding if needed
 	if (Grid.NX != Grid_psi.NX || Grid.NY != Grid_psi.NY) {
 		zero_padding_1D<<<Grid_psi.fft_blocks.x, Grid_psi.threadsPerBlock.x>>>(Dev_Temp_C1, (cufftDoubleComplex*) Psi_real_out, Grid_psi, Grid);
 	}
 	else { // no movement needed, just copy data over
-		cudaMemcpy(Psi_real_out, Dev_Temp_C1, Grid.NX, cudaMemcpyDeviceToDevice);
+		cudaMemcpy((cufftDoubleComplex*) Psi_real_out, (cufftDoubleComplex*)  Dev_Temp_C1, Grid.sizeNfft, cudaMemcpyDeviceToDevice);
 	}
-
+	// compute x derivative for d\psi/dx = dphi/dx = F^{-1} (ik_x F(phi))
+	k_fft_dx_h_1D<<<Grid_psi.fft_blocks.x, Grid_psi.threadsPerBlock.x>>>((cufftDoubleComplex*) Psi_real_out, (cufftDoubleComplex*) Dev_Temp_C1, Grid_psi);
+	cufftExecZ2D (cufft_plan_phi_1D_inverse, (cufftDoubleComplex*) Dev_Temp_C1, (cufftDoubleReal*)(Psi_real_out+Grid_psi.N));
+	copy_first_row_to_all_rows_in_grid<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>((cufftDoubleReal*) (Psi_real_out+Grid_psi.N), (cufftDoubleReal*) (Psi_real_out+Grid_psi.N), Grid_psi);
 	// inverse fft (1D)
 	cufftExecZ2D (cufft_plan_phi_1D_inverse, (cufftDoubleComplex*) Psi_real_out, (cufftDoubleReal*)(Dev_Temp_C1));
-
 	// assemble psi= phi  - v^2/2
 	k_assemble_psi<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>((cufftDoubleReal*)(Dev_Temp_C1), Psi_real_out, Grid_psi);
-	// convert 2d psi to fourier space
-	cufftExecD2Z (cufft_plan_psi_D2Z, Psi_real_out, Dev_Temp_C1);
-	k_normalize_h<<<Grid_psi.fft_blocks, Grid_psi.threadsPerBlock>>>(Dev_Temp_C1, Grid_psi);
+	// compute y derivative for d\psi/(dy) = v
+	generate_gridvalues_v<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>((cufftDoubleReal*)(Psi_real_out+2*Grid_psi.N), -1.0, Grid_psi);
+	// compute xy derivative for d^2\psi/(dxdy) = 0
+	set_value<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>((cufftDoubleReal*)(Psi_real_out+3*Grid_psi.N), 0.0, Grid_psi);
 	// cut high frequencies in fourier space, however not that much happens after zero move add from coarse grid
 	// k_fft_cut_off_scale_h<<<Grid_Psi.fft_blocks, Grid_Psi.threadsPerBlock>>>((cufftDoubleComplex*) Dev_Temp_C1+Grid_Psi.Nfft, Grid_Psi, freq_cut_psi);
 	// Inverse laplacian in Fourier space
-	fourier_hermite(Grid_psi, Dev_Temp_C1, Psi_real_out, cufft_plan_psi_Z2D);
+	// fourier_hermite(Grid_psi, Dev_Temp_C1, Psi_real_out, cufft_plan_psi_Z2D);
 }
 
 
