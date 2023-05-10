@@ -10,7 +10,7 @@ In addition, it gives a major overview on the file structure and log output itse
 Make sure to check the preparations before running the code in order to ensure, that everything was setup correctly.
 
 Run the code inside /Cuda-CMM:
-./SimulationCuda2d.out param_file=./examples/params-01-working-test.txt
+./SimulationCuda2d.out param_file=./examples/euler2D/params-01-working-test.txt
 
 Expected output:
 A new file will be created in the data-folder named '01-working-test_two_cosine_C32_F32_t8_T1'.
@@ -52,7 +52,7 @@ The sub-folder 'Mesure' inside 'Monitoring_data' contains all monitored global q
 This example should be a first simulation with results. It aims to explain all basic parameters of the parameter-file.
 
 Run the code inside /Cuda-CMM:
-./SimulationCuda2d.out param_file=./examples/params-02-first-simulation.txt
+./SimulationCuda2d.out param_file=./examples/euler2D/params-02-first-simulation.txt
 
 Expected output:
 A new file will be created in the data-folder named '02-first-simulation_4_nodes_C128_F128_t64_T1'.
@@ -108,7 +108,7 @@ For this simulation, the vorticity and velocity were saved at the initial and fi
 This example aims to explain the different options to save and introduces the zoom property.
 
 Run the code inside /Cuda-CMM:
-./SimulationCuda2d.out param_file=./examples/params-03-save-settings.txt
+./SimulationCuda2d.out param_file=./examples/euler2D/params-03-save-settings.txt
 
 Expected output:
 A new file will be created in the data-folder named '03-save_settings_4_nodes_C128_F128_t64_T4'.
@@ -150,7 +150,7 @@ Computational and sampled saves can be found in 'Time_data', while zooms are loc
 This example aims to explain the different settings in order to embedd fluid and inertial particles.
 
 Run the code inside /Cuda-CMM:
-./SimulationCuda2d.out param_file=./examples/params-04-embedded-particles.txt
+./SimulationCuda2d.out param_file=./examples/euler2D/params-04-embedded-particles.txt
 
 Expected output:
 A new file will be created in the data-folder named '04-embedded_particles_4_nodes_C128_F128_t64_T4'.
@@ -183,7 +183,7 @@ The individual particle sets can be saved in the save_computational options
 This example aims to explain a computation utilizing the forward map in order to advect particle positions.
 
 Run the code inside /Cuda-CMM:
-./SimulationCuda2d.out param_file=./examples/params-05-forward-map.txt
+./SimulationCuda2d.out param_file=./examples/euler2D/params-05-forward-map.txt
 
 Expected output:
 A new file will be created in the data-folder named '04-embedded_particles_4_nodes_C128_F128_t64_T4'.

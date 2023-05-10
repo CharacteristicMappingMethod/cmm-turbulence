@@ -509,7 +509,7 @@ __global__ void copy_first_row_to_all_rows_in_grid(cufftDoubleReal *val_in, cuff
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 
-	if(iX >= Grid.NX || iY >= Grid.NY)
+	if(iX >= Grid.NX || iY >= Grid.NY || iY == 0)
 		return;
 
 	int In = iY*Grid.NX + iX;
@@ -536,7 +536,7 @@ __global__ void set_value(cufftDoubleReal *array, cufftDoubleReal value, TCudaGr
 
 __global__ void generate_gridvalues_v(cufftDoubleReal *v, double prefactor, TCudaGrid2D Grid) {
 	// #############################################################################################
-	// This function creates a NX time NV grid of values f(ix,iv) = *v[iv]^2*prefactor
+	// This function creates a NX time NV grid of values f(ix,iv) = v[iv]*prefactor
 	// prefactor is used to scale the values or switch the sign
 	// #############################################################################################
 	

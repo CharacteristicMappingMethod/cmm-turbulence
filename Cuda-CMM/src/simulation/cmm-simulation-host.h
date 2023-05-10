@@ -78,7 +78,7 @@ void grad_y(TCudaGrid2D Grid, double *Dev_W, double *Dev_out, cufftDoubleComplex
 // Computation of Global conservation values
 std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 		TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
-		double *Dev_Psi, double *Dev_W_coarse, double *Dev_W_H_fine,
+		double *Dev_Psi, double *Dev_W_coarse,
 		cufftHandle cufft_plan_coarse_D2Z, cufftHandle cufft_plan_coarse_Z2D, cufftHandle cufftPlan_fine_D2Z, cufftHandle cufftPlan_fine_Z2D,
 		cufftDoubleComplex *Dev_Temp_C1);
 

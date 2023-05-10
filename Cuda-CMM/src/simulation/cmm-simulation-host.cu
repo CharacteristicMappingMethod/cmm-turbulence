@@ -385,13 +385,14 @@ void evaluate_potential_from_density_hermite(SettingsCMM SettingsMain, TCudaGrid
 	k_apply_map_and_sample_from_hermite<<<Grid_vort.blocksPerGrid, Grid_vort.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
 			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_fine_real, Grid_coarse, Grid_vort, Grid_fine, molly_stencil, false);
 	// this function solves the 1D laplace equation on the Grid_vort (coarse) and upsamples to Grid_Psi (fine)
+	writeTranferToBinaryFile(Grid_vort.N, (cufftDoubleReal*)Dev_Temp_C1, SettingsMain, "/f", false);
 	get_psi_hermite_from_distribution_function(Psi_real, (cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C1, cufft_plan_phi_1D, cufft_plan_phi_1D_inverse, 
 	cufft_plan_psi_D2Z, cufft_plan_psi_Z2D  ,Grid_vort, Grid_Psi);
-// 	writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real), SettingsMain, "/Stream_function_molly", false);
-// 	writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real+1*Grid_Psi.N), SettingsMain, "/Stream_function_mollyx", false);
-// 	writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real+2*Grid_Psi.N), SettingsMain, "/Stream_function_mollyy", false);
-// 	writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real+3*Grid_Psi.N), SettingsMain, "/Stream_function_mollys", false);
-// 	  error("evaluate_potential_from_density_hermite: not nted yet",134);
+	writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real), SettingsMain, "/psi", false);
+	writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real+1*Grid_Psi.N), SettingsMain, "/dpsi_dx", false);
+	writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real+2*Grid_Psi.N), SettingsMain, "/dpsi_dy", false);
+	writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real+3*Grid_Psi.N), SettingsMain, "/dpsi_dxy", false);
+   
 // // 
 }
 
@@ -421,25 +422,25 @@ void get_psi_hermite_from_distribution_function(double *Psi_real_out, double *De
 	// devide by NX to normalize FFT
 	k_normalize_1D_h<<<Grid.fft_blocks.x, Grid.threadsPerBlock.x>>>((cufftDoubleComplex*) Psi_real_out, Grid);  // this is a normalization factor of FFT? if yes we dont need to do it everytime!!! 
 	// inverse laplacian in fourier space - division by kx**2 and ky**2
-	k_fft_iLap_h_1D<<<Grid.fft_blocks.x, Grid.threadsPerBlock.x>>>((cufftDoubleComplex*) Psi_real_out, (cufftDoubleComplex*) Dev_Temp_C1, Grid);
+	k_fft_iLap_h_1D<<<Grid.fft_blocks.x, Grid.threadsPerBlock.x>>>((cufftDoubleComplex*) Psi_real_out, (cufftDoubleComplex*)  Psi_real_out, Grid);
 	// do zero padding if needed
 	if (Grid.NX != Grid_psi.NX || Grid.NY != Grid_psi.NY) {
-		zero_padding_1D<<<Grid_psi.fft_blocks.x, Grid_psi.threadsPerBlock.x>>>(Dev_Temp_C1, (cufftDoubleComplex*) Psi_real_out, Grid_psi, Grid);
+		zero_padding_1D<<<Grid_psi.fft_blocks.x, Grid_psi.threadsPerBlock.x>>>((cufftDoubleComplex*)Psi_real_out, (cufftDoubleComplex*) Psi_real_out, Grid_psi, Grid);
 	}
 	else { // no movement needed, just copy data over
-		cudaMemcpy((cufftDoubleComplex*) Psi_real_out, (cufftDoubleComplex*)  Dev_Temp_C1, Grid.sizeNfft, cudaMemcpyDeviceToDevice);
+		// cudaMemcpy(Psi_real_out, Dev_Temp_C1, Grid.sizeNfft, cudaMemcpyDeviceToDevice);
 	}
-	// compute x derivative for d\psi/dx = dphi/dx = F^{-1} (ik_x F(phi))
+	//compute x derivative for d\psi/dx = dphi/dx = F^{-1} (ik_x F(phi))
 	k_fft_dx_h_1D<<<Grid_psi.fft_blocks.x, Grid_psi.threadsPerBlock.x>>>((cufftDoubleComplex*) Psi_real_out, (cufftDoubleComplex*) Dev_Temp_C1, Grid_psi);
 	cufftExecZ2D (cufft_plan_phi_1D_inverse, (cufftDoubleComplex*) Dev_Temp_C1, (cufftDoubleReal*)(Psi_real_out+Grid_psi.N));
 	copy_first_row_to_all_rows_in_grid<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>((cufftDoubleReal*) (Psi_real_out+Grid_psi.N), (cufftDoubleReal*) (Psi_real_out+Grid_psi.N), Grid_psi);
 	// inverse fft (1D)
 	cufftExecZ2D (cufft_plan_phi_1D_inverse, (cufftDoubleComplex*) Psi_real_out, (cufftDoubleReal*)(Dev_Temp_C1));
-	// assemble psi= phi  - v^2/2
+	// // assemble psi= phi  - v^2/2
 	k_assemble_psi<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>((cufftDoubleReal*)(Dev_Temp_C1), Psi_real_out, Grid_psi);
-	// compute y derivative for d\psi/(dy) = v
+	// // compute y derivative for d\psi/(dy) = v
 	generate_gridvalues_v<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>((cufftDoubleReal*)(Psi_real_out+2*Grid_psi.N), -1.0, Grid_psi);
-	// compute xy derivative for d^2\psi/(dxdy) = 0
+	// // compute xy derivative for d^2\psi/(dxdy) = 0
 	set_value<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>((cufftDoubleReal*)(Psi_real_out+3*Grid_psi.N), 0.0, Grid_psi);
 	// cut high frequencies in fourier space, however not that much happens after zero move add from coarse grid
 	// k_fft_cut_off_scale_h<<<Grid_Psi.fft_blocks, Grid_Psi.threadsPerBlock>>>((cufftDoubleComplex*) Dev_Temp_C1+Grid_Psi.Nfft, Grid_Psi, freq_cut_psi);
@@ -521,7 +522,7 @@ void fourier_hermite(TCudaGrid2D Grid, cufftDoubleComplex *Dev_In, double *Dev_O
 *******************************************************************/
 std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 		TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
-		double *Dev_Psi, double *Dev_W_coarse, double *Dev_W_H_fine,
+		double *Dev_Psi, double *Dev_W_coarse,
 		cufftHandle cufft_plan_coarse_D2Z, cufftHandle cufft_plan_coarse_Z2D, cufftHandle cufftPlan_fine_D2Z, cufftHandle cufftPlan_fine_Z2D,
 		cufftDoubleComplex *Dev_Temp_C1)
 {
@@ -550,7 +551,11 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 
 		// compute quantities
 		if (SettingsMain.getSimulationType() == "cmm_vlasov_poisson_1d"){
-			Compute_Total_Energy(mesure[0], mesure[1], mesure[2], Dev_Psi, Dev_W_coarse, (cufftDoubleReal*) Dev_Temp_C1, Grid_psi);
+			// compute energies
+			Compute_Kinetic_Energy(mesure[1], Dev_W_coarse, (cufftDoubleReal*) Dev_Temp_C1, Grid_coarse); 
+			Compute_Potential_Energy(mesure[2], Dev_Psi, Grid_psi); 
+			mesure[0]=mesure[1]+mesure[2]; // total energy
+			// compute mass
 			Compute_Mass(mesure[3], Dev_W_coarse, Grid_coarse); 
 			// save
 			writeAppendToBinaryFile(1, &t_now, SettingsMain, "/Monitoring_data/Mesure/Time_s");  // time vector for data

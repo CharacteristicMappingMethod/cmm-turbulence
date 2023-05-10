@@ -7,9 +7,9 @@ sim_name	=	15-vp
 domain_size	=	{k=0.5,vmin=-8,vmax=8}
 grid_coarse	=	256
 grid_fine	=	512
-grid_psi	=	512
+grid_psi	=	256
 grid_vort	=	512
-final_time	=	40
+final_time	=	41
 set_dt_by_steps	=	0
 factor_dt_by_grid	=	4
 save_computational_num	=	1
@@ -31,9 +31,7 @@ molly_stencil	=	0
 freq_cut_psi	=	256
 skip_remapping	=	0
 save_sample_num	=	1
-save_sample	=	{is_instant=0,time_start=0,time_end=1,time_step=0.01,var=W-U,grid=1024}
-save_sample	=	{is_instant=0,time_start=0,time_end=0,time_step=0,var=W-U,grid=1024}
-save_sample	=	{is_instant=0,time_start=0,time_end=10,time_step=0.01,var=W-U,grid=512}
+save_sample	=	{is_instant=0,time_start=0,time_end=40,time_step=0.1,var=,grid=1024}
 scalar_name	=	rectangle
 scalar_discrete	=	0
 save_zoom_num	=	0
