@@ -759,12 +759,6 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 		MapStack Map_Stack, MapStack Map_Stack_f, std::map<std::string, CmmVar2D*> cmmVarMap, cufftDoubleComplex *Dev_Temp_C1,
 		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int *forward_particles_block, int forward_particles_thread)
 {
-//std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
-//		MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D* Grid_sample, TCudaGrid2D Grid_discrete, double *Dev_sample,
-//		cufftHandle* cufft_plan_sample_phi_1D, cufftHandle* cufft_plan_sample_phi_1D_inverse, cufftHandle* cufft_plan_sample_phi_2D, cufftHandle* cufft_plan_sample_phi_2D_inverse, cufftDoubleComplex *Dev_Temp_C1,
-//		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int *forward_particles_block, int forward_particles_thread,
-//		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f, double *W_initial_discrete)
-//{
 	// check if we want to save at this time, combine all variables if so
 	std::string message = "";
 	SaveSample* save_sample = SettingsMain.getSaveSample();
@@ -866,9 +860,9 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 				writeAppendToBinaryFile(1, &scal_int, SettingsMain, "/Monitoring_data/Mesure/Scalar_integral_"+ to_str(Sample_var->Grid->NX));
 			}
 
-				
+
 			int varnum = 2;
-			// compute distribution function - 0 to switch for vlasov1D
+			// compute distribution function - 2 to switch for vlasov1D
 			k_h_sample_from_init<<<Sample_var->Grid->blocksPerGrid, Sample_var->Grid->threadsPerBlock>>>(Sample_var->Dev_var, (cufftDoubleReal*)Dev_Temp_C1,
 					*Sample_var->Grid, *cmmVarMap["Vort_discrete_init"]->Grid, varnum, SettingsMain.getInitialConditionNum(), cmmVarMap["Vort_discrete_init"]->Dev_var, SettingsMain.getInitialDiscrete());
 
@@ -889,7 +883,7 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 			get_psi_from_distribution_function(*Sample_var, *Sample_var, Sample_var->Dev_var, Dev_Temp_C1);
 
 			Compute_Potential_Energy(mesure[2], *Sample_var);
-			
+
 			if (save_var.find("Stream") != std::string::npos or save_var.find("Psi") != std::string::npos) {
 				writeTimeVariable(SettingsMain, "Stream_function_Psi_"+to_str(Sample_var->Grid->NX),
 						t_now, Sample_var->Dev_var, Sample_var->Grid->N);

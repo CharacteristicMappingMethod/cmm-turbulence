@@ -33,7 +33,7 @@ class TestParams:
     exec_loc = "SimulationCuda2d.out"  # executable relative from root path
 
     # specific settings
-    debug_level = 1  # 0 - error and final, 1 - individual arrays and more
+    debug_level = 0  # 0 - error and final, 1 - individual arrays and more
     same_architecture = False  # True - compare hashes as well
     save_reference = False  # True - overwrite reference results if test passed
     save_force = False  # True - overwrite reference results
@@ -228,6 +228,7 @@ def run_test(params: TestParams):
         # remove particle and time data, as they are currently not needed
         params.shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", params.reference_loc, "Particle_data"))
         params.shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", params.reference_loc, "Time_data"))
+        params.shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", params.reference_loc, "Zoom_data"))
     
     # final verdict
     logging.info(f'{params.name} - Completed with {compare_pass} mismatches')

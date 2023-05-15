@@ -21,7 +21,10 @@ import importlib  # load individual test files
 
 # list of tests to be executed
 test_names = [
-    "euler2D_11b_4nodes_reference_remapping"
+    "euler2D_init_fields",  # check for initialization of euler2D w particles
+    "euler2D_one_step",  # check for computing one time-step of euler2D w particles
+    "euler2D_11b_4nodes_reference_remapping",  # check for reference simulation including one remapping and w particles
+    "vlasov1D_15_vp_landau_damping"  # vlasov test
 ]
 
 ########################################################################

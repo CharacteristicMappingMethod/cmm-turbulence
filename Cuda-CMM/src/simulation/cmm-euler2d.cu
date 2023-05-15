@@ -182,11 +182,11 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 //		if (sample_names.find("_H") != std::string::npos) {
 //			size_max_sample = std::max(size_max_sample, (size_t)(3*Sample[i_save]->Grid->sizeNReal + Sample[i_save]->Grid->sizeNfft));
 //		}
-		// check if string is not empty, null or contains only whitespaces
+		// check if string is not empty, null or contains only whitespaces - well nice idea I had but we need the space anyways
 		// Note: Size is 2 times, as for derivatives we need a second array for storage, maybe here temp array can be reused
-		if (!(sample_names.empty() || std::all_of(sample_names.begin(), sample_names.end(), [](char c){return std::isspace(c);}))) {
-			size_max_sample = std::max(size_max_sample, (size_t)(Sample[i_save]->Grid->sizeNReal + Sample[i_save]->Grid->sizeNfft));
-		}
+//		if (!(sample_names.empty() || std::all_of(sample_names.begin(), sample_names.end(), [](char c){return std::isspace(c);}))) {
+		size_max_sample = std::max(size_max_sample, (size_t)(Sample[i_save]->Grid->sizeNReal + Sample[i_save]->Grid->sizeNfft));
+//		}
 	}
 	// allocate memory and set for each sample var
 	cudaMalloc((void**)&Dev_Sample, size_max_sample);
