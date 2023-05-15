@@ -354,7 +354,7 @@ __global__ void k_h_sample_from_init(double *Val_out, double *x_y, TCudaGrid2D G
 
 		// check if initial condition is defined at this point (maybe this check should be done  inside the main in the case when "verbose=True", because it makes the code slower)
 		if (x_y[2*In] > Grid_discrete.bounds[1] || x_y[2*In] < Grid_discrete.bounds[0] || x_y[2*In+1] > Grid_discrete.bounds[3] || x_y[2*In+1] < Grid_discrete.bounds[2]) {
-			printf("ERROR: initial condition not defined at point (%f, %f)", x_y[2*In], x_y[2*In+1]);
+			printf("ERROR: initial condition not defined at point (%f, %f)\n", x_y[2*In], x_y[2*In+1]);
 		}
 		// differentiate between what variable we would like to retrieve
 		switch (init_var_num) {
