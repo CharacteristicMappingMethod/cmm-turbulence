@@ -16,8 +16,8 @@ THRUST_INCLUDE = -I$(CUDA_PATH)/include/thrust -I$(CUDA_PATH)/include/cub
 
 
 # set the GPU_ARCH after your gpu capabilities
-GPU_ARCH = sm_86 # for RTX 3070/ 3080/ 3090
-#GPU_ARCH = sm_50
+# GPU_ARCH = sm_86 # for RTX 3070/ 3080/ 3090
+GPU_ARCH = sm_50  # for Julius' rusty old laptop
 # GPU_ARCH = compute_70
 
 # include hdf5 or not, comment out to not include it
@@ -32,13 +32,11 @@ endif
 
 
 # main targets
-#SimulationCuda2d.out: ./bin/globals.o ./bin/settings.o ./bin/cmm-grid2d.o ./bin/cmm-fft.o ./bin/cmm-hermite.o ./bin/cmm-io.o ./bin/cmm-param.o ./bin/cmm-timestep.o ./bin/cmm-particles.o ./bin/cmm-mesure.o ./bin/cmm-init.o ./bin/cmm-simulation-host.o ./bin/cmm-simulation-kernel.o ./bin/cmm-euler2d.o ./bin/cmm-vlasov1d.o ./bin/main2d.o
-SimulationCuda2d.out: ./bin/globals.o ./bin/settings.o ./bin/cmm-grid2d.o ./bin/cmm-fft.o ./bin/cmm-hermite.o ./bin/cmm-io.o ./bin/cmm-param.o ./bin/cmm-timestep.o ./bin/cmm-particles.o ./bin/cmm-mesure.o ./bin/cmm-init.o ./bin/cmm-simulation-host.o ./bin/cmm-simulation-kernel.o ./bin/cmm-euler2d.o ./bin/main2d.o
+SimulationCuda2d.out: ./bin/globals.o ./bin/settings.o ./bin/cmm-grid2d.o ./bin/cmm-fft.o ./bin/cmm-hermite.o ./bin/cmm-io.o ./bin/cmm-param.o ./bin/cmm-timestep.o ./bin/cmm-particles.o ./bin/cmm-mesure.o ./bin/cmm-init.o ./bin/cmm-simulation-host.o ./bin/cmm-simulation-kernel.o ./bin/cmm-euler2d.o ./bin/cmm-vlasov1d.o ./bin/main2d.o
 	#
 	# Build main programm
 	#
-#	$(NVCC_PATH) -O3 -g -lineinfo -o SimulationCuda2d.out ./bin/globals.o ./bin/settings.o ./bin/cmm-grid2d.o ./bin/cmm-fft.o ./bin/cmm-hermite.o ./bin/cmm-io.o ./bin/cmm-param.o ./bin/cmm-timestep.o ./bin/cmm-particles.o ./bin/cmm-mesure.o ./bin/cmm-init.o ./bin/cmm-simulation-host.o ./bin/cmm-simulation-kernel.o ./bin/cmm-euler2d.o ./bin/cmm-vlasov1d.o ./bin/main2d.o -arch=$(GPU_ARCH) -lcufft -lcudadevrt -lcurand
-	$(NVCC_PATH) -O3 -g -lineinfo -o SimulationCuda2d.out ./bin/globals.o ./bin/settings.o ./bin/cmm-grid2d.o ./bin/cmm-fft.o ./bin/cmm-hermite.o ./bin/cmm-io.o ./bin/cmm-param.o ./bin/cmm-timestep.o ./bin/cmm-particles.o ./bin/cmm-mesure.o ./bin/cmm-init.o ./bin/cmm-simulation-host.o ./bin/cmm-simulation-kernel.o ./bin/cmm-euler2d.o ./bin/main2d.o -arch=$(GPU_ARCH) -lcufft -lcudadevrt -lcurand
+	$(NVCC_PATH) -O3 -g -lineinfo -o SimulationCuda2d.out ./bin/globals.o ./bin/settings.o ./bin/cmm-grid2d.o ./bin/cmm-fft.o ./bin/cmm-hermite.o ./bin/cmm-io.o ./bin/cmm-param.o ./bin/cmm-timestep.o ./bin/cmm-particles.o ./bin/cmm-mesure.o ./bin/cmm-init.o ./bin/cmm-simulation-host.o ./bin/cmm-simulation-kernel.o ./bin/cmm-euler2d.o ./bin/cmm-vlasov1d.o ./bin/main2d.o -arch=$(GPU_ARCH) -lcufft -lcudadevrt -lcurand
 
 all: SimulationCuda2d.out
 
@@ -90,8 +88,8 @@ all: SimulationCuda2d.out
 ./bin/cmm-euler2d.o: src/simulation/cmm-euler2d.cu src/simulation/cmm-euler2d.h | bin_dir
 	$(NVCC_PATH) -O3 -c -g -lineinfo src/simulation/cmm-euler2d.cu -o ./bin/cmm-euler2d.o -arch=$(GPU_ARCH) --relocatable-device-code true 
 
-#./bin/cmm-vlasov1d.o: src/simulation/cmm-vlasov1d.cu src/simulation/cmm-vlasov1d.h | bin_dir
-#	$(NVCC_PATH) -O3 -c -g -lineinfo src/simulation/cmm-vlasov1d.cu -o ./bin/cmm-vlasov1d.o -arch=$(GPU_ARCH) --relocatable-device-code true 
+./bin/cmm-vlasov1d.o: src/simulation/cmm-vlasov1d.cu src/simulation/cmm-vlasov1d.h | bin_dir
+	$(NVCC_PATH) -O3 -c -g -lineinfo src/simulation/cmm-vlasov1d.cu -o ./bin/cmm-vlasov1d.o -arch=$(GPU_ARCH) --relocatable-device-code true 
 	
 ./bin/main2d.o: src/main2d.cpp | bin_dir
 	$(NVCC_PATH) -O3 -c  -g -lineinfo src/main2d.cpp -o ./bin/main2d.o 

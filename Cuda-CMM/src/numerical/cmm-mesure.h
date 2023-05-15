@@ -28,10 +28,10 @@ void Compute_Palinstrophy(double &Pal, CmmVar2D Vort, cufftDoubleComplex *Dev_Te
 void Hash_array(char *Hash, double *Dev_var, size_t n);
 
 // vlasov poisson
-void Compute_Mass(double &mass, double *f_in, TCudaGrid2D Grid);
-void Compute_Total_Energy(double &E_tot, double &E_kin, double &E_pot, double *psi_in, double *f_in, cufftDoubleReal *Dev_Temp_C1, TCudaGrid2D Grid);
-void Compute_Kinetic_Energy(double &E_out, double *f_in, cufftDoubleReal *Dev_Temp_C1, TCudaGrid2D Grid);
-void Compute_Potential_Energy(double &E_out, double *psi_in, TCudaGrid2D Grid);
+void Compute_Mass(double &mass, CmmVar2D VarIn);
+void Compute_Total_Energy(double &E_tot, double &E_kin, double &E_pot, CmmVar2D VarKin, CmmVar2D VarPot, cufftDoubleReal *Dev_Temp_C1);
+void Compute_Kinetic_Energy(double &E_out, CmmVar2D VarIn, cufftDoubleReal *Dev_Temp_C1);
+void Compute_Potential_Energy(double &E_out, CmmVar2D VarIn);
 
 void NDFT_1D(cufftDoubleComplex *X_k, double *x_n, double *p_n, double *f_k, int N);
 void iNDFT_1D(cufftDoubleComplex *X_k, double *x_n, double *p_n, double *f_k, int N);

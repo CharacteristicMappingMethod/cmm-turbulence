@@ -33,9 +33,6 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 		double **fluid_particles_pos_in, double *fluid_particles_pos_out,
 		int fluid_particles_num, int *fluid_particles_blocks, int fluid_particles_threads);
 
-//// compute hermite with derivatives in fourier space, uniform helper function fitted for all grids to utilize only input temporary variable
-//void fourier_hermite(TCudaGrid2D Grid, cufftDoubleComplex *Dev_In, double *Dev_Out, cufftHandle cufft_plan);
-
 // Compute fine vorticity hermite
 void translate_initial_condition_through_map_stack(MapStack Map_Stack, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Vort_fine_init,
 		CmmVar2D Vort_discrete_init, cufftDoubleComplex *Dev_Temp_C1, int simulation_num_c, bool initial_discrete, int var_num=0);
@@ -44,16 +41,13 @@ void translate_initial_condition_through_map_stack(MapStack Map_Stack, CmmVar2D 
 void evaluate_stream_hermite(CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Vort_fine_init, CmmVar2D Psi, CmmVar2D empty_vort,
 		cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_psi);
 
-void evaluate_potential_from_density_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_Psi, TCudaGrid2D Grid_vort,
-		double *Dev_ChiX, double *Dev_ChiY, double *Dev_W_H_fine_real, double *Psi_real,
-		cufftHandle cufft_plan_psi_D2Z, cufftHandle cufft_plan_psi_Z2D, cufftHandle cufft_plan_phi_1D, cufftHandle cufft_plan_phi_1D_inverse,
-		cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_phi);	
+void evaluate_potential_from_density_hermite(SettingsCMM SettingsMain, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Vort_fine_init, CmmVar2D Psi,
+		CmmVar2D empty_vort, cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_psi);
 
 
 // compute psi on a given Grid_psi from distribution function defined on Grid using a 1D fft
-void get_psi_hermite_from_distribution_function(double *Psi_real_out, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1,
-		cufftHandle cufft_plan_phi_1D, cufftHandle cufft_plan_phi_1D_inverse, cufftHandle cufft_plan_psi_D2Z, cufftHandle cufft_plan_psi_Z2D,
-		TCudaGrid2D Grid, TCudaGrid2D Grid_psi);
+void get_psi_from_distribution_function(CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1);
+void get_psi_hermite_from_distribution_function(CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1);
 
 // Computation of Global conservation values
 std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
@@ -65,12 +59,8 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int *forward_particles_block, int forward_particles_thread);
 
 std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
-		MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D* Grid_sample, TCudaGrid2D Grid_discrete, double *Dev_sample,
-		cufftHandle* cufft_plan_sample_phi_1D, cufftHandle* cufft_plan_sample_phi_1D_inverse, 
-		cufftHandle* cufft_plan_sample_phi_2D, cufftHandle* cufft_plan_sample_phi_2D_inverse, 
-		cufftDoubleComplex *Dev_Temp_C1, double **Host_forward_particles_pos, double **Dev_forward_particles_pos, 
-		int *forward_particles_block, int forward_particles_thread, double *Dev_ChiX, double *Dev_ChiY,
-		double *Dev_ChiX_f, double *Dev_ChiY_f, double *W_initial_discrete);
+		MapStack Map_Stack, MapStack Map_Stack_f, std::map<std::string, CmmVar2D*> cmmVarMap, cufftDoubleComplex *Dev_Temp_C1,
+		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int *forward_particles_block, int forward_particles_thread);
 
 // sample vorticity with mapstack at arbitrary frame
 std::string compute_zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,

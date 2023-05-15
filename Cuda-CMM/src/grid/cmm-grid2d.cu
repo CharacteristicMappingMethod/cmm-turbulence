@@ -118,15 +118,22 @@ CmmVar2D::CmmVar2D(int NX, int NY, int NZ, double *bounds, int type) {
 	}
 
 	cufftCreate(&plan_D2Z); cufftCreate(&plan_Z2D);
+	cufftCreate(&plan_1D_D2Z); cufftCreate(&plan_1D_Z2D);
 	// disable automatic setting of workareas, so that they all later share the same work area
 	cufftSetAutoAllocation(plan_D2Z, 0); cufftSetAutoAllocation(plan_Z2D, 0);
+	cufftSetAutoAllocation(plan_1D_D2Z, 0); cufftSetAutoAllocation(plan_1D_Z2D, 0);
 	cufftMakePlan2d(plan_D2Z, Grid->NX, Grid->NY, CUFFT_D2Z, &plan_size[0]);
 	cufftMakePlan2d(plan_Z2D, Grid->NX, Grid->NY, CUFFT_Z2D, &plan_size[1]);
+	cufftMakePlan1d(plan_1D_D2Z, Grid->NX, CUFFT_D2Z, 1, &plan_1D_size[0]);
+	cufftMakePlan1d(plan_1D_Z2D, Grid->NX, CUFFT_Z2D, 1, &plan_1D_size[1]);
+
+	// ToDo Asserting
 }
 
 // Set the work area of the cufft_plans, since no parallel fft is performed, all plans share the same work area
 void CmmVar2D::setWorkArea(void *fft_work_area) {
 	cufftSetWorkArea(plan_D2Z, fft_work_area); cufftSetWorkArea(plan_Z2D, fft_work_area);
+	cufftSetWorkArea(plan_1D_D2Z, fft_work_area); cufftSetWorkArea(plan_1D_Z2D, fft_work_area);
 }
 
 // free resources

@@ -234,8 +234,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	// set new workarea to plans
 	for (const auto& i_cmmVar : cmmVarMap) {
 		CmmVar2D cuda_var_2D_now = *i_cmmVar.second;
-		cufftSetWorkArea(cuda_var_2D_now.plan_D2Z, fft_work_area);
-		cufftSetWorkArea(cuda_var_2D_now.plan_Z2D, fft_work_area);
+		cuda_var_2D_now.setWorkArea(fft_work_area);
 	}
 
 	if (SettingsMain.getVerbose() >= 4) {
@@ -470,12 +469,6 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		cufftSetStream(cufftPlan_coarse_streams[i], streams[i]);
 		cufftSetStream(cufftPlan_fine_streams[i], streams[i]);
 	}
-	
-
-	/*******************************************************************
-	*	 Define variables on another, set grid for investigations 	   *
-	*   We need another variable large enough to hold hermitian arrays *
-	*******************************************************************/
 
 	// introduce part to console and print estimated gpu memory usage in mb before initialization
 	if (SettingsMain.getVerbose() >= 1) {
@@ -634,8 +627,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 				// set after current velocity
 				if (particles_advected[i_p].init_vel) {
 					Particle_advect_inertia_init<<<particle_block[i_p], particle_thread>>>(particles_advected[i_p].num,
-										Dev_particles_pos[i_p], Dev_particles_vel[i_p],
-										Psi.Dev_var, *Psi.Grid);
+							Dev_particles_pos[i_p], Dev_particles_vel[i_p], Psi.Dev_var, *Psi.Grid);
 				}
 				// set to zero
 				else { cudaMemset(Dev_particles_vel[i_p], 0.0, 2*particles_advected[i_p].num*sizeof(double)); }
@@ -708,7 +700,6 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
     // save particle position if interested in that
     message = writeParticles(SettingsMain, t0, dt, dt, Dev_particles_pos, Dev_particles_vel, *Psi.Grid, Psi.Dev_var, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
 	if (SettingsMain.getVerbose() >= 3 && message != "") logger.push(message);
-
 
 	// zoom if wanted, has to be done after particle initialization, maybe a bit useless at first instance
 	message = compute_zoom(SettingsMain, t0, dt, dt,
@@ -1093,7 +1084,6 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	// compute conservation if wanted
 	message = compute_conservation_targets(SettingsMain, T_MAX, dt, dt, cmmVarMap, Dev_Temp_C1);
 	if (SettingsMain.getVerbose() >= 3 && message != "") logger.push(message);
-
 
 	// sample if wanted
 	message = sample_compute_and_write(SettingsMain, T_MAX, dt, dt,

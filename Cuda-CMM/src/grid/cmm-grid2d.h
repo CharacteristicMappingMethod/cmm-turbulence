@@ -45,6 +45,8 @@ public:
 	double *Dev_var; double RAM_size; int type;
 	TCudaGrid2D *Grid;
 	cufftHandle plan_D2Z, plan_Z2D; size_t plan_size[2];
+	// we should get 1D plans without further memory usage so just define them for everything
+	cufftHandle plan_1D_D2Z, plan_1D_Z2D; size_t plan_1D_size[2];
 
 	CmmVar2D(int NX, int NY, int NZ, double *bounds, int type);
 
