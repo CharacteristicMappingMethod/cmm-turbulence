@@ -969,7 +969,7 @@ std::string compute_zoom(SettingsCMM SettingsMain, double t_now, double dt_now, 
 				// safe bounds in array
 				double bounds[4] = {x_min, x_max, y_min, y_max};
 
-				printf("bounds : %f,  %f,  %f, %f", x_min, x_max, y_min, y_max);
+				printf("bounds : %f,  %f,  %f, %f\n", x_min, x_max, y_min, y_max);
 
 				TCudaGrid2D Grid_zoom_i(Zoom_var->Grid->NX, Zoom_var->Grid->NY, Zoom_var->Grid->NZ, bounds);
 
@@ -1029,8 +1029,6 @@ std::string compute_zoom(SettingsCMM SettingsMain, double t_now, double dt_now, 
 						}
 					}
 				}
-
-
 
 				// compute backwards map for map stack of zoom window
 				apply_map_stack(Grid_zoom_i, Map_Stack, cmmVarMap["ChiX"]->Dev_var, cmmVarMap["ChiY"]->Dev_var, (cufftDoubleReal*)Dev_Temp_C1+Grid_zoom_i.N, -1);

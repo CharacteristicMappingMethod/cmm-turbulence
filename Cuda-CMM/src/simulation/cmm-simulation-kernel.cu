@@ -307,16 +307,29 @@ __global__ void k_h_sample_map_compact(double *ChiX, double *ChiY, double *x_y, 
 	if(iX >= Grid.NX || iY >= Grid.NY) return;
 	int In = iY*Grid.NX + iX;
 
-	//position
+	//position spanning on targeted grid
 	double x =  Grid.bounds[0] + iX*Grid.hx;
 	double y =  Grid.bounds[2] + iY*Grid.hy;
-	double LX = Grid.bounds[1] - Grid.bounds[0]; double LY = Grid.bounds[3] - Grid.bounds[2];
+	// LX and LY are in reference to the map grid
+	double LX = Grid_map.bounds[1] - Grid_map.bounds[0]; double LY = Grid_map.bounds[3] - Grid_map.bounds[2];
+
+	if (iX == 10 && iY == 10) {
+		printf("Pos Sample (%f, %f)\n", x, y);
+	}
 
 	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, Grid_map);
+
+	if (iX == 10 && iY == 10) {
+		printf("Pos2 Sample (%f, %f)\n", x_y[2*In], x_y[2*In+1]);
+	}
 
 	// save in two points in array and warp - translate by domain size(s)
 	x_y[2*In  ] = x - floor((x - Grid_map.bounds[0]) / LX) * LX;
 	x_y[2*In+1] = y - floor((y - Grid_map.bounds[2]) / LY) * LY;
+
+	if (iX == 10 && iY == 10) {
+		printf("Pos3 Sample (%f, %f)\n", x_y[2*In], x_y[2*In+1]);
+	}
 }
 // apply intermediate maps to compacted map, basically only samples in stacked form
 __global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid)
@@ -327,13 +340,25 @@ __global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, doub
 	if(iX >= Grid.NX || iY >= Grid.NY) return;
 	int In = iY*Grid.NX + iX;
 
+	if (iX == 10 && iY == 10) {
+		printf("Pos Apply (%f, %f)\n", x_y[2*In], x_y[2*In+1]);
+	}
+
 	double points[2];
 	double LX = Grid_map.bounds[1] - Grid_map.bounds[0]; double LY = Grid_map.bounds[3] - Grid_map.bounds[2];
 	device_diffeo_interpolate_2D(ChiX_stack, ChiY_stack, x_y[2*In], x_y[2*In+1], &points[0], &points[1], Grid_map);
 
+	if (iX == 10 && iY == 10) {
+		printf("Pos2 Apply (%f, %f)\n", x_y[2*In], x_y[2*In+1]);
+	}
+
 	// warping - translate by domain size(s)
 	x_y[2*In  ] = points[0] - floor((points[0] - Grid_map.bounds[0])/LX)*LX;
 	x_y[2*In+1] = points[1] - floor((points[1] - Grid_map.bounds[2])/LY)*LY;
+
+	if (iX == 10 && iY == 10) {
+		printf("Pos3 Apply (%f, %f)\n", x_y[2*In], x_y[2*In+1]);
+	}
 }
 // sample from initial condition
 __global__ void k_h_sample_from_init(double *Val_out, double *x_y, TCudaGrid2D Grid, TCudaGrid2D Grid_discrete, int init_var_num, int init_num, double *Val_initial_discrete, bool initial_discrete)
