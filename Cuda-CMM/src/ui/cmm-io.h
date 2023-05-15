@@ -29,6 +29,8 @@
 #include <time.h>
 #include <dirent.h>
 
+#include <map>  // used for a list of all variables
+
 // check for reading in directory
 #include <vector>
 #include <dirent.h> // for directory functions
@@ -63,10 +65,8 @@ int recursive_delete(std::string path, int debug);
 
 
 // function to save all data from one timestep into hdf5 or other file structure
-std::string writeTimeStep(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
-		TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
-		double *Dev_W_coarse, double *Dev_Psi_real,
-		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f);
+std::string writeTimeStep(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, std::map<std::string, CmmVar2D*> cmmVarMap);
+
 void writeTimeVariable(SettingsCMM SettingsMain, std::string data_name, double t_now, double *Dev_save, long int N);
 void writeTimeVariable(SettingsCMM SettingsMain, std::string data_name, double t_now, double *Host_save, double *Dev_save, long int size_N, long int N, int offset);
 
@@ -74,10 +74,8 @@ std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now
 		double **Dev_particles_pos, double **Dev_particles_vel,
 		TCudaGrid2D Grid_psi, double *Dev_psi, double *Dev_Temp, int* fluid_particles_blocks, int fluid_particles_threads);
 
-void writeMapStack(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Grid_psi,
-		double* Dev_ChiX, double* Dev_ChiY, double* Dev_Psi_real, bool isForward);
-void readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, TCudaGrid2D Grid_psi,
-		double* Dev_ChiX, double* Dev_ChiY, double* Dev_Psi_real, bool isForward, std::string data_name);
+void writeMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Psi, bool isForward);
+void readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Psi, bool isForward, std::string data_name);
 
 void writeParticlesState(SettingsCMM SettingsMain, double **Dev_particles_pos, double **Dev_particles_vel);
 void readParticlesState(SettingsCMM SettingsMain, double **Dev_particles_pos, double **Dev_particles_vel, std::string data_name);

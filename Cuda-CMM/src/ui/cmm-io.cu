@@ -219,7 +219,7 @@ bool readTransferFromBinaryFile(long long int Len, double *d_var, std::string da
 *******************************************************************/
 // C++17 has a library dealing with that but project needs C++14 as well
 int recursive_delete(std::string path, int debug) {
-    DIR *dir; struct dirent *entry; std::string child_path; int rc;
+    DIR *dir; struct dirent *entry; std::string child_path;
 
     /* Open the directory */
     dir = opendir(path.c_str());
@@ -288,9 +288,7 @@ std::string writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid
 // binary version
 #else
 	std::string writeTimeStep(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
-			TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
-			double *Dev_W_coarse, double *Dev_Psi_real,
-			double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f) {
+			std::map<std::string, CmmVar2D*> cmmVarMap) {
 
 		// check if we want to save at this time, combine all variables if so
 		bool save_now = false; std::string save_var;
@@ -329,51 +327,41 @@ std::string writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid
 
 			// Vorticity on coarse grid : W_coarse
 			if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos) {
-				writeTranferToBinaryFile(Grid_coarse.N, Dev_W_coarse, SettingsMain, sub_folder_name + "/Vorticity_W_coarse", false);
+				writeTranferToBinaryFile(cmmVarMap["Vort"]->Grid->N, cmmVarMap["Vort"]->Dev_var, SettingsMain, sub_folder_name + "/Vorticity_W_coarse", false);
 			}
 
 			// Stream function on psi grid : Psi_psi
 			if (save_var.find("Stream") != std::string::npos or save_var.find("Psi") != std::string::npos) {
-				writeTranferToBinaryFile(Grid_psi.N, Dev_Psi_real, SettingsMain, sub_folder_name + "/Stream_function_Psi_psi", false);
+				writeTranferToBinaryFile(cmmVarMap["Psi"]->Grid->N, cmmVarMap["Psi"]->Dev_var, SettingsMain, sub_folder_name + "/Stream_function_Psi_psi", false);
 			}
 			if (save_var.find("Stream_H") != std::string::npos or save_var.find("Psi_H") != std::string::npos) {
-				writeTranferToBinaryFile(4*Grid_psi.N, Dev_Psi_real, SettingsMain, sub_folder_name + "/Stream_function_Psi_H_psi", false);
+				writeTranferToBinaryFile(4*cmmVarMap["Psi"]->Grid->N, cmmVarMap["Psi"]->Dev_var, SettingsMain, sub_folder_name + "/Stream_function_Psi_H_psi", false);
 			}
 
-			// Velocity on psi grid : U_psi
+			// Velocity on psi grid : U_psi, x-direction and y-direction
 			if (save_var.find("Velocity") != std::string::npos or save_var.find("U") != std::string::npos) {
-				// Velocity in x direction
-				writeTranferToBinaryFile(Grid_psi.N, Dev_Psi_real+1*Grid_psi.N, SettingsMain, sub_folder_name + "/Velocity_UX_psi", false);
-				// Velocity in y direction
-				writeTranferToBinaryFile(Grid_psi.N, Dev_Psi_real+2*Grid_psi.N, SettingsMain, sub_folder_name + "/Velocity_UY_psi", false);
+				writeTranferToBinaryFile(cmmVarMap["Psi"]->Grid->N, cmmVarMap["Psi"]->Dev_var+1*cmmVarMap["Psi"]->Grid->N, SettingsMain, sub_folder_name + "/Velocity_UX_psi", false);
+				writeTranferToBinaryFile(cmmVarMap["Psi"]->Grid->N, cmmVarMap["Psi"]->Dev_var+2*cmmVarMap["Psi"]->Grid->N, SettingsMain, sub_folder_name + "/Velocity_UY_psi", false);
 			}
 
-			// Backwards map on coarse grid in Hermite or single version : Chi_coarse
+			// Backwards map on coarse grid in Hermite or single version : Chi_coarse, x- and y-direction
 			if (save_var.find("Map_b") != std::string::npos or save_var.find("Chi_b") != std::string::npos) {
-				// Map in x direction on coarse grid : ChiX
-				writeTranferToBinaryFile(Grid_coarse.N, Dev_ChiX, SettingsMain, sub_folder_name + "/Map_ChiX_coarse", false);
-				// Map in y direction on coarse grid : ChiY
-				writeTranferToBinaryFile(Grid_coarse.N, Dev_ChiY, SettingsMain, sub_folder_name + "/Map_ChiY_coarse", false);
+				writeTranferToBinaryFile(cmmVarMap["ChiX"]->Grid->N, cmmVarMap["ChiX"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiX_coarse", false);
+				writeTranferToBinaryFile(cmmVarMap["ChiY"]->Grid->N, cmmVarMap["ChiY"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiY_coarse", false);
 			}
 			if (save_var.find("Map_H") != std::string::npos or save_var.find("Chi_H") != std::string::npos) {
-				// Map in x direction on coarse grid : ChiX
-				writeTranferToBinaryFile(4*Grid_coarse.N, Dev_ChiX, SettingsMain, sub_folder_name + "/Map_ChiX_H_coarse", false);
-				// Map in y direction on coarse grid : ChiY
-				writeTranferToBinaryFile(4*Grid_coarse.N, Dev_ChiY, SettingsMain, sub_folder_name + "/Map_ChiY_H_coarse", false);
+				writeTranferToBinaryFile(4*cmmVarMap["ChiX"]->Grid->N, cmmVarMap["ChiX"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiX_H_coarse", false);
+				writeTranferToBinaryFile(4*cmmVarMap["ChiY"]->Grid->N, cmmVarMap["ChiY"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiY_H_coarse", false);
 			}
 
-			// Forwards map on coarse grid in Hermite or single version : Chi_f_coarse
+			// Forwards map on coarse grid in Hermite or single version : Chi_f_coarse, x- and y-direction
 			if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos) {
-				// Map in x direction on coarse grid : ChiX
-				writeTranferToBinaryFile(Grid_coarse.N, Dev_ChiX_f, SettingsMain, sub_folder_name + "/Map_ChiX_f_coarse", false);
-				// Map in y direction on coarse grid : ChiY
-				writeTranferToBinaryFile(Grid_coarse.N, Dev_ChiY_f, SettingsMain, sub_folder_name + "/Map_ChiY_f_coarse", false);
+				writeTranferToBinaryFile(cmmVarMap["ChiX_f"]->Grid->N, cmmVarMap["ChiX_f"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiX_f_coarse", false);
+				writeTranferToBinaryFile(cmmVarMap["ChiY_f"]->Grid->N, cmmVarMap["ChiY_f"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiY_f_coarse", false);
 			}
 			if (save_var.find("Map_f_H") != std::string::npos or save_var.find("Chi_f_H") != std::string::npos) {
-				// Map in x direction on coarse grid : ChiX
-				writeTranferToBinaryFile(4*Grid_coarse.N, Dev_ChiX_f, SettingsMain, sub_folder_name + "/Map_ChiX_f_H_coarse", false);
-				// Map in y direction on coarse grid : ChiY
-				writeTranferToBinaryFile(4*Grid_coarse.N, Dev_ChiY_f, SettingsMain, sub_folder_name + "/Map_ChiY_f_H_coarse", false);
+				writeTranferToBinaryFile(4*cmmVarMap["ChiX_f"]->Grid->N, cmmVarMap["ChiX_f"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiX_f_H_coarse", false);
+				writeTranferToBinaryFile(4*cmmVarMap["ChiY_f"]->Grid->N, cmmVarMap["ChiY_f"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiY_f_H_coarse", false);
 			}
 		}
 		return message;
@@ -456,7 +444,7 @@ std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now
 			if (save_var.find("PartA_" + to_str_0(i_p+1, 2)) != std::string::npos) {
 				writeTranferToBinaryFile(2*particles_advected[i_p].num, Dev_particles_pos[i_p], SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_pos_P" + to_str_0(i_p+1, 2), false);
 				// compute and safe hashing
-				double w_hash[2]; Hash_array(2*particles_advected[i_p].num, (char*)w_hash, Dev_particles_pos[i_p]);
+				double w_hash[2]; Hash_array((char*)w_hash, Dev_particles_pos[i_p], 2*particles_advected[i_p].num);
 				writeAppendToBinaryFile(2, w_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_particles_pos_P" + to_str_0(i_p+1, 2));
 			}
 			// particle velocity now
@@ -465,7 +453,7 @@ std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now
 				if (particles_advected[i_p].tau != 0) {
 					writeTranferToBinaryFile(2*particles_advected[i_p].num, Dev_particles_vel[i_p], SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2), false);
 					// hashing
-					double w_hash[2]; Hash_array(2*particles_advected[i_p].num, (char*)w_hash, Dev_particles_vel[i_p]);
+					double w_hash[2]; Hash_array((char*)w_hash, Dev_particles_vel[i_p], 2*particles_advected[i_p].num);
 					writeAppendToBinaryFile(2, w_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_particles_vel_U" + to_str_0(i_p+1, 2));
 				}
 				// sample velocity values from current stream function
@@ -473,7 +461,7 @@ std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now
 					k_h_sample_points_dxdy<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(Grid_psi, Grid_psi, Dev_psi, Dev_particles_pos[i_p], Dev_Temp, particles_advected[i_p].num);
 					writeTranferToBinaryFile(2*particles_advected[i_p].num, Dev_Temp, SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2), false);
 					// hashing
-					double w_hash[2]; Hash_array(2*particles_advected[i_p].num, (char*)w_hash, Dev_Temp);
+					double w_hash[2]; Hash_array((char*)w_hash, Dev_Temp, 2*particles_advected[i_p].num);
 					writeAppendToBinaryFile(2, w_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_particles_vel_U" + to_str_0(i_p+1, 2));
 				}
 			}
@@ -485,8 +473,7 @@ std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now
 
 
 // save the map stack together with current map and psi
-void writeMapStack(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Grid_psi,
-		double* Dev_ChiX, double* Dev_ChiY, double* Dev_Psi_real, bool isForward) {
+void writeMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Psi, bool isForward) {
 	// create new subfolder for mapstack, doesn't matter if we try to create it several times
 	std::string sub_folder_name = "/MapStack";
 	std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
@@ -502,13 +489,13 @@ void writeMapStack(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Gri
 	}
 
 	// save the active map
-	writeTranferToBinaryFile(4*Map_Stack.Grid->N, Dev_ChiX, SettingsMain, sub_folder_name + "/Map_ChiX"  + str_forward + "_H_coarse", false);
-	writeTranferToBinaryFile(4*Map_Stack.Grid->N, Dev_ChiY, SettingsMain, sub_folder_name + "/Map_ChiY"  + str_forward + "_H_coarse", false);
+	writeTranferToBinaryFile(4*Map_Stack.Grid->N, ChiX.Dev_var, SettingsMain, sub_folder_name + "/Map_ChiX"  + str_forward + "_H_coarse", false);
+	writeTranferToBinaryFile(4*Map_Stack.Grid->N, ChiY.Dev_var, SettingsMain, sub_folder_name + "/Map_ChiY"  + str_forward + "_H_coarse", false);
 
 	// save previous psi
 	if (!isForward) {
 		for (int i_psi = 1; i_psi < SettingsMain.getLagrangeOrder(); ++i_psi) {
-			writeTranferToBinaryFile(4*Grid_psi.N, Dev_Psi_real, SettingsMain, sub_folder_name + "/Stream_function_Psi_H_psi_" + to_str(i_psi), false);
+			writeTranferToBinaryFile(4*Psi.Grid->N, Psi.Dev_var, SettingsMain, sub_folder_name + "/Stream_function_Psi_H_psi_" + to_str(i_psi), false);
 		}
 	}
 }
@@ -536,8 +523,9 @@ int countFilesWithString(const std::string& dirPath, const std::string& searchSt
 }
 
 // read the map stack together with current map and psi
-void readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, TCudaGrid2D Grid_psi,
-		double* Dev_ChiX, double* Dev_ChiY, double* Dev_Psi_real, bool isForward, std::string data_name) {
+void readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Psi,
+		bool isForward, std::string data_name)
+{
 	// set default path
 	std::string folder_name_now = data_name;
 	if (data_name == "") {
@@ -553,13 +541,13 @@ void readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, TCudaGrid2D Gri
 	}
 
 	// read the active map
-	readTransferFromBinaryFile(4*Map_Stack.Grid->N, Dev_ChiX, folder_name_now + "/Map_ChiX"  + str_forward + "_H_coarse.data");
-	readTransferFromBinaryFile(4*Map_Stack.Grid->N, Dev_ChiY, folder_name_now + "/Map_ChiY"  + str_forward + "_H_coarse.data");
+	readTransferFromBinaryFile(4*Map_Stack.Grid->N, ChiX.Dev_var, folder_name_now + "/Map_ChiX"  + str_forward + "_H_coarse.data");
+	readTransferFromBinaryFile(4*Map_Stack.Grid->N, ChiY.Dev_var, folder_name_now + "/Map_ChiY"  + str_forward + "_H_coarse.data");
 
 	// load previous psi
 	if (!isForward) {
 		for (int i_psi = 1; i_psi < SettingsMain.getLagrangeOrder(); ++i_psi) {
-			readTransferFromBinaryFile(4*Grid_psi.N, Dev_Psi_real + i_psi*4*Grid_psi.N, folder_name_now + "/Stream_function_Psi_H_psi_" + to_str(i_psi) + ".data");
+			readTransferFromBinaryFile(4*Psi.Grid->N, Psi.Dev_var + i_psi*4*Psi.Grid->N, folder_name_now + "/Stream_function_Psi_H_psi_" + to_str(i_psi) + ".data");
 		}
 	}
 }
@@ -638,10 +626,11 @@ void Logger::push(std::string message)
 
 	if(file)
 	{
-		file<<"["<<currentDateTime()<<"]\t";
-		file<<message<< std::endl;
+		file << "["<<currentDateTime() << "]\t";
+		file << message << std::endl;
 		file.close();
 	}
+	std::cout << message << std::endl;
 }
 
 

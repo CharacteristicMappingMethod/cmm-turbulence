@@ -340,6 +340,87 @@ __global__ void zero_padding_1D(cufftDoubleComplex *In, cufftDoubleComplex *Out,
 	}
 }
 
+
+// compute hermite with derivatives in fourier space, uniform helper function fitted for all grids to utilize only input temporary variable
+// input has size (NX+1)/2*NY and output 4*NX*NY, output is therefore used as temporary variable
+void fourier_hermite(TCudaGrid2D Grid, cufftDoubleComplex *Dev_In, double *Dev_Out, cufftHandle cufft_plan) {
+
+	// reshift for transforming so that we have enough space for everything
+	Dev_Out += Grid.N - 2*Grid.Nfft;
+
+	// dy and dxdy derivates are stored in later parts of output array, we can therefore use the first half as a temporary variable
+	// start with computing dy derivative
+	k_fft_dy_h<<<Grid.fft_blocks, Grid.threadsPerBlock>>>(Dev_In, (cufftDoubleComplex*)Dev_Out, Grid);
+
+	// compute dxdy afterwards, to combine backwards transformations
+	k_fft_dx_h<<<Grid.fft_blocks, Grid.threadsPerBlock>>>((cufftDoubleComplex*)Dev_Out, (cufftDoubleComplex*)(Dev_Out) + Grid.Nfft, Grid);
+
+	// backwards transformation, store dx in position 3/4 and dy in position 4/4
+	cufftExecZ2D(cufft_plan, (cufftDoubleComplex*)(Dev_Out) + Grid.Nfft, Dev_Out + 2*Grid.N + 2*Grid.Nfft);
+	cufftExecZ2D(cufft_plan, (cufftDoubleComplex*)Dev_Out, Dev_Out + Grid.N + 2*Grid.Nfft);
+
+	// now compute dx derivative on itself and store it in the right place
+	k_fft_dx_h<<<Grid.fft_blocks, Grid.threadsPerBlock>>>(Dev_In, (cufftDoubleComplex*)Dev_Out, Grid);
+	cufftExecZ2D(cufft_plan, (cufftDoubleComplex*)Dev_Out, Dev_Out + 2*Grid.Nfft);// x-derivative of the vorticity in Fourier space
+
+	/* Memory layout before shift of Dev_Out:
+	 f	 	... Dev_Out[2*Grid.Nfft-Grid.N	  , ..., 2*Grid.Nfft            - 1]
+	 d/dx 	... Dev_Out[2*Grid.Nfft			  , ..., 2*Grid.Nfft +   Grid.N - 1]
+	 d/dy 	... Dev_Out[2*Grid.Nfft +   Grid.N, ..., 2*Grid.Nfft + 2*Grid.N - 1]
+	 d/dxdy ... Dev_Out[2*Grid.Nfft + 2*Grid.N, ..., 2*Grid.Nfft + 3*Grid.N - 1]
+	*/
+	// shift again just before final store
+	Dev_Out += 2*Grid.Nfft - Grid.N;
+
+	// at last, store normal values
+	cufftExecZ2D(cufft_plan, Dev_In, Dev_Out);
+}
+
+
+// compute laplacian on variable grid, needs Grid.sizeNfft + Grid.sizeN memory
+void laplacian(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1){
+    cufftExecD2Z(Var_in.plan_D2Z, Var_in.Dev_var, Dev_Temp_C1);
+    k_normalize_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, *Var_in.Grid);
+
+    k_fft_lap_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, *Var_in.Grid);
+    cufftExecZ2D(Var_in.plan_Z2D, Dev_Temp_C1, Var_out);
+}
+
+// compute iLap, for example for stream function from vorticity
+void i_laplacian(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1){
+    cufftExecD2Z(Var_in.plan_D2Z, Var_in.Dev_var, Dev_Temp_C1);
+    k_normalize_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, *Var_in.Grid);
+
+    k_fft_iLap_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, *Var_in.Grid);
+    cufftExecZ2D(Var_in.plan_Z2D, Dev_Temp_C1, Var_out);
+}
+void i_laplacian_h(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1){
+    cufftExecD2Z(Var_in.plan_D2Z, Var_in.Dev_var, Dev_Temp_C1);
+    k_normalize_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, *Var_in.Grid);
+
+	// Forming Psi hermite
+    k_fft_iLap_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, *Var_in.Grid);
+	fourier_hermite(*Var_in.Grid, Dev_Temp_C1, Var_out, Var_in.plan_Z2D);
+}
+
+// compute x-gradient on variable grid, needs Grid.sizeNfft + Grid.sizeN memory
+void grad_x(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1){
+    cufftExecD2Z(Var_in.plan_D2Z, Var_in.Dev_var, Dev_Temp_C1);
+    k_normalize_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, *Var_in.Grid);
+
+    k_fft_dx_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, *Var_in.Grid);
+    cufftExecZ2D(Var_in.plan_Z2D, Dev_Temp_C1, Var_out);
+}
+
+// compute x-gradient on variable grid, needs Grid.sizeNfft + Grid.sizeN memory
+void grad_y(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1){
+    cufftExecD2Z(Var_in.plan_D2Z, Var_in.Dev_var, Dev_Temp_C1);
+    k_normalize_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, *Var_in.Grid);
+
+    k_fft_dy_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, *Var_in.Grid);
+    cufftExecZ2D(Var_in.plan_Z2D, Dev_Temp_C1, Var_out);
+}
+
 /*******************************************************************
 *								Test NDFT						   *
 *******************************************************************/

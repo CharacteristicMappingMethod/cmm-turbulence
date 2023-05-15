@@ -45,5 +45,15 @@ __global__ void k_normalize_h(cufftDoubleComplex *F, TCudaGrid2D Grid);
 __global__ void k_normalize_1D_h(cufftDoubleComplex *F, TCudaGrid2D Grid);
 __global__ void zero_padding_1D(cufftDoubleComplex *In, cufftDoubleComplex *Out, TCudaGrid2D Grid_out, TCudaGrid2D Grid_in);
 
+// compute hermite with derivatives in fourier space, uniform helper function fitted for all grids to utilize only input temporary variable
+void fourier_hermite(TCudaGrid2D Grid, cufftDoubleComplex *Dev_In, double *Dev_Out, cufftHandle cufft_plan);
+
+// compute laplacian, x-gradient and y-gradient, double output for more freedom
+void laplacian(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1);
+void i_laplacian(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1);
+void i_laplacian_h(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1);
+void grad_x(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1);
+void grad_y(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1);
+
 
 #endif

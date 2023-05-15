@@ -13,6 +13,11 @@
 *.cu~
 *.h~
 
+# ignore python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
 # ignore discrete initial conditions for now
 /src/Initial_W_discret/
 

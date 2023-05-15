@@ -832,7 +832,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	if (SettingsMain.getVerbose() >= 3 && message != "") std::cout<<message+"\n"; logger.push(message);
 
 	// zoom if wanted, has to be done after particle initialization, maybe a bit useless at first instance
-	message = Zoom(SettingsMain, t0, dt, dt,
+	message = compute_zoom(SettingsMain, t0, dt, dt,
 			Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
@@ -1107,7 +1107,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		}
 
 		// zoom if wanted
-		message = Zoom(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt,
+		message = compute_zoom(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt,
 				Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
 				Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 				(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,
@@ -1277,7 +1277,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	}
 
 	// zoom if wanted
-	message = Zoom(SettingsMain, T_MAX, dt, dt,
+	message = compute_zoom(SettingsMain, T_MAX, dt, dt,
 			Map_Stack, Map_Stack_f, Grid_zoom, Grid_psi, Grid_discrete,
 			Dev_ChiX, Dev_ChiY, Dev_ChiX_f, Dev_ChiY_f,
 			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_initial, Dev_Psi_real,

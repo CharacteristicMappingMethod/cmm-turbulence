@@ -20,11 +20,12 @@
 #include <math.h>
 
 // euler incompressible
-void Compute_Energy(double &E, double *psi, TCudaGrid2D Grid);
-void Compute_Enstrophy(double &E, double *W, TCudaGrid2D Grid);
+void Compute_Energy_H(double &E, CmmVar2D Psi);
+void Compute_Energy(double &E, CmmVar2D Psi, cufftDoubleComplex *Dev_Temp_C1);
+void Compute_Enstrophy(double &E, CmmVar2D Vort);
 void Compute_Enstrophy_fourier(double &E, cufftDoubleComplex *W, TCudaGrid2D Grid);
-void Compute_Palinstrophy(TCudaGrid2D Grid, double &Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftHandle cufft_plan_D2Z, cufftHandle cufft_plan_Z2D);
-void Hash_array(long long int n, char *Hash, double *dev_array);
+void Compute_Palinstrophy(double &Pal, CmmVar2D Vort, cufftDoubleComplex *Dev_Temp_C1);
+void Hash_array(char *Hash, double *Dev_var, size_t n);
 
 // vlasov poisson
 void Compute_Mass(double &mass, double *f_in, TCudaGrid2D Grid);

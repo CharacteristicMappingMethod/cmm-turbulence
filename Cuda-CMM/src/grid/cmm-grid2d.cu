@@ -83,6 +83,61 @@ void fill_grid(TCudaGrid2D *Grid, int NX, int NY, int NZ, double *bounds) {
 }
 
 
+CmmVar2D::CmmVar2D(int NX, int NY, int NZ, double *bounds, int type) {
+	// fill variables for grid
+	this->Grid = (TCudaGrid2D *)malloc(sizeof(TCudaGrid2D));
+	fill_grid(this->Grid, NX, NY, NZ, bounds);
+	this->type = type;
+
+	// normal array
+	if (type == 0) {
+		cudaMalloc((void**)&Dev_var, Grid->sizeNReal);
+		RAM_size = Grid->sizeNReal / 1e6;
+	}
+	// normal Hermite array
+	else if (type == -1) {
+		cudaMalloc((void**)&Dev_var, 4*Grid->sizeNReal);
+		RAM_size = 4*Grid->sizeNReal / 1e6;
+	}
+	// Hermite array with fft extension
+	else if (type == -2) {
+		cudaMalloc((void**)&Dev_var, 3*Grid->sizeNReal + Grid->sizeNfft);
+		Dev_var += 2*Grid->Nfft - Grid->N; // shift to hide beginning buffer
+		RAM_size = (3*Grid->sizeNReal + Grid->sizeNfft) / 1e6;
+	}
+	// Empty array, useful if only plan and grids are needed or if option is disabled
+	else if (type == -10) {
+		cudaMalloc((void**)&Dev_var, sizeof(double));
+		RAM_size = (sizeof(double)) / 1e6;
+	}
+	// assume range 1-5 to be lagrange orders for psi, this is pretty dirty but then I dont have to pass an additional array
+	else if (type > 0 && type <= 5){
+		cudaMalloc((void**)&Dev_var, 3*Grid->sizeNReal+Grid->sizeNfft + (type-1)*4*Grid->sizeNReal);
+		Dev_var += 2*Grid->Nfft - Grid->N; // shift to hide beginning buffer
+		RAM_size = (3*Grid->sizeNReal+Grid->sizeNfft + (type-1)*4*Grid->sizeNReal) / 1e6;
+	}
+
+	cufftCreate(&plan_D2Z); cufftCreate(&plan_Z2D);
+	// disable automatic setting of workareas, so that they all later share the same work area
+	cufftSetAutoAllocation(plan_D2Z, 0); cufftSetAutoAllocation(plan_Z2D, 0);
+	cufftMakePlan2d(plan_D2Z, Grid->NX, Grid->NY, CUFFT_D2Z, &plan_size[0]);
+	cufftMakePlan2d(plan_Z2D, Grid->NX, Grid->NY, CUFFT_Z2D, &plan_size[1]);
+}
+
+// Set the work area of the cufft_plans, since no parallel fft is performed, all plans share the same work area
+void CmmVar2D::setWorkArea(void *fft_work_area) {
+	cufftSetWorkArea(plan_D2Z, fft_work_area); cufftSetWorkArea(plan_Z2D, fft_work_area);
+}
+
+// free resources
+void CmmVar2D::free_res() {
+	// free variable, take reshift into account
+	if (type == -2 || (type > 0 && type <= 5)) cudaFree(Dev_var - 2*Grid->Nfft + Grid->N);  // Dev_var - 2*Grid->Nfft + Grid->N
+	else cudaFree(Dev_var);
+	cufftDestroy(plan_D2Z); cufftDestroy(plan_Z2D);
+}
+
+
 MapStack::MapStack(TCudaGrid2D *Grid, int cpu_map_num)
 {
 

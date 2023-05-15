@@ -14,6 +14,7 @@
 #ifndef __CUDA_GRID_2D_H__
 #define __CUDA_GRID_2D_H__
 
+#include <cstddef>  // for size_t
 #include <cufft.h>
 #include <cufftXt.h>
 
@@ -32,12 +33,24 @@ struct TCudaGrid2D
 
 		dim3 threadsPerBlock, blocksPerGrid, fft_blocks;
 
-		long long int sizeNReal, sizeNComplex, sizeNfft;
+		size_t sizeNReal, sizeNComplex, sizeNfft;
 
 		TCudaGrid2D(int NX, int NY, int NZ, double *bounds);
 };
 
 void fill_grid(TCudaGrid2D *Grid, int NX, int NY, int NZ, double *bounds);
+
+class CmmVar2D {
+public:
+	double *Dev_var; double RAM_size; int type;
+	TCudaGrid2D *Grid;
+	cufftHandle plan_D2Z, plan_Z2D; size_t plan_size[2];
+
+	CmmVar2D(int NX, int NY, int NZ, double *bounds, int type);
+
+	void setWorkArea(void *fft_work_area);
+	void free_res();
+};
 
 // class for map stack thingies, because I am always just transferring this everywhere
 class MapStack {
