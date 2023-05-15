@@ -55,7 +55,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	*******************************************************************/
 	
 	// boundary information for translating, 6 coords for 3D - (x0, x1, y0, y1, z0, z1)
-	double bounds[6] = {0, 10*PI, -2.5*PI, 2.5*PI, 0, 0};
+	double bounds[6] = {0, 4.0*PI, -2.5*PI, 2.5*PI, 0, 0};
 	// the code seems to work only square domains!!! is it a bug of a feature? I think its sad
 	double t0 = SettingsMain.getRestartTime();							// time - initial
 	double dt;															// time - step final
@@ -211,17 +211,16 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	}
 	size_t size_max_fft = 0; size_t workSize_sample[2];
 	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
+		// 2D fft plans for sample mesh
+		cufftMakePlan2d(cufft_plan_sample_2D_D2Z[i_save], Grid_sample[i_save].NX,   Grid_sample[i_save].NY,   CUFFT_D2Z, &workSize_sample[0]);
+	    cufftMakePlan2d(cufft_plan_sample_2D_Z2D[i_save], Grid_sample[i_save].NX,   Grid_sample[i_save].NY,   CUFFT_Z2D, &workSize_sample[1]);
+	    size_max_fft = std::max(size_max_fft, workSize_sample[0]); size_max_fft = std::max(size_max_fft, workSize_sample[1]);
 	    // 1D fft plans for sample mesh
 		res_phi 		= cufftPlan1d(&cufft_plan_sample_1D_D2Z[i_save], Grid_sample[i_save].NX,   CUFFT_D2Z, 1);
 	    res_phi_inverse = cufftPlan1d(&cufft_plan_sample_1D_Z2D[i_save], Grid_sample[i_save].NX,   CUFFT_Z2D, 1);
 		assert(res_phi == CUFFT_SUCCESS);
 		assert(res_phi_inverse == CUFFT_SUCCESS);
-		// 2D fft plans for sample mesh
-		cufftMakePlan2d(cufft_plan_sample_2D_D2Z[i_save], Grid_sample[i_save].NX,   Grid_sample[i_save].NY,   CUFFT_D2Z, &workSize_sample[0]);
-	    cufftMakePlan2d(cufft_plan_sample_2D_Z2D[i_save], Grid_sample[i_save].NX,   Grid_sample[i_save].NY,   CUFFT_Z2D, &workSize_sample[1]);
-	    size_max_fft = std::max(size_max_fft, workSize_sample[0]); size_max_fft = std::max(size_max_fft, workSize_sample[1]);
 	}
-
 
 	 // Create cuFFT plans
     res_phi=cufftPlan1d(&plan_phi_1D, Grid_vort.NX, CUFFT_D2Z, 1);
@@ -809,7 +808,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		std::cout<<message+"\n"; logger.push(message);
 	}
 	// compute conservation if wanted
-	message = compute_conservation_targets(SettingsMain, t0, dt, dt, Grid_fine, Grid_coarse, Grid_psi, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
+	message = compute_conservation_targets(SettingsMain, t0, dt, dt, Grid_fine, Grid_coarse, Grid_psi, Dev_Psi_real, Dev_W_coarse,
 			cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 			Dev_Temp_C1);
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
@@ -824,7 +823,6 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	if (SettingsMain.getVerbose() >= 3 && message != "") {
 		std::cout<<message+"\n"; logger.push(message);
 	}
-
     cudaDeviceSynchronize();
 
     // save particle position if interested in that
@@ -954,6 +952,9 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		*******************************************************************/
 	    double monitor_map[5]; bool forwarded_init = false;
 	    monitor_map[0] = incompressibility_check(Grid_fine, Grid_coarse, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1);
+		if (monitor_map[0]<=0 || monitor_map[0]>1e15){
+			error("Dear captain there is an incompressibility error in coarse grid. Aborting.",2345);
+		}
 //		monitor_map[0] = incompressibility_check(Grid_coarse, Grid_coarse, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1);
 
 		if (SettingsMain.getForwardMap()) {
@@ -1077,7 +1078,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 			std::cout<<message+"\n"; logger.push(message);
 		}
 		// compute conservation if wanted
-		message = compute_conservation_targets(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Grid_fine, Grid_coarse, Grid_psi, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
+		message = compute_conservation_targets(SettingsMain, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Grid_fine, Grid_coarse, Grid_psi, Dev_Psi_real, Dev_W_coarse, 
 				cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 				Dev_Temp_C1);
 		if (SettingsMain.getVerbose() >= 3 && message != "") {
@@ -1157,6 +1158,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 			double diff = std::chrono::duration_cast<std::chrono::microseconds>(step - begin).count()/1e6;
 			c_time = diff; // loop_ctr was already increased but first entry is init time
 		}
+
 		if (SettingsMain.getVerbose() >= 2) {
 			message = "Step = " + to_str(loop_ctr)
 					+ " \t S-Time = " + to_str(t_vec[loop_ctr_l+1]) + "/" + to_str(SettingsMain.getFinalTime())
@@ -1253,7 +1255,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	}
 
 	// compute conservation if wanted
-	message = compute_conservation_targets(SettingsMain, T_MAX, dt, dt, Grid_fine, Grid_coarse, Grid_psi, Dev_Psi_real, Dev_W_coarse, (cufftDoubleReal*)Dev_Temp_C1,
+	message = compute_conservation_targets(SettingsMain, T_MAX, dt, dt, Grid_fine, Grid_coarse, Grid_psi, Dev_Psi_real, Dev_W_coarse,
 			cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D, cufft_plan_fine_D2Z, cufft_plan_fine_Z2D,
 			Dev_Temp_C1);
 	if (SettingsMain.getVerbose() >= 3 && message != "") {

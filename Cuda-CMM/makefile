@@ -16,8 +16,8 @@ THRUST_INCLUDE = -I$(CUDA_PATH)/include/thrust -I$(CUDA_PATH)/include/cub
 
 
 # set the GPU_ARCH after your gpu capabilities
-#GPU_ARCH = sm_86 # for RTX 3070/ 3080/ 3090
-GPU_ARCH = sm_50
+GPU_ARCH = sm_86 # for RTX 3070/ 3080/ 3090
+#GPU_ARCH = sm_50
 # GPU_ARCH = compute_70
 
 # include hdf5 or not, comment out to not include it

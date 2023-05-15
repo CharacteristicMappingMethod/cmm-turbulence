@@ -47,14 +47,14 @@ __global__ void k_advect_using_stream_hermite(double *ChiX, double *ChiY, double
 __global__ void k_h_sample_map_compact(double *ChiX, double *ChiY, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid);
 __global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, double *x_y, TCudaGrid2D Grid_map, TCudaGrid2D Grid);
 __global__ void k_h_sample_from_init(double *ws, double *x_y, TCudaGrid2D Grid, TCudaGrid2D Grid_discrete, int init_var_num, int init_num, double *W_initial_discrete, bool initial_discrete);
-
 __global__ void k_compare_vorticity_with_initial(double *ChiX_stack, double *ChiY_stack, double *ChiX, double *ChiY, double *error, int stack_length, TCudaGrid2D Grid_map, TCudaGrid2D Grid_fine, int simulation_num);
-
 __global__ void k_apply_map_and_sample_from_hermite(double *ChiX, double *ChiY, double *fs, double *H, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_vort, TCudaGrid2D Grid_fine, int molly_stencil, bool padd_inline_fft);
-
 
 // vlasov integral
 __global__ void integral_v(double *v_in, double *v_out, int nx, int ny, double hy);
 __global__ void k_assemble_psi(double *phi_1D, double *psi_out, TCudaGrid2D Grid);
+__global__ void generate_gridvalues_v(cufftDoubleReal *v, double prefactor, TCudaGrid2D Grid);
+__global__ void copy_first_row_to_all_rows_in_grid(cufftDoubleReal *val_in, cufftDoubleReal *val_out, TCudaGrid2D Grid);
+__global__ void set_value(cufftDoubleReal *array_in, double value, TCudaGrid2D Grid);
 
 #endif
