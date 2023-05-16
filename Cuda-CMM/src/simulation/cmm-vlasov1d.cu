@@ -45,7 +45,11 @@ extern __constant__ double d_rand[1000], d_init_params[10];  // array for random
 
 void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 {
-	
+	std::string message="\n\n\n";
+	message += "╔════════════════════════════════════════════╗\n";
+	message += "║          Starting Vlasov 1D Simulation     ║\n" ;
+    message += "╚════════════════════════════════════════════╝\n" ;
+	std::cout<<message;
 	// start clock as first thing to measure initializations too
 	auto begin = std::chrono::high_resolution_clock::now();
 	// clock_t begin = clock();
@@ -56,8 +60,9 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	
 	// boundary information for translating, 6 coords for 3D - (x0, x1, y0, y1, z0, z1)
 	double bounds[6] = {0, 4.0*PI, -2.5*PI, 2.5*PI, 0, 0};
-	SettingsMain.getDomainBounds(bounds,2);
-	printf("Domain bounds: x0/PI = %f, x1/PI = %f, y0/PI= %f, y1/PI = %f, z0 = %f, z1 = %f\n", bounds[0], bounds[1], bounds[2], bounds[3], bounds[4], bounds[5]);
+	SettingsMain.getDomainBounds(bounds);
+
+	printf("Domain bounds:\nx0/PI = %f, x1/PI = %f,\ny0/PI= %f, y1/PI = %f,\nz0/Pi = %f, z1/PI = %f\n", bounds[0], bounds[1], bounds[2], bounds[3], bounds[4], bounds[5]);
 	for (int i = 0; i < 6; ++i) bounds[i] = bounds[i]*PI;
 	// the code seems to work only square domains!!! is it a bug of a feature? I think its sad
 	double t0 = SettingsMain.getRestartTime();							// time - initial
@@ -92,8 +97,8 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 
 	create_directory_structure(SettingsMain, dt, iterMax);
     Logger logger(SettingsMain);
-
-    std::string message;  // string to be used for console output
+	logger.push(message);
+   
 
 	// introduce part to console
 	if (SettingsMain.getVerbose() >= 2) {

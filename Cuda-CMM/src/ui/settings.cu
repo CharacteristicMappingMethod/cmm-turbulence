@@ -355,7 +355,7 @@ int SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		else if (command == "sim_name") setSimName(value);
 		else if (command == "domain_bounds") {
 			parseString(value, b);		
-			setDomainBounds(b,2);
+			setDomainBounds(b);
 		}
 		else if (command == "grid_coarse") setGridCoarse(std::stoi(value));
 		else if (command == "grid_fine") setGridFine(std::stoi(value));

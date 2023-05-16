@@ -236,13 +236,13 @@ public:
 	std::string getFileName() const { return file_name; }
 	void setFileName(std::string fileName) { file_name = fileName; }
 	// grid settings
-	void getDomainBounds(double* domainbounds, int dim) { 
-		for (int i= 0; i < 2*dim; i++) {
+	void getDomainBounds(double* domainbounds) { 
+		for (int i= 0; i < 2*MAX_DIM; i++) {
         	domainbounds[i] = bounds[i];
     	}
 	}
-	void setDomainBounds(double* domainbounds, int dim) { 
-		for (int i= 0; i < 2*dim; i++) {
+	void setDomainBounds(double* domainbounds) { 
+		for (int i= 0; i < 2*MAX_DIM; i++) {
         	bounds[i]= domainbounds[i];
     	}
 	}
