@@ -119,10 +119,10 @@ void apply_map_stack(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double 
 	if (direction == -1) {
 		// first application: current map
 		k_h_sample_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
-
 		// afterwards: trace back all other maps
 		for (int i_map = Map_Stack.map_stack_ctr-1; i_map >= 0; i_map--) {
 			Map_Stack.copy_map_to_device(i_map);
+			// printf("Map %d \n\n\n\n", i_map);
 			k_apply_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
 					Dev_Temp, *Map_Stack.Grid, Grid);
 		}
@@ -907,7 +907,7 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 					Grid_sample[i_save], Grid_discrete, varnum, SettingsMain.getInitialConditionNum(), W_initial_discrete, SettingsMain.getInitialDiscrete());
 
 			// save particle distribution function
-			if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos  or save_var.find("F") != std::string::npos) {
+			if (save_var.find("Dist")!= std::string::npos  or save_var.find("F") != std::string::npos) {
 				writeTimeVariable(SettingsMain, "Distribution_F_"+to_str(Grid_sample[i_save].NX),
 						t_now, Dev_sample, Grid_sample[i_save].N);
 			}
@@ -1013,6 +1013,7 @@ std::string Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double d
 
 				// compute forwards map for map stack of zoom window first, as it can be discarded afterwards
 				if (SettingsMain.getForwardMap()) {
+					
 					// compute only if we actually want to save, elsewhise its a lot of computations for nothing
 					if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos
 							or SettingsMain.getParticlesForwardedNum() > 0) {
@@ -1070,7 +1071,8 @@ std::string Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double d
 
 				// compute backwards map for map stack of zoom window
 				apply_map_stack(Grid_zoom_i, Map_Stack, Dev_ChiX, Dev_ChiY, Dev_Temp+Grid_zoom_i.N, -1);
-
+				// writeTranferToBinaryFile(Grid_zoom_i.N, Dev_Temp+Grid_zoom_i.N, SettingsMain, sub_folder_name+"/Distributions_"+to_str(Grid_zoom_i.NX), false);
+				// error("here",234);
 				// save map by copying and saving offsetted data
 				if (save_var.find("Map_b") != std::string::npos or save_var.find("Chi_b") != std::string::npos) {
 					cudaMemcpy2D(Dev_Temp, sizeof(double), Dev_Temp+Grid_zoom_i.N, sizeof(double)*2,
@@ -1103,11 +1105,10 @@ std::string Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double d
 				}
 
 				if (save_var.find("Dist") != std::string::npos or save_var.find("F") != std::string::npos) {
-					// compute vorticity - 0 to switch for vorticity
 					k_h_sample_from_init<<<Grid_zoom_i.blocksPerGrid, Grid_zoom_i.threadsPerBlock>>>(Dev_Temp, Dev_Temp+Grid_zoom_i.N,
 							Grid_zoom_i, Grid_discrete, 2, SettingsMain.getInitialConditionNum(), W_initial_discrete, SettingsMain.getInitialDiscrete());
-
 					writeTranferToBinaryFile(Grid_zoom_i.N, Dev_Temp, SettingsMain, sub_folder_name+"/Distribution_"+to_str(Grid_zoom_i.NX), false);
+		
 				}
 
 				// compute sample of stream function - it's not a zoom though!

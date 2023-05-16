@@ -310,10 +310,11 @@ __global__ void k_h_sample_map_compact(double *ChiX, double *ChiY, double *x_y, 
 	//position
 	double x =  Grid.bounds[0] + iX*Grid.hx;
 	double y =  Grid.bounds[2] + iY*Grid.hy;
-	double LX = Grid.bounds[1] - Grid.bounds[0]; double LY = Grid.bounds[3] - Grid.bounds[2];
+	// LX and LY are in reference to the map grid
+	double LX = Grid_map.bounds[1] - Grid_map.bounds[0]; double LY = Grid_map.bounds[3] - Grid_map.bounds[2];
 
 	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, Grid_map);
-
+	
 	// save in two points in array and warp - translate by domain size(s)
 	x_y[2*In  ] = x - floor((x - Grid_map.bounds[0]) / LX) * LX;
 	x_y[2*In+1] = y - floor((y - Grid_map.bounds[2]) / LY) * LY;
@@ -326,7 +327,7 @@ __global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, doub
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 	if(iX >= Grid.NX || iY >= Grid.NY) return;
 	int In = iY*Grid.NX + iX;
-
+	
 	double points[2];
 	double LX = Grid_map.bounds[1] - Grid_map.bounds[0]; double LY = Grid_map.bounds[3] - Grid_map.bounds[2];
 	device_diffeo_interpolate_2D(ChiX_stack, ChiY_stack, x_y[2*In], x_y[2*In+1], &points[0], &points[1], Grid_map);
@@ -334,6 +335,7 @@ __global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, doub
 	// warping - translate by domain size(s)
 	x_y[2*In  ] = points[0] - floor((points[0] - Grid_map.bounds[0])/LX)*LX;
 	x_y[2*In+1] = points[1] - floor((points[1] - Grid_map.bounds[2])/LY)*LY;
+	// printf("y: %f, y_new: %f\n", x_y[2*In+1], points[1]);
 }
 // sample from initial condition
 __global__ void k_h_sample_from_init(double *Val_out, double *x_y, TCudaGrid2D Grid, TCudaGrid2D Grid_discrete, int init_var_num, int init_num, double *Val_initial_discrete, bool initial_discrete)
@@ -353,7 +355,7 @@ __global__ void k_h_sample_from_init(double *Val_out, double *x_y, TCudaGrid2D G
 	if (!initial_discrete) {
 
 		// check if initial condition is defined at this point (maybe this check should be done  inside the main in the case when "verbose=True", because it makes the code slower)
-		if (x_y[2*In] > Grid_discrete.bounds[1] || x_y[2*In] < Grid_discrete.bounds[0] || x_y[2*In+1] > Grid_discrete.bounds[3] || x_y[2*In+1] < Grid_discrete.bounds[2]) {
+		if (x_y[2*In] > Grid.bounds[1] || x_y[2*In] < Grid.bounds[0] || x_y[2*In+1] > Grid.bounds[3] || x_y[2*In+1] < Grid.bounds[2]) {
 			printf("ERROR: initial condition not defined at point (%f, %f)\n", x_y[2*In], x_y[2*In+1]);
 		}
 		// differentiate between what variable we would like to retrieve
