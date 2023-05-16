@@ -56,6 +56,9 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	
 	// boundary information for translating, 6 coords for 3D - (x0, x1, y0, y1, z0, z1)
 	double bounds[6] = {0, 4.0*PI, -2.5*PI, 2.5*PI, 0, 0};
+	SettingsMain.getDomainBounds(bounds,2);
+	printf("Domain bounds: x0/PI = %f, x1/PI = %f, y0/PI= %f, y1/PI = %f, z0 = %f, z1 = %f\n", bounds[0], bounds[1], bounds[2], bounds[3], bounds[4], bounds[5]);
+	for (int i = 0; i < 6; ++i) bounds[i] = bounds[i]*PI;
 	// the code seems to work only square domains!!! is it a bug of a feature? I think its sad
 	double t0 = SettingsMain.getRestartTime();							// time - initial
 	double dt;															// time - step final

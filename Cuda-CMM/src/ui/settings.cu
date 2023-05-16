@@ -21,6 +21,8 @@ void SettingsCMM::setPresets() {
 	std::string simulation_type = "cmm_euler_2d";  // which equation do we want to solve? "cmm_euler_2d" or "cmm_vlasov_poisson_1d"
 	std::string sim_name = "debug";  // unique identifier to differentiate simulations
 
+	// set grid properties
+	double bounds[6] = {0, twoPI, 0, twoPI, 0, 0};
 	// grid settings for coarse and fine grid
 	// 	8		16		32		64		128		256		512		1024	2048	4096	8192	16384	32768
 	// max working on Anthicythere : grid_scale = 8192; fine_grid_scale = 16384;
@@ -253,6 +255,9 @@ void SettingsCMM::setPresets() {
 	setGridPsi(grid_psi); setGridVort(grid_vort);
 	setFinalTime(final_time);
 	setSetDtBySteps(set_dt_by_steps); setFactorDtByGrid(factor_dt_by_grid); setStepsPerSec(steps_per_sec);
+	// setDomainBounds(bounds);
+	
+
 
 	setSaveComputationalNum(save_computational_num);
 	for (int i_save = 0; i_save < save_computational_num; ++i_save) {
@@ -341,13 +346,17 @@ int SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		// construct two substrings
 		std::string command = command_full.substr(0, pos_equal);
 		std::string value = command_full.substr(pos_equal+delimiter.length(), command_full.length());
-
+		double b[6]={0,0,0,0,0,0};
 		// big if else for different commands
 		// this beast is becoming larger and larger, i should convert it to something more automatic
 		// link to site for that: https://stackoverflow.com/questions/4480788/c-c-switch-case-with-string
 		if (command == "workspace") setWorkspace(value);
 		else if (command == "simulation_type") setSimulationType(value);
 		else if (command == "sim_name") setSimName(value);
+		else if (command == "domain_bounds") {
+			parseString(value, b);		
+			setDomainBounds(b,2);
+		}
 		else if (command == "grid_coarse") setGridCoarse(std::stoi(value));
 		else if (command == "grid_fine") setGridFine(std::stoi(value));
 		else if (command == "grid_psi") setGridPsi(std::stoi(value));
