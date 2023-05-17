@@ -49,7 +49,6 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	message += "╔════════════════════════════════════════════╗\n";
 	message += "║          Starting Vlasov 1D Simulation     ║\n" ;
     message += "╚════════════════════════════════════════════╝\n" ;
-	std::cout<<message;
 	// start clock as first thing to measure initializations too
 	auto begin = std::chrono::high_resolution_clock::now();
 	// clock_t begin = clock();
@@ -62,8 +61,18 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	double bounds[6] = {0, 4.0*PI, -2.5*PI, 2.5*PI, 0, 0};
 	SettingsMain.getDomainBounds(bounds);
 
+	if (SettingsMain.getInitialConditionNum() == 0) {
+		message += "\nInitial condition: Landau Damping\n\n";
+		for (int i = 0; i < 4; ++i) bounds[i] = bounds[i]*PI; // multiply by PI
+	} 
+	else if (SettingsMain.getInitialConditionNum() == 1){ 
+		// Notice that for the twostream instability we only multiply the x bounds by PI
+		 for (int i = 0; i < 2; ++i)	 bounds[i] = bounds[i]*PI; // multiply by PI 
+		 message += "\nInitial condition: Two Stream Instability\n\n";
+	}
+	std::cout<<message;
 	printf("Domain bounds:\nx0/PI = %f, x1/PI = %f,\ny0/PI= %f, y1/PI = %f,\nz0/Pi = %f, z1/PI = %f\n", bounds[0], bounds[1], bounds[2], bounds[3], bounds[4], bounds[5]);
-	for (int i = 0; i < 6; ++i) bounds[i] = bounds[i]*PI;
+	
 	// the code seems to work only square domains!!! is it a bug of a feature? I think its sad
 	double t0 = SettingsMain.getRestartTime();							// time - initial
 	double dt;															// time - step final

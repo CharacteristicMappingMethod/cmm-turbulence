@@ -22,7 +22,7 @@ void SettingsCMM::setPresets() {
 	std::string sim_name = "debug";  // unique identifier to differentiate simulations
 
 	// set grid properties
-	double bounds[6] = {0, twoPI, 0, twoPI, 0, 0};
+	// double bounds[6] = {0, twoPI, 0, twoPI, 0, 0};
 	// grid settings for coarse and fine grid
 	// 	8		16		32		64		128		256		512		1024	2048	4096	8192	16384	32768
 	// max working on Anthicythere : grid_scale = 8192; fine_grid_scale = 16384;

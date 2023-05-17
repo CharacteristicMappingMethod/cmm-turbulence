@@ -245,6 +245,14 @@ public:
 		for (int i= 0; i < 2*MAX_DIM; i++) {
         	bounds[i]= domainbounds[i];
     	}
+		
+		// check if bounds are correct
+		double Lx = bounds[1]-bounds[0];
+		double Ly = bounds[3]-bounds[2];
+		if (!(Lx > 1e-16 & Ly > 1e-16)) {
+			error("Bonjour, there might be a problem in the engine room! We need your help! The domain bounds are not correct!" , 20230517);
+		}
+	
 	}
 	int getGridCoarse() const { return grid_coarse; }
 	void setGridCoarse(int gridCoarse) { grid_coarse = gridCoarse; }
