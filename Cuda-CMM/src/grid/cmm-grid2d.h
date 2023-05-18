@@ -53,6 +53,15 @@ public:
 	void setWorkArea(void *fft_work_area);
 	void free_res();
 };
+class CmmPart {
+public:
+	double *Dev_var; double RAM_size; double tau_p; size_t num; size_t sizeN;
+	const int thread = 256; int block;
+
+	CmmPart(size_t num, double tau_p);
+
+	void free_res();
+};
 
 // class for map stack thingies, because I am always just transferring this everywhere
 class MapStack {

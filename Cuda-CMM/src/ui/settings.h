@@ -161,7 +161,7 @@ private:
 	std::string initial_discrete_location;
 	int initial_condition_num, initial_discrete_grid; bool initial_discrete;
 	int verbose;
-	double bounds[2*MAX_DIM];
+	double domain_bounds[2*MAX_DIM];
 	// time stepping properties
 	double final_time, factor_dt_by_grid;
 	int steps_per_sec;
@@ -236,19 +236,20 @@ public:
 	std::string getFileName() const { return file_name; }
 	void setFileName(std::string fileName) { file_name = fileName; }
 	// grid settings
-	void getDomainBounds(double* domainbounds) { 
+	std::string getDomainBounds() const { return arrayToString(domain_bounds, 2*MAX_DIM); }
+	void getDomainBounds(double* domainBounds) {
 		for (int i= 0; i < 2*MAX_DIM; i++) {
-        	domainbounds[i] = bounds[i];
+        	domainBounds[i] = domain_bounds[i];
     	}
 	}
-	void setDomainBounds(double* domainbounds) { 
+	void setDomainBounds(double* domainBounds) {
 		for (int i= 0; i < 2*MAX_DIM; i++) {
-        	bounds[i]= domainbounds[i];
+        	domain_bounds[i]= domainBounds[i];
     	}
 		
-		// check if bounds are correct
-		double Lx = bounds[1]-bounds[0];
-		double Ly = bounds[3]-bounds[2];
+		// check if bounds are correct (positive non-zero)
+		double Lx = domain_bounds[1]-domain_bounds[0];
+		double Ly = domain_bounds[3]-domain_bounds[2];
 		if (!(Lx > 1e-16 & Ly > 1e-16)) {
 			error("Bonjour, there might be a problem in the engine room! We need your help! The domain bounds are not correct!" , 20230517);
 		}

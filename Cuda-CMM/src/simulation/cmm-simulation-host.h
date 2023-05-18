@@ -29,9 +29,8 @@ void advect_using_stream_hermite(SettingsCMM SettingsMain, CmmVar2D ChiX, CmmVar
 
 // sampling from mapstack - Apply mapstacks and init from initial conditions for different variables
 void apply_map_stack(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double *ChiY, double *Dev_Temp, int direction);
-void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double *ChiY, double *Dev_Temp, int direction,
-		double **fluid_particles_pos_in, double *fluid_particles_pos_out,
-		int fluid_particles_num, int *fluid_particles_blocks, int fluid_particles_threads);
+void apply_map_stack_points(SettingsCMM SettingsMain, TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double *ChiY,
+		double *Dev_Temp, int direction, std::map<std::string, CmmPart*> cmmPartMap, double *fluid_particles_pos_out);
 
 // Compute fine vorticity hermite
 void translate_initial_condition_through_map_stack(MapStack Map_Stack, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Vort_fine_init,
@@ -49,24 +48,43 @@ void evaluate_potential_from_density_hermite(SettingsCMM SettingsMain, CmmVar2D 
 void get_psi_from_distribution_function(CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1);
 void get_psi_hermite_from_distribution_function(CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1);
 
+
+
+// all save functions under one roof
+void save_functions(SettingsCMM& SettingsMain, Logger& logger, double t_now, double dt_now, double dt,
+		MapStack Map_Stack, MapStack Map_Stack_f, std::map<std::string, CmmVar2D*> cmmVarMap, std::map<std::string, CmmPart*> cmmPartMap,
+		cufftDoubleComplex *Dev_Temp_C1);
+//void save_functions(SettingsCMM& SettingsMain, Logger& logger, double t_now, double dt_now, double dt,
+//		MapStack Map_Stack, MapStack Map_Stack_f, std::map<std::string, CmmVar2D*> cmmVarMap, cufftDoubleComplex *Dev_Temp_C1,
+//		double **Host_particles, double **Dev_particles_pos, double **Dev_particles_vel, int* fluid_particles_blocks, int fluid_particles_threads,
+//		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int *forward_particles_block, int forward_particles_thread);
+
+
 // Computation of Global conservation values
 std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 		std::map<std::string, CmmVar2D*> cmmVarMap, cufftDoubleComplex *Dev_Temp_C1);
 
 // Sample on a specific grid and save everything
-std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
-		MapStack Map_Stack, MapStack Map_Stack_f, std::map<std::string, CmmVar2D*> cmmVarMap, cufftDoubleComplex *Dev_Temp_C1,
-		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int *forward_particles_block, int forward_particles_thread);
+std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, MapStack Map_Stack, MapStack Map_Stack_f,
+		std::map<std::string, CmmVar2D*> cmmVarMap, std::map<std::string, CmmPart*> cmmPartMap, cufftDoubleComplex *Dev_Temp_C1);
+//std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
+//		MapStack Map_Stack, MapStack Map_Stack_f, std::map<std::string, CmmVar2D*> cmmVarMap, cufftDoubleComplex *Dev_Temp_C1,
+//		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int *forward_particles_block, int forward_particles_thread);
 
-std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
-		MapStack Map_Stack, MapStack Map_Stack_f, std::map<std::string, CmmVar2D*> cmmVarMap, cufftDoubleComplex *Dev_Temp_C1,
-		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int *forward_particles_block, int forward_particles_thread);
+std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, MapStack Map_Stack, MapStack Map_Stack_f,
+		std::map<std::string, CmmVar2D*> cmmVarMap, std::map<std::string, CmmPart*> cmmPartMap, cufftDoubleComplex *Dev_Temp_C1);
+//std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
+//		MapStack Map_Stack, MapStack Map_Stack_f, std::map<std::string, CmmVar2D*> cmmVarMap, cufftDoubleComplex *Dev_Temp_C1,
+//		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int *forward_particles_block, int forward_particles_thread);
 
 // sample vorticity with mapstack at arbitrary frame
-std::string compute_zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
-		MapStack Map_Stack, MapStack Map_Stack_f, std::map<std::string, CmmVar2D*> cmmVarMap, cufftDoubleComplex *Dev_Temp_C1,
-		double **Host_particles_pos, double **Dev_particles_pos,
-		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int* forward_particles_block, int forward_particles_thread);
+std::string compute_zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, MapStack Map_Stack, MapStack Map_Stack_f,
+		std::map<std::string, CmmVar2D*> cmmVarMap, std::map<std::string, CmmPart*> cmmPartMap, cufftDoubleComplex *Dev_Temp_C1);
+
+//std::string compute_zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
+//		MapStack Map_Stack, MapStack Map_Stack_f, std::map<std::string, CmmVar2D*> cmmVarMap, cufftDoubleComplex *Dev_Temp_C1,
+//		double **Host_particles_pos, double **Dev_particles_pos,
+//		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int* forward_particles_block, int forward_particles_thread);
 
 // check all targets to compute the next intermediate step
 double compute_next_timestep(SettingsCMM SettingsMain, double t_now, double dt_now);

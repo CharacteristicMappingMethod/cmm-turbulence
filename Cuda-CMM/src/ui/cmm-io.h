@@ -71,14 +71,16 @@ void writeTimeVariable(SettingsCMM SettingsMain, std::string data_name, double t
 void writeTimeVariable(SettingsCMM SettingsMain, std::string data_name, double t_now, double *Host_save, double *Dev_save, long int size_N, long int N, int offset);
 
 std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
-		double **Dev_particles_pos, double **Dev_particles_vel,
-		TCudaGrid2D Grid_psi, double *Dev_psi, double *Dev_Temp, int* fluid_particles_blocks, int fluid_particles_threads);
+		std::map<std::string, CmmPart*> cmmPartMap, CmmVar2D Psi, double *Dev_Temp);
+//std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
+//		double **Dev_particles_pos, double **Dev_particles_vel,
+//		TCudaGrid2D Grid_psi, double *Dev_psi, double *Dev_Temp, int* fluid_particles_blocks, int fluid_particles_threads);
 
 void writeMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Psi, bool isForward);
 void readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Psi, bool isForward, std::string data_name);
 
-void writeParticlesState(SettingsCMM SettingsMain, double **Dev_particles_pos, double **Dev_particles_vel);
-void readParticlesState(SettingsCMM SettingsMain, double **Dev_particles_pos, double **Dev_particles_vel, std::string data_name);
+void writeParticlesState(SettingsCMM SettingsMain, CmmPart** Part_Pos, CmmPart** Part_Vel);
+void readParticlesState(SettingsCMM SettingsMain, CmmPart** Part_Pos, CmmPart** Part_Vel, std::string data_name);
 
 class Logger
 {

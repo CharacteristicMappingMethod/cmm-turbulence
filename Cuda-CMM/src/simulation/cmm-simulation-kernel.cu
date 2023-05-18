@@ -332,10 +332,6 @@ __global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, doub
 	double LX = Grid_map.bounds[1] - Grid_map.bounds[0]; double LY = Grid_map.bounds[3] - Grid_map.bounds[2];
 	device_diffeo_interpolate_2D(ChiX_stack, ChiY_stack, x_y[2*In], x_y[2*In+1], &points[0], &points[1], Grid_map);
 
-	if (iX == 10 && iY == 10) {
-		printf("Pos2 Apply (%f, %f)\n", x_y[2*In], x_y[2*In+1]);
-	}
-
 	// warping - translate by domain size(s)
 	x_y[2*In  ] = points[0] - floor((points[0] - Grid_map.bounds[0])/LX)*LX;
 	x_y[2*In+1] = points[1] - floor((points[1] - Grid_map.bounds[2])/LY)*LY;
@@ -524,22 +520,23 @@ __global__ void copy_first_row_to_all_rows_in_grid(cufftDoubleReal *val_in, cuff
 	val_out[In] = val_in[iX];
 }
 
-__global__ void set_value(cufftDoubleReal *array, cufftDoubleReal value, TCudaGrid2D Grid){
-	// #############################################################################################
-	// This function creates a NX time NV grid of values f(ix,iv) = value
-	// #############################################################################################
-	
-	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
-	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-
-	if(iX >= Grid.NX || iY >= Grid.NY)
-			return;
-
-	int In = iY*Grid.NX + iX;
-
-	array[In] = value;
-
-}
+// use cudaMemset(array, value, Size) for this
+//__global__ void set_value(cufftDoubleReal *array, cufftDoubleReal value, TCudaGrid2D Grid){
+//	// #############################################################################################
+//	// This function creates a NX time NV grid of values f(ix,iv) = value
+//	// #############################################################################################
+//
+//	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+//	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+//
+//	if(iX >= Grid.NX || iY >= Grid.NY)
+//			return;
+//
+//	int In = iY*Grid.NX + iX;
+//
+//	array[In] = value;
+//
+//}
 
 __global__ void generate_gridvalues_v(cufftDoubleReal *v, double prefactor, TCudaGrid2D Grid) {
 	// #############################################################################################

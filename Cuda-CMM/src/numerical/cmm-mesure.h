@@ -33,6 +33,13 @@ void Compute_Total_Energy(double &E_tot, double &E_kin, double &E_pot, CmmVar2D 
 void Compute_Kinetic_Energy(double &E_out, CmmVar2D VarIn, cufftDoubleReal *Dev_Temp_C1);
 void Compute_Potential_Energy(double &E_out, CmmVar2D VarIn);
 
+// function to compute several global quantities for comparison purposes
+// currently: min, max, area weighted avg, area weighted L2 norm
+void Compute_min(double &mesure, CmmVar2D Var);
+void Compute_max(double &mesure, CmmVar2D Var);
+void Compute_avg(double &mesure, CmmVar2D Var);
+void Compute_L2(double &mesure, CmmVar2D Var);
+
 void NDFT_1D(cufftDoubleComplex *X_k, double *x_n, double *p_n, double *f_k, int N);
 void iNDFT_1D(cufftDoubleComplex *X_k, double *x_n, double *p_n, double *f_k, int N);
 __global__ void NDFT_2D(cufftDoubleComplex *X_k, double *x_n, double *p_n, int *f_k, int NX, int Np);

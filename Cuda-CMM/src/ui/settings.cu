@@ -346,22 +346,23 @@ int SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		// construct two substrings
 		std::string command = command_full.substr(0, pos_equal);
 		std::string value = command_full.substr(pos_equal+delimiter.length(), command_full.length());
-		double b[6]={0,0,0,0,0,0};
 		// big if else for different commands
 		// this beast is becoming larger and larger, i should convert it to something more automatic
 		// link to site for that: https://stackoverflow.com/questions/4480788/c-c-switch-case-with-string
 		if (command == "workspace") setWorkspace(value);
 		else if (command == "simulation_type") setSimulationType(value);
 		else if (command == "sim_name") setSimName(value);
-		else if (command == "domain_bounds") {
-			parseString(value, b);		
-			setDomainBounds(b);
-		}
 		else if (command == "grid_coarse") setGridCoarse(std::stoi(value));
 		else if (command == "grid_fine") setGridFine(std::stoi(value));
 		else if (command == "grid_psi") setGridPsi(std::stoi(value));
 		else if (command == "grid_vort") setGridVort(std::stoi(value));
 
+
+		else if (command == "domain_bounds") {
+			double b[6]={0,0,0,0,0,0};
+			parseString(value, b);		
+			setDomainBounds(b);
+		}
 		else if (command == "final_time") setFinalTime(std::stod(value));
 		else if (command == "factor_dt_by_grid") setFactorDtByGrid(std::stod(value));
 		else if (command == "steps_per_sec") setStepsPerSec(std::stoi(value));

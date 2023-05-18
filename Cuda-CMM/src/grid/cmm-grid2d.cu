@@ -144,6 +144,19 @@ void CmmVar2D::free_res() {
 	cufftDestroy(plan_D2Z); cufftDestroy(plan_Z2D);
 }
 
+CmmPart::CmmPart(size_t num, double tau_p) {
+	this->num = num;
+	this->sizeN = 2*num*sizeof(double);
+	this->tau_p = tau_p;
+	this->block = ceil(num / (double)this->thread);
+
+	cudaMalloc((void**)&Dev_var, 2*num*sizeof(double));
+	RAM_size = this->sizeN / 1e6;
+}
+void CmmPart::free_res() {
+	cudaFree(Dev_var);
+}
+
 
 MapStack::MapStack(TCudaGrid2D *Grid, int cpu_map_num)
 {

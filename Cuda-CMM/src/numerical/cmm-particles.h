@@ -26,10 +26,10 @@
 	__global__ void Particle_advect_inertia_init(int Nb_particle, double *particles_pos, double *particles_vel,
 			double *psi, TCudaGrid2D Grid);
 
-	void particles_advect(SettingsCMM SettingsMain, TCudaGrid2D Grid_psi, double **particles_pos, double **particles_vel,
-			double *psi, double *t, double *dt, int loop_ctr, int *particles_block, int particles_thread);
-	void particles_advect(SettingsCMM SettingsMain, TCudaGrid2D Grid_psi, double **particles_pos, double **particles_vel,
-			double *psi, double *t, double *dt, int loop_ctr, int* particles_block, int particles_thread, int i_p);
+	void particles_advect(SettingsCMM SettingsMain, CmmPart** Part_Pos, CmmPart** Part_Vel, CmmVar2D Psi,
+			double *t, double *dt, int loop_ctr);
+	void particles_advect(SettingsCMM SettingsMain, CmmPart** Part_Pos, CmmPart** Part_Vel, CmmVar2D Psi,
+			double *t, double *dt, int loop_ctr, int i_p);
 
 	__global__ void Particle_advect(int Nb_particle, double dt, double *particles_pos, double *psi,
 			TCudaGrid2D Grid, int particles_time_integration_num, int l_order);

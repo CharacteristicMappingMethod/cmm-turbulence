@@ -402,8 +402,11 @@ void writeTimeVariable(SettingsCMM SettingsMain, std::string data_name, double t
  * Write particle positions
  */
 // will be with hdf5 version too at some point
-std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, double **Dev_particles_pos, double **Dev_particles_vel,
-		TCudaGrid2D Grid_psi, double *Dev_psi, double *Dev_Temp, int* fluid_particles_blocks, int fluid_particles_threads) {
+std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
+		std::map<std::string, CmmPart*> cmmPartMap, CmmVar2D Psi, double *Dev_Temp) {
+
+//		double **Dev_particles_pos, double **Dev_particles_vel,
+//		TCudaGrid2D Grid_psi, double *Dev_psi, double *Dev_Temp, int* fluid_particles_blocks, int fluid_particles_threads) {
 	// check if we want to save at this time, combine all variables if so
 	std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
 	bool save_now = false; std::string save_var;
@@ -442,24 +445,30 @@ std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now
 		for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
 			// particle position first
 			if (save_var.find("PartA_" + to_str_0(i_p+1, 2)) != std::string::npos) {
-				writeTranferToBinaryFile(2*particles_advected[i_p].num, Dev_particles_pos[i_p], SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_pos_P" + to_str_0(i_p+1, 2), false);
+				std::string part_map_name = "PartA_Pos_P" + to_str_0(i_p+1, 2);
+				CmmPart Part_Pos_now = *cmmPartMap[part_map_name];
+				writeTranferToBinaryFile(2*Part_Pos_now.num, Part_Pos_now.Dev_var, SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_pos_P" + to_str_0(i_p+1, 2), false);
 				// compute and safe hashing
-				double w_hash[2]; Hash_array((char*)w_hash, Dev_particles_pos[i_p], 2*particles_advected[i_p].num);
+				double w_hash[2]; Hash_array((char*)w_hash, Part_Pos_now.Dev_var, 2*Part_Pos_now.num);
 				writeAppendToBinaryFile(2, w_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_particles_pos_P" + to_str_0(i_p+1, 2));
 			}
 			// particle velocity now
 			if (save_var.find("PartA_Vel_" + to_str_0(i_p+1, 2)) != std::string::npos) {
 				// copy data to host and save - but only if tau != 0
 				if (particles_advected[i_p].tau != 0) {
-					writeTranferToBinaryFile(2*particles_advected[i_p].num, Dev_particles_vel[i_p], SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2), false);
+					std::string part_map_name = "PartA_Vel_U" + to_str_0(i_p+1, 2);
+					CmmPart Part_Vel_now = *cmmPartMap[part_map_name];
+					writeTranferToBinaryFile(2*Part_Vel_now.num, Part_Vel_now.Dev_var, SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2), false);
 					// hashing
-					double w_hash[2]; Hash_array((char*)w_hash, Dev_particles_vel[i_p], 2*particles_advected[i_p].num);
+					double w_hash[2]; Hash_array((char*)w_hash, Part_Vel_now.Dev_var, 2*particles_advected[i_p].num);
 					writeAppendToBinaryFile(2, w_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_particles_vel_U" + to_str_0(i_p+1, 2));
 				}
-				// sample velocity values from current stream function
+				// sample velocity values from current stream function at particle positions
 				else {
-					k_h_sample_points_dxdy<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(Grid_psi, Grid_psi, Dev_psi, Dev_particles_pos[i_p], Dev_Temp, particles_advected[i_p].num);
-					writeTranferToBinaryFile(2*particles_advected[i_p].num, Dev_Temp, SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2), false);
+					std::string part_map_name = "PartA_Pos_P" + to_str_0(i_p+1, 2);
+					CmmPart Part_Pos_now = *cmmPartMap[part_map_name];
+					k_h_sample_points_dxdy<<<Part_Pos_now.block, Part_Pos_now.thread>>>(*Psi.Grid, *Psi.Grid, Psi.Dev_var, Part_Pos_now.Dev_var, Dev_Temp, Part_Pos_now.num);
+					writeTranferToBinaryFile(2*Part_Pos_now.num, Dev_Temp, SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2), false);
 					// hashing
 					double w_hash[2]; Hash_array((char*)w_hash, Dev_Temp, 2*particles_advected[i_p].num);
 					writeAppendToBinaryFile(2, w_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_particles_vel_U" + to_str_0(i_p+1, 2));
@@ -553,7 +562,7 @@ void readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, CmmVar2D ChiX, 
 }
 
 
-void writeParticlesState(SettingsCMM SettingsMain, double **Dev_particles_pos, double **Dev_particles_vel) {
+void writeParticlesState(SettingsCMM SettingsMain, CmmPart** Part_Pos, CmmPart** Part_Vel) {
 	// create new subfolder for mapstack, doesn't matter if we try to create it several times
 	std::string sub_folder_name = "/MapStack";
 	std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
@@ -566,15 +575,15 @@ void writeParticlesState(SettingsCMM SettingsMain, double **Dev_particles_pos, d
 	// save all particle positions and velocities if tau != 0
 	for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
 		// save particle positions
-		writeTranferToBinaryFile(2*particles_advected[i_p].num, Dev_particles_pos[i_p], SettingsMain, sub_folder_name + "/Particles_advected_pos_P" + to_str_0(i_p+1, 2), false);
+		writeTranferToBinaryFile(2*Part_Pos[i_p]->num, Part_Pos[i_p]->Dev_var, SettingsMain, sub_folder_name + "/Particles_advected_pos_P" + to_str_0(i_p+1, 2), false);
 
 		// save all particle velocities if tau != 0
 		if (particles_advected[i_p].tau != 0) {
-			writeTranferToBinaryFile(2*particles_advected[i_p].num, Dev_particles_vel[i_p], SettingsMain, sub_folder_name + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2), false);
+			writeTranferToBinaryFile(2*Part_Vel[i_p]->num, Part_Vel[i_p]->Dev_var, SettingsMain, sub_folder_name + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2), false);
 		}
 	}
 }
-void readParticlesState(SettingsCMM SettingsMain, double **Dev_particles_pos, double **Dev_particles_vel, std::string data_name) {
+void readParticlesState(SettingsCMM SettingsMain, CmmPart** Part_Pos, CmmPart** Part_Vel, std::string data_name) {
 	// set default path
 	std::string folder_name_now = data_name;
 	if (data_name == "") {
@@ -587,11 +596,11 @@ void readParticlesState(SettingsCMM SettingsMain, double **Dev_particles_pos, do
 	// save all particle positions and velocities if tau != 0
 	for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
 		// save particle positions
-		readTransferFromBinaryFile(2*particles_advected[i_p].num, Dev_particles_pos[i_p], folder_name_now + "/Particles_advected_pos_P" + to_str_0(i_p+1, 2) + ".data");
+		readTransferFromBinaryFile(2*Part_Pos[i_p]->num, Part_Pos[i_p]->Dev_var, folder_name_now + "/Particles_advected_pos_P" + to_str_0(i_p+1, 2) + ".data");
 
 		// save all particle velocities if tau != 0
 		if (particles_advected[i_p].tau != 0) {
-			readTransferFromBinaryFile(2*particles_advected[i_p].num, Dev_particles_vel[i_p], folder_name_now + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2) + ".data");
+			readTransferFromBinaryFile(2*Part_Vel[i_p]->num, Part_Vel[i_p]->Dev_var, folder_name_now + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2) + ".data");
 		}
 	}
 }

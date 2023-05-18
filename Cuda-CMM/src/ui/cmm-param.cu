@@ -65,6 +65,7 @@ void save_param_file(SettingsCMM& SettingsMain, std::string param_name) {
 		file << write_line("grid_vort", to_str(SettingsMain.getGridVort(), 16));
 
 		// time details
+		file << write_line("domain_bounds", to_str(SettingsMain.getDomainBounds(), 16));
 		file << write_line("final_time", to_str(SettingsMain.getFinalTime(), 16));
 		file << write_line("set_dt_by_steps", to_str(SettingsMain.getSetDtBySteps(), 16));
 		if (SettingsMain.getSetDtBySteps()) {

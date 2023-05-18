@@ -11,7 +11,7 @@
 #
 ########################################################################
 
-import os
+import os, shutil
 import logging
 import numpy as np
 import argparse
@@ -208,6 +208,10 @@ def compare_monitoring(params: TestParams, res_in, res_ref):
 
 
 def run_test(params: TestParams):
+    # delete old simulation if it exists
+    if os.path.isdir(os.path.join(params.root_path, params.wkdir, "data", params.results_loc)):
+        shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", params.results_loc))
+
     # run simulation
     run_sim(params)
 
@@ -223,12 +227,12 @@ def run_test(params: TestParams):
     if (params.save_reference and compare_pass == 0) or params.save_force:
         params.logInfo("Overwriting reference results")
         # rmtree is weird - we have to first remove old folder before copying
-        params.shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", params.reference_loc))
-        params.shutil.copytree(os.path.join(params.root_path, params.wkdir, "data", params.results_loc), os.path.join(params.root_path, params.wkdir, "data", params.reference_loc))
+        shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", params.reference_loc))
+        shutil.copytree(os.path.join(params.root_path, params.wkdir, "data", params.results_loc), os.path.join(params.root_path, params.wkdir, "data", params.reference_loc))
         # remove particle and time data, as they are currently not needed
-        params.shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", params.reference_loc, "Particle_data"))
-        params.shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", params.reference_loc, "Time_data"))
-        params.shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", params.reference_loc, "Zoom_data"))
+        shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", params.reference_loc, "Particle_data"))
+        shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", params.reference_loc, "Time_data"))
+        shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", params.reference_loc, "Zoom_data"))
     
     # final verdict
     logging.info(f'{params.name} - Completed with {compare_pass} mismatches')

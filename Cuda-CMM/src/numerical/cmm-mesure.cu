@@ -17,6 +17,8 @@
 #include <thrust/transform_reduce.h>
 #include <thrust/functional.h>
 #include <thrust/device_ptr.h>
+#include <thrust/extrema.h>
+#include <thrust/execution_policy.h>
 
 // hashing algorithm
 #include "murmur3.cu"
@@ -147,6 +149,26 @@ void Compute_Total_Energy(double &E_tot, double &E_kin, double &E_pot, CmmVar2D 
 	Compute_Kinetic_Energy(E_kin, VarKin, Dev_Temp_C1);
 	Compute_Potential_Energy(E_pot, VarPot);
 	E_tot = E_kin + E_pot;
+}
+
+
+// function to compute several global quantities for comparison purposes
+// currently: min, max, area weighted avg, area weighted L2 norm
+void Compute_min(double &mesure, CmmVar2D Var) {
+	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Var.Dev_var);
+	mesure = thrust::reduce( ptr, ptr + Var.Grid->N, Var.Dev_var[0], thrust::minimum<double>());
+}
+void Compute_max(double &mesure, CmmVar2D Var) {
+	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Var.Dev_var);
+	mesure = thrust::reduce( ptr, ptr + Var.Grid->N, Var.Dev_var[0], thrust::maximum<double>());
+}
+void Compute_avg(double &mesure, CmmVar2D Var) {
+	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Var.Dev_var);
+	mesure = Var.Grid->hy * Var.Grid->hx * thrust::reduce( ptr, ptr + Var.Grid->N, 0.0, thrust::plus<double>());
+}
+void Compute_L2(double &mesure, CmmVar2D Var) {
+	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Var.Dev_var);
+	mesure = Var.Grid->hy * Var.Grid->hx * thrust::transform_reduce( ptr, ptr + Var.Grid->N, thrust::square<double>(), 0.0, thrust::plus<double>());
 }
 
 
