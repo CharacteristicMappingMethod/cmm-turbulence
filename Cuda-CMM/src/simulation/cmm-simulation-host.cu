@@ -117,10 +117,10 @@ void apply_map_stack(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double 
 	if (direction == -1) {
 		// first application: current map
 		k_h_sample_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
-
 		// afterwards: trace back all other maps
 		for (int i_map = Map_Stack.map_stack_ctr-1; i_map >= 0; i_map--) {
 			Map_Stack.copy_map_to_device(i_map);
+			// printf("Map %d \n\n\n\n", i_map);
 			k_apply_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
 					Dev_Temp, *Map_Stack.Grid, Grid);
 		}
@@ -867,10 +867,9 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 					*Sample_var->Grid, *cmmVarMap["Vort_discrete_init"]->Grid, varnum, SettingsMain.getInitialConditionNum(), cmmVarMap["Vort_discrete_init"]->Dev_var, SettingsMain.getInitialDiscrete());
 
 			// save particle distribution function
-			if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos  or save_var.find("F") != std::string::npos) {
+			if (save_var.find("Dist") != std::string::npos or save_var.find("F") != std::string::npos) {
 				writeTimeVariable(SettingsMain, "Distribution_F_"+to_str(Sample_var->Grid->NX),
 						t_now, Sample_var->Dev_var, Sample_var->Grid->N);
-			}
 
 			// compute enstrophy and palinstrophy
 			Compute_Kinetic_Energy(mesure[1], *Sample_var, (cufftDoubleReal*) Dev_Temp_C1);
@@ -975,6 +974,7 @@ std::string compute_zoom(SettingsCMM SettingsMain, double t_now, double dt_now, 
 
 				// compute forwards map for map stack of zoom window first, as it can be discarded afterwards
 				if (SettingsMain.getForwardMap()) {
+					
 					// compute only if we actually want to save, elsewhise its a lot of computations for nothing
 					if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos
 							or SettingsMain.getParticlesForwardedNum() > 0) {
@@ -1069,7 +1069,7 @@ std::string compute_zoom(SettingsCMM SettingsMain, double t_now, double dt_now, 
 					k_h_sample_from_init<<<Grid_zoom_i.blocksPerGrid, Grid_zoom_i.threadsPerBlock>>>((cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleReal*)Dev_Temp_C1+Grid_zoom_i.N,
 							Grid_zoom_i, *cmmVarMap["Vort_discrete_init"]->Grid, 2, SettingsMain.getInitialConditionNum(), cmmVarMap["Vort_discrete_init"]->Dev_var, SettingsMain.getInitialDiscrete());
 
-					writeTranferToBinaryFile(Grid_zoom_i.N, (cufftDoubleReal*)Dev_Temp_C1, SettingsMain, sub_folder_name+"/Vorticity_W_"+to_str(Grid_zoom_i.NX), false);
+					writeTranferToBinaryFile(Grid_zoom_i.N, (cufftDoubleReal*)Dev_Temp_C1, SettingsMain, sub_folder_name+"/Distribution_"+to_str(Grid_zoom_i.NX), false);
 				}
 
 				// compute sample of stream function - it's not a zoom though!

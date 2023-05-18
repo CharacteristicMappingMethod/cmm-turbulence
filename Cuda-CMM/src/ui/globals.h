@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <iostream>
 #include <sstream>
-
+#define MAX_DIM 3
 
 // GLOBAL ERROR HANDLING
 // please use this function to handle errors

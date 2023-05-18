@@ -4,7 +4,7 @@ param_version	=	3
 workspace	=	./
 simulation_type	=	cmm_vlasov_poisson_1d
 sim_name	=	15-vp
-domain_size	=	{k=0.5,vmin=-8,vmax=8}
+domain_bounds	=	{0,4,-2.5,2.5}
 grid_coarse	=	256
 grid_fine	=	512
 grid_psi	=	256
@@ -30,12 +30,12 @@ map_update_order	=	4th
 molly_stencil	=	0
 freq_cut_psi	=	256
 skip_remapping	=	0
-save_sample_num	=	1
+save_sample_num	=	0
 save_sample	=	{is_instant=0,time_start=0,time_end=40,time_step=0.1,var=,grid=1024}
 scalar_name	=	rectangle
 scalar_discrete	=	0
-save_zoom_num	=	1
-save_zoom	=	{is_instant=0,time_start=0.1,time_end=0.1,time_step=1,var=F,grid=1024,pos_x=1.570796326794897,pos_y=0,width_x=3.141592653589793,width_y=3.141592653589793,rep=5,rep_fac=0.5}
+save_zoom_num	=	0
+save_zoom	=	{is_instant=0,time_start=0.1,time_end=0.1,time_step=1,var=F,grid=1024,pos_x=6.28318530718,pos_y=0,width_x=12.5663706144,width_y=15.7079632679,rep=5,rep_fac=0.5}
 forward_map	=	0
 particles_advected_num	=	0
 particles_steps	=	-1
