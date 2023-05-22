@@ -13,7 +13,7 @@ final_time	=	0.2
 set_dt_by_steps	=	0
 factor_dt_by_grid	=	4
 save_computational_num	=	1
-save_computational	=	{is_instant=0,time_start=0,time_end=100,time_step=0.01,var=,conv=1}
+save_computational	=	{is_instant=0,time_start=0,time_end=100,time_step=0.01,var=All,conv=1}
 mem_RAM_CPU_remaps	=	500
 save_map_stack	=	0
 restart_time	=	0
@@ -31,7 +31,7 @@ molly_stencil	=	0
 freq_cut_psi	=	256
 skip_remapping	=	0
 save_sample_num	=	1
-save_sample	=	{is_instant=0,time_start=0,time_end=40,time_step=0.1,var=,grid=1024}
+save_sample	=	{is_instant=0,time_start=0,time_end=40,time_step=0.01,var=All,grid=256}
 scalar_name	=	rectangle
 scalar_discrete	=	0
 save_zoom_num	=	0

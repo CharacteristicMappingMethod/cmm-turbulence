@@ -1,51 +1,51 @@
 init_fields_forward_4_nodes_C256_F512_t1_T0
-[2023-05-22.17:46:48]	Starting memory initialization 	 C-Time = 0h 0m 0.000352s
-[2023-05-22.17:46:48]	Number of CUDA devices = 1
-[2023-05-22.17:46:48]	Active CUDA device = 0
-[2023-05-22.17:46:48]	Cuda runtime version = 11080
-[2023-05-22.17:46:48]	Cuda driver version = 11070
-[2023-05-22.17:46:48]	CuFFT version = 10900
-[2023-05-22.17:46:48]	Solving = cmm_euler_2d
-[2023-05-22.17:46:48]	Initial condition = 4_nodes
-[2023-05-22.17:46:48]	Iter max = 0
-[2023-05-22.17:46:48]	Name of simulation = init_fields_forward_4_nodes_C256_F512_t1_T0
-[2023-05-22.17:46:48]	Initialized backwards maps arrays: cudaSuccess
-[2023-05-22.17:46:48]	Initialized coarse vort array: cudaSuccess
-[2023-05-22.17:46:48]	Initialized vort_fine_init array: cudaSuccess
-[2023-05-22.17:46:48]	Initialized discrete initial array
-[2023-05-22.17:46:48]	Initialized stream function array: cudaSuccess
-[2023-05-22.17:46:48]	Initialized forward maps arrays: cudaSuccess
-[2023-05-22.17:46:48]	Initialized empty_vort variable: cudaSuccess
-[2023-05-22.17:46:48]	Initialized Sample variables: cudaSuccess
-[2023-05-22.17:46:48]	Initialized Zoom variables: cudaSuccess
-[2023-05-22.17:46:48]	Initialized cufft workplan: cudaSuccess
-[2023-05-22.17:46:48]	Initialized GPU temp array: cudaSuccess
-[2023-05-22.17:46:48]	Map size in MB = 4
-[2023-05-22.17:46:48]	Map stack length on CPU = 5
-[2023-05-22.17:46:48]	Initialized CPU map stack: cudaSuccess
-[2023-05-22.17:46:48]	Initialized CPU forward map stack: cudaSuccess
-[2023-05-22.17:46:48]	Particles set F01 : Num = 1000
-[2023-05-22.17:46:48]	Particles set F02 : Num = 1000
-[2023-05-22.17:46:48]	Memory initialization finished 	 estimated GPU RAM = 0.0383 gb 	 estimated CPU RAM = 0.0419 gb 	 C-Time = 0h 0m 0.117s
-[2023-05-22.17:46:48]	Starting simulation initialization 	 C-Time = 0h 0m 0.118s 	 Last Cuda Error = cudaSuccess
-[2023-05-22.17:46:48]	Init order = 1/3 	 Method = EulerExp 	 C-Time = 0h 0m 0.119s
-[2023-05-22.17:46:48]	   Init step = 1/1 	 IncompErr = 1.8 	 C-Time = 0h 0m 0.158s
-[2023-05-22.17:46:48]	Init order = 2/3 	 Method = RK2 	 C-Time = 0h 0m 0.158s
-[2023-05-22.17:46:48]	   Init step = 1/2 	 IncompErr = 1.97 	 C-Time = 0h 0m 0.195s
-[2023-05-22.17:46:48]	   Init step = 2/2 	 IncompErr = 3.35 	 C-Time = 0h 0m 0.231s
-[2023-05-22.17:46:48]	Init order = 3/3 	 Method = RK3 	 C-Time = 0h 0m 0.231s
-[2023-05-22.17:46:48]	   Init step = 1/2 	 IncompErr = 1.17 	 C-Time = 0h 0m 0.285s
-[2023-05-22.17:46:48]	   Init step = 2/2 	 IncompErr = 1.09 	 C-Time = 0h 0m 0.336s
-[2023-05-22.17:46:48]	Processed particle data
-[2023-05-22.17:46:48]	Computed coarse Cons : Energ = 20.671338 	 Enstr = 23.687051 	 Palinstr = 37.504497 	 Wmax = 2.8
-[2023-05-22.17:46:48]	Processed sample data 1 on grid 256, Cons : Energ = 20.671338 	 Enstr = 23.687051 	 Palinstr = 37.504497 	 Wmax = 2.8
-[2023-05-22.17:46:49]	Processed zoom data 1 on grid 256
-[2023-05-22.17:46:49]	W min = -1.64 - W max = 2.8
-[2023-05-22.17:46:49]	Simulation initialization finished 	 Last Cuda Error = cudaSuccess 	 C-Time = 0h 0m 1.1s
-[2023-05-22.17:46:49]	Starting simulation loop 	 C-Time = 0h 0m 1.1s
-[2023-05-22.17:46:49]	Simulation loop finished 	 C-Time = 0h 0m 1.1s
-[2023-05-22.17:46:49]	Processed particle data
-[2023-05-22.17:46:49]	Computed coarse Cons : Energ = 20.671338 	 Enstr = 23.687051 	 Palinstr = 37.504497 	 Wmax = 2.8
-[2023-05-22.17:46:49]	Processed sample data 1 on grid 256, Cons : Energ = 20.671338 	 Enstr = 23.687051 	 Palinstr = 37.504497 	 Wmax = 2.8
-[2023-05-22.17:46:49]	Processed zoom data 1 on grid 256
-[2023-05-22.17:46:49]	Finished simulation 	 Last Cuda Error = cudaSuccess 	 C-Time = 0h 0m 1.85s
+[2023-05-22.18:11:44]	Starting memory initialization 	 C-Time = 0h 0m 0.000242s
+[2023-05-22.18:11:44]	Number of CUDA devices = 1
+[2023-05-22.18:11:44]	Active CUDA device = 0
+[2023-05-22.18:11:44]	Cuda runtime version = 11080
+[2023-05-22.18:11:44]	Cuda driver version = 11070
+[2023-05-22.18:11:44]	CuFFT version = 10900
+[2023-05-22.18:11:44]	Solving = cmm_euler_2d
+[2023-05-22.18:11:44]	Initial condition = 4_nodes
+[2023-05-22.18:11:44]	Iter max = 0
+[2023-05-22.18:11:44]	Name of simulation = init_fields_forward_4_nodes_C256_F512_t1_T0
+[2023-05-22.18:11:44]	Initialized backwards maps arrays: cudaSuccess
+[2023-05-22.18:11:44]	Initialized coarse vort array: cudaSuccess
+[2023-05-22.18:11:44]	Initialized vort_fine_init array: cudaSuccess
+[2023-05-22.18:11:44]	Initialized discrete initial array
+[2023-05-22.18:11:44]	Initialized stream function array: cudaSuccess
+[2023-05-22.18:11:44]	Initialized forward maps arrays: cudaSuccess
+[2023-05-22.18:11:44]	Initialized empty_vort variable: cudaSuccess
+[2023-05-22.18:11:44]	Initialized Sample variables: cudaSuccess
+[2023-05-22.18:11:44]	Initialized Zoom variables: cudaSuccess
+[2023-05-22.18:11:44]	Initialized cufft workplan: cudaSuccess
+[2023-05-22.18:11:44]	Initialized GPU temp array: cudaSuccess
+[2023-05-22.18:11:44]	Map size in MB = 4
+[2023-05-22.18:11:44]	Map stack length on CPU = 5
+[2023-05-22.18:11:44]	Initialized CPU map stack: cudaSuccess
+[2023-05-22.18:11:44]	Initialized CPU forward map stack: cudaSuccess
+[2023-05-22.18:11:44]	Particles set F01 : Num = 1000
+[2023-05-22.18:11:44]	Particles set F02 : Num = 1000
+[2023-05-22.18:11:44]	Memory initialization finished 	 estimated GPU RAM = 0.0383 gb 	 estimated CPU RAM = 0.0419 gb 	 C-Time = 0h 0m 0.122s
+[2023-05-22.18:11:44]	Starting simulation initialization 	 C-Time = 0h 0m 0.122s 	 Last Cuda Error = cudaSuccess
+[2023-05-22.18:11:44]	Init order = 1/3 	 Method = EulerExp 	 C-Time = 0h 0m 0.124s
+[2023-05-22.18:11:44]	   Init step = 1/1 	 IncompErr = 1.8 	 C-Time = 0h 0m 0.163s
+[2023-05-22.18:11:44]	Init order = 2/3 	 Method = RK2 	 C-Time = 0h 0m 0.163s
+[2023-05-22.18:11:44]	   Init step = 1/2 	 IncompErr = 1.97 	 C-Time = 0h 0m 0.2s
+[2023-05-22.18:11:44]	   Init step = 2/2 	 IncompErr = 3.35 	 C-Time = 0h 0m 0.236s
+[2023-05-22.18:11:44]	Init order = 3/3 	 Method = RK3 	 C-Time = 0h 0m 0.236s
+[2023-05-22.18:11:44]	   Init step = 1/2 	 IncompErr = 1.17 	 C-Time = 0h 0m 0.29s
+[2023-05-22.18:11:44]	   Init step = 2/2 	 IncompErr = 1.09 	 C-Time = 0h 0m 0.341s
+[2023-05-22.18:11:45]	Processed particle data
+[2023-05-22.18:11:45]	Computed coarse Cons : Energ = 20.671338 	 Enstr = 23.687051 	 Palinstr = 37.504497 	 Wmax = 2.8
+[2023-05-22.18:11:45]	Processed sample data 1 on grid 256, Cons : Energ = 20.671338 	 Enstr = 23.687051 	 Palinstr = 37.504497 	 Wmax = 2.8
+[2023-05-22.18:11:45]	Processed zoom data 1 on grid 256
+[2023-05-22.18:11:45]	W min = -1.64 - W max = 2.8
+[2023-05-22.18:11:45]	Simulation initialization finished 	 Last Cuda Error = cudaSuccess 	 C-Time = 0h 0m 1.1s
+[2023-05-22.18:11:45]	Starting simulation loop 	 C-Time = 0h 0m 1.1s
+[2023-05-22.18:11:45]	Simulation loop finished 	 C-Time = 0h 0m 1.1s
+[2023-05-22.18:11:45]	Processed particle data
+[2023-05-22.18:11:45]	Computed coarse Cons : Energ = 20.671338 	 Enstr = 23.687051 	 Palinstr = 37.504497 	 Wmax = 2.8
+[2023-05-22.18:11:46]	Processed sample data 1 on grid 256, Cons : Energ = 20.671338 	 Enstr = 23.687051 	 Palinstr = 37.504497 	 Wmax = 2.8
+[2023-05-22.18:11:46]	Processed zoom data 1 on grid 256
+[2023-05-22.18:11:46]	Finished simulation 	 Last Cuda Error = cudaSuccess 	 C-Time = 0h 0m 1.86s

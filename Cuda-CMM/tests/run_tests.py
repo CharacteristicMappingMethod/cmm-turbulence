@@ -21,8 +21,14 @@ import importlib  # load individual test files
 
 # list of tests to be executed
 test_names = [
-    ["euler2D_init_fields", "test_param_dict"],  # check for initialization of euler2D w particles
-    ["euler2D_one_step", "test_param_dict"],  # check for computing one time-step of euler2D w particles
+    ["euler2D_init_fields", "test_param_dict_none"],  # check for initialization of euler2D without saving
+    ["euler2D_init_fields", "test_param_dict_comp"],  # check for initialization of euler2D, only comp vars
+    ["euler2D_init_fields", "test_param_dict_conv"],  # check for initialization of euler2D, only conv
+    ["euler2D_init_fields", "test_param_dict_sample"],  # check for initialization of euler2D, sampling
+    ["euler2D_init_fields", "test_param_dict_zoom"],  # check for initialization of euler2D, zooming
+    ["euler2D_init_fields", "test_param_dict_particles"],  # check for initialization of euler2D, particles with sampling
+    ["euler2D_init_fields", "test_param_dict_forward"],  # check for initialization of euler2D, forwarded map but basically everything
+    ["euler2D_one_step", "test_param_dict"],  # check for one time-step
     ["euler2D_11b_4nodes_reference_remapping", "test_param_dict"],  # check for reference simulation including one remapping and w particles
     ["vlasov1D_15_vp_landau_damping", "test_param_dict"]  # vlasov test
 ]
