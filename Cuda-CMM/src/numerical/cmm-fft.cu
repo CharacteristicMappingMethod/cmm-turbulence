@@ -361,7 +361,9 @@ __global__ void zero_padding_1D(cufftDoubleComplex *In, cufftDoubleComplex *Out,
 
 
 // compute hermite with derivatives in fourier space, uniform helper function fitted for all grids to utilize only input temporary variable
-// input has size (NX+1)/2*NY and output 4*NX*NY, output is therefore used as temporary variable
+// input has size (NX+1)/2*NY and output 4*NX*NY, output is used as temporary variable
+// The output variable has to take reshifting into account, which is needed to align the data
+// Dev_In and Dev_Out cannot point to the same memory
 void fourier_hermite(TCudaGrid2D Grid, cufftDoubleComplex *Dev_In, double *Dev_Out, cufftHandle cufft_plan) {
 
 	// reshift for transforming so that we have enough space for everything
@@ -397,8 +399,8 @@ void fourier_hermite(TCudaGrid2D Grid, cufftDoubleComplex *Dev_In, double *Dev_O
 
 
 // compute laplacian on variable grid, needs Grid.sizeNfft + Grid.sizeN memory
-void laplacian(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1){
-    cufftExecD2Z(Var_in.plan_D2Z, Var_in.Dev_var, Dev_Temp_C1);
+void laplacian(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1, size_t offset_start){
+    cufftExecD2Z(Var_in.plan_D2Z, Var_in.Dev_var+offset_start, Dev_Temp_C1);
     k_normalize_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, *Var_in.Grid);
 
     k_fft_lap_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, *Var_in.Grid);
@@ -406,15 +408,15 @@ void laplacian(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1
 }
 
 // compute iLap, for example for stream function from vorticity
-void i_laplacian(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1){
-    cufftExecD2Z(Var_in.plan_D2Z, Var_in.Dev_var, Dev_Temp_C1);
+void i_laplacian(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1, size_t offset_start){
+    cufftExecD2Z(Var_in.plan_D2Z, Var_in.Dev_var+offset_start, Dev_Temp_C1);
     k_normalize_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, *Var_in.Grid);
 
     k_fft_iLap_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, *Var_in.Grid);
     cufftExecZ2D(Var_in.plan_Z2D, Dev_Temp_C1, Var_out);
 }
-void i_laplacian_h(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1){
-    cufftExecD2Z(Var_in.plan_D2Z, Var_in.Dev_var, Dev_Temp_C1);
+void i_laplacian_h(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1, size_t offset_start){
+    cufftExecD2Z(Var_in.plan_D2Z, Var_in.Dev_var+offset_start, Dev_Temp_C1);
     k_normalize_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, *Var_in.Grid);
 
 	// Forming Psi hermite
@@ -423,8 +425,8 @@ void i_laplacian_h(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Tem
 }
 
 // compute x-gradient on variable grid, needs Grid.sizeNfft + Grid.sizeN memory
-void grad_x(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1){
-    cufftExecD2Z(Var_in.plan_D2Z, Var_in.Dev_var, Dev_Temp_C1);
+void grad_x(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1, size_t offset_start){
+    cufftExecD2Z(Var_in.plan_D2Z, Var_in.Dev_var+offset_start, Dev_Temp_C1);
     k_normalize_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, *Var_in.Grid);
 
     k_fft_dx_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, *Var_in.Grid);
@@ -432,8 +434,8 @@ void grad_x(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1){
 }
 
 // compute x-gradient on variable grid, needs Grid.sizeNfft + Grid.sizeN memory
-void grad_y(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1){
-    cufftExecD2Z(Var_in.plan_D2Z, Var_in.Dev_var, Dev_Temp_C1);
+void grad_y(CmmVar2D Var_in, double* Var_out, cufftDoubleComplex *Dev_Temp_C1, size_t offset_start){
+    cufftExecD2Z(Var_in.plan_D2Z, Var_in.Dev_var+offset_start, Dev_Temp_C1);
     k_normalize_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, *Var_in.Grid);
 
     k_fft_dy_h<<<Var_in.Grid->fft_blocks, Var_in.Grid->threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, *Var_in.Grid);

@@ -88,16 +88,26 @@ def run_sim(params: TestParams):
 # wkdir         - path of executed test
 # loc           - name of data to be loaded
 def read_monitoring(params: TestParams, loc):
-    params.logInfo(f"Loading monitoring results: {loc}")   
-    res_return, loc_data = [{}, {}], [os.path.join("data", loc, "Monitoring_data"), os.path.join("data", loc, "Monitoring_data", "Mesure")]
+    params.logInfo(f"Loading monitoring results: {loc}")
+    # check if different folder with data exists
+    loc_rel = os.path.join(params.root_path, params.wkdir, "data", loc)
+    if not os.path.isdir(os.path.join(loc_rel, "Monitoring_data")): params.logError(f"{loc}: No folder 'Monitoring_data'")
+    if not os.path.isdir(os.path.join(loc_rel, "Monitoring_data", "Mesure")): params.logError(f"{loc}: No folder 'Mesure'")
+    if not os.path.isdir(os.path.join(loc_rel, "Monitoring_data", "Debug_globals")): params.logError(f"{loc}: No folder 'Debug_globals'")
+    
+    res_return, loc_data = [{}, {}, {}], [os.path.join("data", loc, "Monitoring_data"), os.path.join("data", loc, "Monitoring_data", "Mesure"),
+                                          os.path.join("data", loc, "Monitoring_data", "Debug_globals")]
     for i_res, i_loc in zip(res_return, loc_data):
-        for i_load in os.listdir(os.path.join(params.root_path, params.wkdir, i_loc)):
-            if i_load.endswith(".data"):
-                if i_load.startswith("Hash"):
-                    res_read = np.fromfile(os.path.join(params.root_path, params.wkdir, i_loc, i_load), dtype=np.uint8)
-                    res_join = ''.join([hex(i_res_in)[2:].upper() for i_res_in in res_read])
-                    i_res[i_load] = [res_join[i:i+32] for i in range(0, len(res_join), 32)]
-                else: i_res[i_load] = np.fromfile(os.path.join(params.root_path, params.wkdir, i_loc, i_load), dtype=float)
+        try:
+            for i_load in os.listdir(os.path.join(params.root_path, params.wkdir, i_loc)):
+                if i_load.endswith(".data"):
+                    if i_load.endswith("Hash.data"):
+                        res_read = np.fromfile(os.path.join(params.root_path, params.wkdir, i_loc, i_load), dtype=np.uint8)
+                        res_join = ''.join([hex(i_res_in)[2:].upper() for i_res_in in res_read])
+                        i_res[i_load] = [res_join[i:i+32] for i in range(0, len(res_join), 32)]
+                    else: i_res[i_load] = np.fromfile(os.path.join(params.root_path, params.wkdir, i_loc, i_load), dtype=float)
+        except:
+            pass
     return res_return
 
 
@@ -106,27 +116,31 @@ def read_monitoring(params: TestParams, loc):
 # Global quantitities       - Mismatches are compared up to precision of eps_pass
 # Hash quantitities         - Only works for the same machine, then it should be equal
 def compare_mesure(params:TestParams, res_in, res_ref):
+    # compare keys
+    if res_in.keys() != res_ref.keys():
+        params.logError(f"Different data available for this simulation and reference results. This simulation: {res_in.keys()}, reference: {res_ref.keys()}")
+
     # compare data
-    compare_pass = 0  # counter for failed tests
+    compare_res = np.array([0, 0])  # counter for passed or failed tests
     for i_res in res_in.keys():
         i_res_name = i_res.replace(".data", "")
         # check if this data is a sample data or computational data
         try:
-            str_last = i_res_name.split("_")[-1]  # extract str between last _ and .data
-            if "P" in str_last: raise ValueError()  # go to except statement, as this is a Particle Hash
-            is_sample = any(char.isdigit() for char in i_res)  # check if number in data string, then we assume its a sample variable
-        except:
+            sample_grid = int(i_res_name.split("_")[-1])  # if last is only digits then we assume it comes from sample grid size
+            is_sample = True
+        except:  # elsewise it is not a sampled variable
             is_sample = False
-        sample_grid = 0
-        if is_sample: sample_grid = int(i_res_name.split("_")[-1])
+            sample_grid = 0
 
         # check if this data is present in reference data
         if not i_res in res_ref.keys():
             params.logError(f"{i_res_name}: Not available for reference results")
+            compare_res[1] += 1
             continue
         # check if the data has the same length
         elif len(res_in[i_res]) != len(res_ref[i_res]):
             params.logError(f"{i_res_name}: Different data length. This simulation: {len(res_in[i_res])}, reference: {len(res_ref[i_res])}")
+            compare_res[1] += 1
             continue
         # compare values now
         else:
@@ -135,25 +149,92 @@ def compare_mesure(params:TestParams, res_in, res_ref):
                     diff = [res_in[i_res][i_len] == res_ref[i_res][i_len] for i_len in range(len(res_ref[i_res]))]
                     if sum(diff) == len(res_ref[i_res]):
                         params.logInfo(f'{i_res_name}: Passed')
+                        compare_res[0] += 1
                     else:
                         if is_sample: params.logError(f'{i_res_name}: Failed hash with matching {diff} for times {res_in[f"Time_s_{sample_grid}.data"]}')
                         else: params.logError(f'{i_res_name}: Failed hash with matching {diff} for times {res_in["Time_s.data"]}')
-                        compare_pass += 1
+                        compare_res[1] += 1
             elif i_res.startswith("Time"):
                 diff = res_in[i_res] - res_ref[i_res]
                 sum_diff = np.sum(diff)
                 if sum_diff != 0:
                     params.logError(f'{i_res_name}: Timings are not equal. This simulation: {res_in[i_res]}, reference: {res_ref[i_res]}')
-                    compare_pass += 1
+                    compare_res[1] += 1
             else:
                 diff = np.abs(res_in[i_res] - res_ref[i_res])
                 sum_diff = np.sum(diff)
-                if sum_diff < params.eps_pass: params.logInfo(f'{i_res_name}: Passed')
+                if sum_diff < params.eps_pass:
+                    params.logInfo(f'{i_res_name}: Passed')
+                    compare_res[0] += 1
                 else:
                     if is_sample: params.logError(f'{i_res_name}: Failed with difference {diff} for times {res_in[f"Time_s_{sample_grid}.data"]}')
                     else: params.logError(f'{i_res_name}: Failed with difference {diff} for times {res_in[f"Time_s.data"]}')
-                    compare_pass += 1
-    return compare_pass
+                    compare_res[1] += 1
+    return compare_res
+
+
+# function to compare debug values of arrays:
+# Global quantitities       - Mismatches are compared up to precision of eps_pass
+# Hash quantitities         - Only works for the same machine, then it should be equal
+def compare_debug(params: TestParams, res_in, res_ref):
+    # compare keys
+    if res_in.keys() != res_ref.keys():
+        params.logError(f"Different data available for this simulation and reference results. This simulation: {res_in.keys()}, reference: {res_ref.keys()}")
+
+    # compare data
+    compare_res = np.array([0, 0])  # counter for passed or failed tests
+    for i_res in res_in.keys():
+        i_res_name = i_res.replace(".data", "")
+        # check if this data is a sample data or computational data
+        is_zoom = "Zoom" in i_res_name
+        if is_zoom: zoom_ctr = int(i_res_name.split("_")[-4 + 3*("Time" in i_res_name)])
+        else: zoom_ctr = 0
+        try:
+            sample_grid = int(i_res_name.split("_")[-2 + 4*is_zoom])  # if second last is only digits then we assume it comes from sample grid size
+            is_sample = True
+        except:  # elsewise it is not a sampled variable
+            is_sample = False
+            sample_grid = 0
+
+        # check if this data is present in reference data
+        if not i_res in res_ref.keys():
+            params.logError(f"{i_res_name}: Not available for reference results")
+            compare_res[1] += 1
+            continue
+        # check if the data has the same length
+        elif len(res_in[i_res]) != len(res_ref[i_res]):
+            params.logError(f"{i_res_name}: Different data length. This simulation: {len(res_in[i_res])}, reference: {len(res_ref[i_res])}")
+            compare_res[1] += 1
+            continue
+        # compare values now
+        else:
+            if i_res_name.endswith("Hash"):
+                if params.same_architecture:
+                    diff = [res_in[i_res][i_len] == res_ref[i_res][i_len] for i_len in range(len(res_ref[i_res]))]
+                    if sum(diff) == len(res_ref[i_res]):
+                        params.logInfo(f'{i_res_name}: Passed')
+                        compare_res[0] += 1
+                    else:
+                        time_name = "Time_s" + is_sample*f"_{sample_grid}" + is_zoom*f"_Zoom_{zoom_ctr}" + ".data"
+                        params.logError(f'{i_res_name}: Failed hash with matching {diff} for times {res_in[time_name]}')
+                        compare_res[1] += 1
+            elif i_res.startswith("Time"):
+                diff = res_in[i_res] - res_ref[i_res]
+                sum_diff = np.sum(diff)
+                if sum_diff != 0:
+                    params.logError(f'{i_res_name}: Timings are not equal. This simulation: {res_in[i_res]}, reference: {res_ref[i_res]}')
+                    compare_res[1] += 1
+            else:
+                diff = np.abs(res_in[i_res] - res_ref[i_res])
+                sum_diff = np.sum(diff)
+                if sum_diff < params.eps_pass:
+                    params.logInfo(f'{i_res_name}: Passed')
+                    compare_res[0] += 1
+                else:
+                    time_name = "Time_s" + is_sample*f"_{sample_grid}" + is_zoom*f"_Zoom_{zoom_ctr}" + ".data"
+                    params.logError(f'{i_res_name}: Failed with difference {diff} for times {res_in[time_name]}')
+                    compare_res[1] += 1
+    return compare_res
 
 
 # function to compare monitoring values:
@@ -161,8 +242,12 @@ def compare_mesure(params:TestParams, res_in, res_ref):
 # Remapping values          - Check if remapping occurs similar in quantity and at what time
 # Inc / Inv error           - if this matches, then it should be a strong hint on a similar simulation as it has to match every single step
 def compare_monitoring(params: TestParams, res_in, res_ref):
+    # compare keys
+    if res_in.keys() != res_ref.keys():
+        params.logError(f"Different data available for this simulation and reference results. This simulation: {res_in.keys()}, reference: {res_ref.keys()}")
+
     # compare data
-    compare_pass = 0  # counter for failed tests
+    compare_res = np.array([0, 0])  # counter for passed or failed tests
     for i_res in res_in.keys():
         i_res_name = i_res.replace(".data", "")
         # check if this data is present in reference data
@@ -181,7 +266,7 @@ def compare_monitoring(params: TestParams, res_in, res_ref):
                 sum_diff = np.sum(diff)
                 if sum_diff != 0:
                     params.logError(f'{i_res_name}: Timings are not equal. This simulation: {res_in["Time_s.data"]}, reference: {res_ref["Time_s.data"]}, diff: {sum_diff}')
-                    compare_pass += 1
+                    compare_res[1] += 1
             elif i_res.startswith("Map"):
                 if i_res.endswith("counter.data"):
                     # compute indices where map counter increases
@@ -190,21 +275,26 @@ def compare_monitoring(params: TestParams, res_in, res_ref):
                     # compare
                     if map_ind_in.size != map_ind_ref.size:
                         params.logError(f'{i_res_name}: Different amount of remappings occurred. This simulation: {map_ind_in.size()}, reference: {map_ind_ref.size()}')
-                        compare_pass += 1
+                        compare_res[1] += 1
+                        continue
                     diff = map_ind_in - map_ind_ref
                     sum_diff = np.sum(diff)
                     if sum_diff != 0:
                         params.logError(f'{i_res_name}: Remapping at different steps. This simulation: {map_ind_in}, reference: {map_ind_ref}')
-                        compare_pass += 1
-                    else: params.logInfo(f'{i_res_name}: Passed')
+                        compare_res[1] += 1
+                    else:
+                        params.logInfo(f'{i_res_name}: Passed')
+                        compare_res[0] += 1
             else:  # incompressibility or invertibility error
                 diff = np.abs(res_in[i_res] - res_ref[i_res])
                 sum_diff = np.sum(diff)
-                if sum_diff < params.eps_pass: params.logInfo(f'{i_res_name}: Passed')
+                if sum_diff < params.eps_pass:
+                    params.logInfo(f'{i_res_name}: Passed')
+                    compare_res[0] += 1
                 else:
                     params.logError(f'{i_res_name}: Failed with difference {diff} for times {res_in["Time_s.data"]}')
-                    compare_pass += 1
-    return compare_pass
+                    compare_res[1] += 1
+    return compare_res
 
 
 def run_test(params: TestParams):
@@ -216,25 +306,27 @@ def run_test(params: TestParams):
     run_sim(params)
 
     # load in simulation and reference data
-    [res_monitor_in, res_mesure_in] = read_monitoring(params, loc=params.results_loc)
-    [res_monitor_ref, res_mesure_ref] = read_monitoring(params, loc=params.reference_loc)
+    [res_monitor_in, res_mesure_in, res_debug_in] = read_monitoring(params, loc=params.results_loc)
+    [res_monitor_ref, res_mesure_ref, res_debug_ref] = read_monitoring(params, loc=params.reference_loc)
 
     # compare monitoring and mesure data
-    compare_pass = compare_monitoring(params, res_in=res_monitor_in, res_ref=res_monitor_ref)
-    compare_pass += compare_mesure(params, res_in=res_mesure_in, res_ref=res_mesure_ref)
+    compare_res = compare_monitoring(params, res_in=res_monitor_in, res_ref=res_monitor_ref)
+    compare_res += compare_mesure(params, res_in=res_mesure_in, res_ref=res_mesure_ref)
+    compare_res += compare_debug(params, res_in=res_debug_in, res_ref=res_debug_ref)
 
     # overwrite reference results
-    if (params.save_reference and compare_pass == 0) or params.save_force:
+    if (params.save_reference and compare_res[1] == 0) or params.save_force:
         params.logInfo("Overwriting reference results")
         # rmtree is weird - we have to first remove old folder before copying
-        shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", params.reference_loc))
-        shutil.copytree(os.path.join(params.root_path, params.wkdir, "data", params.results_loc), os.path.join(params.root_path, params.wkdir, "data", params.reference_loc))
+        rel_ref = os.path.join(params.root_path, params.wkdir, "data", params.reference_loc)
+        if os.path.isdir(rel_ref): shutil.rmtree(rel_ref)
+        shutil.copytree(os.path.join(params.root_path, params.wkdir, "data", params.results_loc), rel_ref)
         # remove particle and time data, as they are currently not needed
-        shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", params.reference_loc, "Particle_data"))
-        shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", params.reference_loc, "Time_data"))
-        shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", params.reference_loc, "Zoom_data"))
+        if os.path.isdir(os.path.join(rel_ref, "Particle_data")): shutil.rmtree(os.path.join(rel_ref, "Particle_data"))
+        if os.path.isdir(os.path.join(rel_ref, "Time_data")): shutil.rmtree(os.path.join(rel_ref, "Time_data"))
+        if os.path.isdir(os.path.join(rel_ref, "Zoom_data")): shutil.rmtree(os.path.join(rel_ref, "Zoom_data"))
     
     # final verdict
-    logging.info(f'{params.name} - Completed with {compare_pass} mismatches')
+    logging.info(f'{params.name} - Completed with {compare_res[1]} mismatches and {compare_res[0]} passed comparisons')
 
-    return compare_pass
+    return compare_res

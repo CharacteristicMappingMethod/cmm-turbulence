@@ -27,31 +27,31 @@
 
 
 // assume Psi is in Hermite form
-void Compute_Energy_H(double &E, CmmVar2D Psi){
+void Compute_Energy_H(double &E, CmmVar2D Psi, size_t offset_start){
 	// parallel reduction using thrust
-	thrust::device_ptr<double> psi_ptr = thrust::device_pointer_cast(Psi.Dev_var);
+	thrust::device_ptr<double> psi_ptr = thrust::device_pointer_cast(Psi.Dev_var+offset_start);
 	E = 0.5*Psi.Grid->hx*Psi.Grid->hy * thrust::transform_reduce(psi_ptr + Psi.Grid->N, psi_ptr + 3*Psi.Grid->N, thrust::square<double>(), 0.0, thrust::plus<double>());
 //	printf("Energ : %f\n", *E);
 }
 // similar to palinstrophy: compute by FFT here
-void Compute_Energy(double &E, CmmVar2D Psi, cufftDoubleComplex *Dev_Temp_C1){
+void Compute_Energy(double &E, CmmVar2D Psi, cufftDoubleComplex *Dev_Temp_C1, size_t offset_start){
 	// round 1: dx dervative
-	grad_x(Psi, (cufftDoubleReal*)Dev_Temp_C1 + Psi.Grid->Nfft*2, Dev_Temp_C1);
+	grad_x(Psi, (cufftDoubleReal*)Dev_Temp_C1 + Psi.Grid->Nfft*2, Dev_Temp_C1, offset_start);
 	// parallel reduction using thrust working on Grid.Nfft*2 due to inline fft padding
 	thrust::device_ptr<double> psi_ptr = thrust::device_pointer_cast((cufftDoubleReal*)Dev_Temp_C1);
 	E = 0.5*Psi.Grid->hx*Psi.Grid->hy * thrust::transform_reduce(psi_ptr + 2*Psi.Grid->Nfft, psi_ptr + 2*Psi.Grid->Nfft + Psi.Grid->N, thrust::square<double>(), 0.0, thrust::plus<double>());
 
 	// round 2: dy dervative
-	grad_y(Psi, (cufftDoubleReal*)Dev_Temp_C1 + Psi.Grid->Nfft*2, Dev_Temp_C1);
+	grad_y(Psi, (cufftDoubleReal*)Dev_Temp_C1 + Psi.Grid->Nfft*2, Dev_Temp_C1, offset_start);
 	// parallel reduction using thrust
 	E += 0.5*Psi.Grid->hx*Psi.Grid->hy * thrust::transform_reduce(psi_ptr + 2*Psi.Grid->Nfft, psi_ptr + 2*Psi.Grid->Nfft + Psi.Grid->N, thrust::square<double>(), 0.0, thrust::plus<double>());
 //	printf("Energ : %f\n", *E);
 }
 
 
-void Compute_Enstrophy(double &E, CmmVar2D Vort){
+void Compute_Enstrophy(double &E, CmmVar2D Vort, size_t offset_start){
 	// parallel reduction using thrust
-	thrust::device_ptr<double> W_ptr = thrust::device_pointer_cast(Vort.Dev_var);
+	thrust::device_ptr<double> W_ptr = thrust::device_pointer_cast(Vort.Dev_var+offset_start);
 	E = 0.5*Vort.Grid->hx*Vort.Grid->hy * thrust::transform_reduce(W_ptr, W_ptr + Vort.Grid->N, thrust::square<double>(), 0.0, thrust::plus<double>());
 //	printf("Enstr : %f\n", *E);
 }
@@ -72,16 +72,17 @@ void Compute_Enstrophy_fourier(double &E, cufftDoubleComplex *W, TCudaGrid2D Gri
 }
 
 
-// compute palinstrophy using fourier transformations - a bit more expensive with one temporary array but ca marche
-void Compute_Palinstrophy(double &Pal, CmmVar2D Vort, cufftDoubleComplex *Dev_Temp_C1){
+// compute palinstrophy using fourier transformations
+// Dev_Temp_C1 needs size 2 x Grid Vort Nfft in space
+void Compute_Palinstrophy(double &Pal, CmmVar2D Vort, cufftDoubleComplex *Dev_Temp_C1, size_t offset_start){
 	// round 1: dx dervative
-	grad_x(Vort, (cufftDoubleReal*)Dev_Temp_C1 + Vort.Grid->Nfft*2, Dev_Temp_C1);
+	grad_x(Vort, (cufftDoubleReal*)Dev_Temp_C1 + Vort.Grid->Nfft*2, Dev_Temp_C1, offset_start);
 	// parallel reduction using thrust working on Grid.Nfft*2 due to inline fft padding
 	thrust::device_ptr<double> Pal_ptr = thrust::device_pointer_cast((cufftDoubleReal*)Dev_Temp_C1);
 	Pal = 0.5*Vort.Grid->hx*Vort.Grid->hy * thrust::transform_reduce(Pal_ptr + 2*Vort.Grid->Nfft, Pal_ptr + 2*Vort.Grid->Nfft + Vort.Grid->N, thrust::square<double>(), 0.0, thrust::plus<double>());
 
 	// round 2: dy dervative
-	grad_y(Vort, (cufftDoubleReal*)Dev_Temp_C1 + Vort.Grid->Nfft*2, Dev_Temp_C1);
+	grad_y(Vort, (cufftDoubleReal*)Dev_Temp_C1 + Vort.Grid->Nfft*2, Dev_Temp_C1, offset_start);
 	// parallel reduction using thrust
 	Pal += 0.5*Vort.Grid->hx*Vort.Grid->hy * thrust::transform_reduce(Pal_ptr + 2*Vort.Grid->Nfft, Pal_ptr + 2*Vort.Grid->Nfft + Vort.Grid->N, thrust::square<double>(), 0.0, thrust::plus<double>());
 //	printf("Pal : %f\n", *Pal);
@@ -93,13 +94,13 @@ Vlasov Poisson
 ##############################################################################
 */ 
 
-void Compute_Mass(double &mass, CmmVar2D VarIn) {
+void Compute_Mass(double &mass, CmmVar2D VarIn, size_t offset_start) {
 	// #############################################################################################
 	//   this function computes the electrical energy of the system defined by the potential psi
 	//		 \Ekin(t) =\frac{1}{2}\int_{\Omega_v} \int_{\Omega_x} f(x,v,t) \abs{v}^2 \d x\, \d v\,.
 	// #############################################################################################
 	
-	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(VarIn.Dev_var);
+	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(VarIn.Dev_var+offset_start);
 	mass = VarIn.Grid->hy * VarIn.Grid->hx * thrust::reduce( ptr, ptr + VarIn.Grid->N, 0.0, thrust::plus<double>());
 }
 
@@ -118,18 +119,18 @@ __global__ void generate_gridvalues_f_times_v_square(cufftDoubleReal *v2,cufftDo
 	v2[In] = v_temp*v_temp*f[In];
 }
 
-void Compute_Kinetic_Energy(double &E_out, CmmVar2D VarIn, cufftDoubleReal *Dev_Temp_C1){
+void Compute_Kinetic_Energy(double &E_out, CmmVar2D VarIn, cufftDoubleReal *Dev_Temp_C1, size_t offset_start){
 	// #############################################################################################
 	//   this function computes the electrical energy of the system defined by the potential psi
 	//		 \Ekin(t) =\frac{1}{2}\int_{\Omega_v} \int_{\Omega_x} f(x,v,t) \abs{v}^2 \d x\, \d v\,.
 	// #############################################################################################
 	
-	generate_gridvalues_f_times_v_square<<<VarIn.Grid->blocksPerGrid, VarIn.Grid->threadsPerBlock>>>(Dev_Temp_C1, VarIn.Dev_var, *VarIn.Grid);
+	generate_gridvalues_f_times_v_square<<<VarIn.Grid->blocksPerGrid, VarIn.Grid->threadsPerBlock>>>(Dev_Temp_C1, VarIn.Dev_var+offset_start, *VarIn.Grid);
 	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Dev_Temp_C1);
 	E_out = 0.5 * VarIn.Grid->hy * VarIn.Grid->hx * thrust::reduce( ptr, ptr + VarIn.Grid->N, 0.0, thrust::plus<double>());
 }
 
-void Compute_Potential_Energy(double &E_out, CmmVar2D VarIn){
+void Compute_Potential_Energy(double &E_out, CmmVar2D VarIn, size_t offset_start){
 	// #############################################################################################
 	// this function computes the electrical energy of the system defined by the potential psi
 	// 		 \Epot(t) =\frac{1}{2}\int_{\Omega_x} \abs{E(x,t)}^2 \d x \,.
@@ -137,38 +138,55 @@ void Compute_Potential_Energy(double &E_out, CmmVar2D VarIn){
 	// #############################################################################################
 
 	// parallel reduction using thrust
-	thrust::device_ptr<double> psi_ptr = thrust::device_pointer_cast(VarIn.Dev_var);
+	thrust::device_ptr<double> psi_ptr = thrust::device_pointer_cast(VarIn.Dev_var+offset_start);
 	E_out = 0.5 * VarIn.Grid->hx * thrust::transform_reduce(psi_ptr + 1*VarIn.Grid->N, psi_ptr + VarIn.Grid->N + VarIn.Grid->NX, thrust::square<double>(), 0.0, thrust::plus<double>());
 }
 
 
-void Compute_Total_Energy(double &E_tot, double &E_kin, double &E_pot, CmmVar2D VarKin, CmmVar2D VarPot, cufftDoubleReal *Dev_Temp_C1){
+void Compute_Total_Energy(double &E_tot, double &E_kin, double &E_pot, CmmVar2D VarKin, CmmVar2D VarPot, cufftDoubleReal *Dev_Temp_C1, size_t offset_start_K, size_t offset_start_P){
 	// #############################################################################################
 	//  this function computes the total energy of the vlasov poisson system defined by the potential psi and the distribution function f
 	// #############################################################################################
-	Compute_Kinetic_Energy(E_kin, VarKin, Dev_Temp_C1);
-	Compute_Potential_Energy(E_pot, VarPot);
+	Compute_Kinetic_Energy(E_kin, VarKin, Dev_Temp_C1, offset_start_K);
+	Compute_Potential_Energy(E_pot, VarPot, offset_start_P);
 	E_tot = E_kin + E_pot;
 }
 
 
 // function to compute several global quantities for comparison purposes
 // currently: min, max, area weighted avg, area weighted L2 norm
-void Compute_min(double &mesure, CmmVar2D Var) {
-	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Var.Dev_var);
-	mesure = thrust::reduce( ptr, ptr + Var.Grid->N, Var.Dev_var[0], thrust::minimum<double>());
+void Compute_min(double &mesure, CmmVar2D Var, size_t offset_start) {
+	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Var.Dev_var+offset_start);
+	mesure = *thrust::min_element(ptr, ptr + Var.Grid->N);
 }
-void Compute_max(double &mesure, CmmVar2D Var) {
-	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Var.Dev_var);
-	mesure = thrust::reduce( ptr, ptr + Var.Grid->N, Var.Dev_var[0], thrust::maximum<double>());
+void Compute_max(double &mesure, CmmVar2D Var, size_t offset_start) {
+	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Var.Dev_var+offset_start);
+	mesure = *thrust::max_element(ptr, ptr + Var.Grid->N);
 }
-void Compute_avg(double &mesure, CmmVar2D Var) {
-	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Var.Dev_var);
+void Compute_avg(double &mesure, CmmVar2D Var, size_t offset_start) {
+	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Var.Dev_var+offset_start);
+	mesure = Var.Grid->hy * Var.Grid->hx * thrust::reduce( ptr, ptr + Var.Grid->N, 0.0, thrust::maximum<double>());
+}
+void Compute_L2(double &mesure, CmmVar2D Var, size_t offset_start) {
+	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Var.Dev_var+offset_start);
 	mesure = Var.Grid->hy * Var.Grid->hx * thrust::reduce( ptr, ptr + Var.Grid->N, 0.0, thrust::plus<double>());
 }
-void Compute_L2(double &mesure, CmmVar2D Var) {
-	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Var.Dev_var);
-	mesure = Var.Grid->hy * Var.Grid->hx * thrust::transform_reduce( ptr, ptr + Var.Grid->N, thrust::square<double>(), 0.0, thrust::plus<double>());
+// for normal arrays, averaged later is over length
+void Compute_min(double &mesure, double* Dev_var, size_t N, size_t offset_start) {
+	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Dev_var+offset_start);
+	mesure = *thrust::min_element(ptr, ptr + N);
+}
+void Compute_max(double &mesure, double* Dev_var, size_t N, size_t offset_start) {
+	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Dev_var+offset_start);
+	mesure = *thrust::max_element(ptr, ptr + N);
+}
+void Compute_avg(double &mesure, double* Dev_var, size_t N, size_t offset_start) {
+	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Dev_var+offset_start);
+	mesure = thrust::reduce( ptr, ptr + N, 0.0, thrust::maximum<double>()) / (double)(N);
+}
+void Compute_L2(double &mesure, double* Dev_var, size_t N, size_t offset_start) {
+	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Dev_var+offset_start);
+	mesure = thrust::reduce( ptr, ptr + N, 0.0, thrust::plus<double>()) / (double)(N);
 }
 
 

@@ -236,6 +236,7 @@ public:
 	std::string getFileName() const { return file_name; }
 	void setFileName(std::string fileName) { file_name = fileName; }
 	// grid settings
+	double* getDomainBoundsPointer() { return domain_bounds; }
 	std::string getDomainBounds() const { return arrayToString(domain_bounds, 2*MAX_DIM); }
 	void getDomainBounds(double* domainBounds) {
 		for (int i= 0; i < 2*MAX_DIM; i++) {
@@ -248,8 +249,7 @@ public:
     	}
 		
 		// check if bounds are correct (positive non-zero)
-		double Lx = domain_bounds[1]-domain_bounds[0];
-		double Ly = domain_bounds[3]-domain_bounds[2];
+		double Lx = domain_bounds[1]-domain_bounds[0]; double Ly = domain_bounds[3]-domain_bounds[2];
 		if (!(Lx > 1e-16 & Ly > 1e-16)) {
 			error("Bonjour, there might be a problem in the engine room! We need your help! The domain bounds are not correct!" , 20230517);
 		}

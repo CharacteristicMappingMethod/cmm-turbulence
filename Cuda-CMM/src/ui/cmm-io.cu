@@ -38,8 +38,13 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax
 	std::string folder_name_tdata = folder_name + "/Monitoring_data";
 	mkdir(folder_name_tdata.c_str(), 0777);
 	// create general subfolder for mesure data
-	folder_name_tdata = folder_name + "/Monitoring_data/Mesure/";
+	folder_name_tdata = folder_name + "/Monitoring_data/Mesure";
 	mkdir(folder_name_tdata.c_str(), 0777);
+	// some stats are computed for debugging purposes
+	if (SettingsMain.getVerbose() >= 4) {
+		folder_name_tdata = folder_name + "/Monitoring_data/Debug_globals";
+		mkdir(folder_name_tdata.c_str(), 0777);
+	}
 
 	// create general subfolder for timesteps
 	folder_name_tdata = folder_name + "/Time_data";
@@ -64,7 +69,7 @@ void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax
 *******************************************************************/
 
 
-void writeAllRealToBinaryFile(int Len, double *var, SettingsCMM SettingsMain, std::string data_name)
+void writeAllRealToBinaryFile(size_t Len, double *var, SettingsCMM SettingsMain, std::string data_name)
 {
 	std::string fileName = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + data_name + ".data";
 	std::ofstream file(fileName.c_str(), std::ios::out | std::ios::binary);
@@ -80,7 +85,7 @@ void writeAllRealToBinaryFile(int Len, double *var, SettingsCMM SettingsMain, st
 
 	file.close();
 }
-void writeAppendToBinaryFile(int Len, double *var, SettingsCMM SettingsMain, std::string data_name)
+void writeAppendToBinaryFile(size_t Len, double *var, SettingsCMM SettingsMain, std::string data_name)
 {
 	std::string fileName = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + data_name + ".data";
 	std::ofstream file(fileName.c_str(), std::ios::out | std::ios::app | std::ios::binary);
@@ -98,7 +103,7 @@ void writeAppendToBinaryFile(int Len, double *var, SettingsCMM SettingsMain, std
 }
 
 
-bool readAllRealFromBinaryFile(int Len, double *var, std::string data_name)
+bool readAllRealFromBinaryFile(size_t Len, double *var, std::string data_name)
 {
 	std::string fileName = data_name;
 	std::ifstream file(fileName.c_str(), std::ios::in | std::ios::binary);
@@ -120,7 +125,7 @@ bool readAllRealFromBinaryFile(int Len, double *var, std::string data_name)
 
 
 
-void writeTranferToBinaryFile(int Len, double *d_var, SettingsCMM SettingsMain, std::string data_name, bool do_append)  {
+void writeTransferToBinaryFile(size_t Len, double *d_var, SettingsCMM SettingsMain, std::string data_name, bool do_append)  {
 	int chunkSize = 1024;
 	std::string fileName = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + data_name + ".data";
 	std::ofstream file;
@@ -138,10 +143,10 @@ void writeTranferToBinaryFile(int Len, double *d_var, SettingsCMM SettingsMain, 
 		cudaStreamCreate(&stream);
 
 		// Read and transfer the data in chunks
-		long long int offset = 0;
+		size_t offset = 0;
 		while (offset < Len) {
-			// check to match Len perfectly
-			if (abs(Len - offset) < chunkSize) chunkSize = Len - offset;
+			// check to match Len perfectly, I had to remove abs function, but it should work without
+			if (Len - offset < chunkSize) chunkSize = Len - offset;
 
 			// Allocate host memory for the chunk
 			double* hostData = new double[chunkSize];
@@ -165,7 +170,7 @@ void writeTranferToBinaryFile(int Len, double *d_var, SettingsCMM SettingsMain, 
 
 	file.close();
 }
-bool readTransferFromBinaryFile(long long int Len, double *d_var, std::string data_name) {
+bool readTransferFromBinaryFile(size_t Len, double *d_var, std::string data_name) {
 	int chunkSize = 1024;
 	std::string fileName = data_name;
 	std::ifstream file(fileName.c_str(), std::ios::in | std::ios::binary);
@@ -184,8 +189,8 @@ bool readTransferFromBinaryFile(long long int Len, double *d_var, std::string da
 		// Read and transfer the data in chunks
 		long long int offset = 0;
 		while (!file.eof() && offset < Len) {
-			// check to match Len perfectly
-			if (abs(Len - offset) < chunkSize) chunkSize = Len - offset;
+			// check to match Len perfectly, I had to remove abs function, but it should work without
+			if (Len - offset < chunkSize) chunkSize = Len - offset;
 
 			// Allocate host memory for the chunk
 			double* hostData = new double[chunkSize];
@@ -288,7 +293,7 @@ std::string writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid
 // binary version
 #else
 	std::string writeTimeStep(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
-			std::map<std::string, CmmVar2D*> cmmVarMap) {
+			std::map<std::string, CmmVar2D*> cmmVarMap, std::map<std::string, CmmPart*> cmmPartMap, double *Dev_Temp) {
 
 		// check if we want to save at this time, combine all variables if so
 		bool save_now = false; std::string save_var;
@@ -307,61 +312,125 @@ std::string writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid
 				save_now = true; save_var = save_var + save_comp[i_save].var;
 			}
 		}
-		std::string message = "";
+		std::string message = ""; bool saved_any_var = false;
 		if (save_now) {
-			std::string sub_folder_name;
+			std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
+			std::string sub_folder_name = "";
+			bool save_all = save_var.find("All") != std::string::npos;  // master save switch
 			if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos or
 					save_var.find("Stream") != std::string::npos or save_var.find("Psi") != std::string::npos or
 					save_var.find("Map") != std::string::npos or save_var.find("Chi") != std::string::npos or
-					save_var.find("Velocity") != std::string::npos or save_var.find("U") != std::string::npos) {
+					save_var.find("Velocity") != std::string::npos or save_var.find("U") != std::string::npos or
+					save_var.find("Dist") != std::string::npos or save_var.find("F") != std::string::npos or
+					save_all) {
 				// create new subfolder for current timestep
-				std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
 				sub_folder_name = "/Time_data/Time_" + t_s_now;
 				std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
 				struct stat st = {0};
 				if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
+
+				// for debug: save time position
+				if (SettingsMain.getVerbose() >= 4) {
+					writeAppendToBinaryFile(1, &t_now, SettingsMain, "/Monitoring_data/Debug_globals/Time_s");  // time vector for data
+				}
+				saved_any_var = true;  // so that we dont save timing twice in particles
 
 				// construct message here as we are sure it is being saved something
 				message = "Processed computational data";
 			}
 
 			// Vorticity on coarse grid : W_coarse
-			if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos) {
-				writeTranferToBinaryFile(cmmVarMap["Vort"]->Grid->N, cmmVarMap["Vort"]->Dev_var, SettingsMain, sub_folder_name + "/Vorticity_W_coarse", false);
+			if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos or save_all) {
+				writeTimeVariable(SettingsMain, "Vorticity_W_coarse", t_now, *cmmVarMap["Vort"]);
+			}
+
+			// Distribution function on computational grid, is just Vort currently
+			if (save_var.find("Dist") != std::string::npos or save_var.find("F") != std::string::npos or save_all) {
+				writeTimeVariable(SettingsMain, "Distribution_coarse", t_now, *cmmVarMap["Vort"]);
 			}
 
 			// Stream function on psi grid : Psi_psi
-			if (save_var.find("Stream") != std::string::npos or save_var.find("Psi") != std::string::npos) {
-				writeTranferToBinaryFile(cmmVarMap["Psi"]->Grid->N, cmmVarMap["Psi"]->Dev_var, SettingsMain, sub_folder_name + "/Stream_function_Psi_psi", false);
+			if (save_var.find("Stream") != std::string::npos or save_var.find("Psi") != std::string::npos or save_all) {
+				writeTimeVariable(SettingsMain, "Stream_function_Psi_psi", t_now, *cmmVarMap["Psi"]);
 			}
-			if (save_var.find("Stream_H") != std::string::npos or save_var.find("Psi_H") != std::string::npos) {
-				writeTranferToBinaryFile(4*cmmVarMap["Psi"]->Grid->N, cmmVarMap["Psi"]->Dev_var, SettingsMain, sub_folder_name + "/Stream_function_Psi_H_psi", false);
+			if (save_var.find("Stream_H") != std::string::npos or save_var.find("Psi_H") != std::string::npos or save_all) {
+				writeArr(SettingsMain, sub_folder_name, "Stream_function_Psi_H_psi", cmmVarMap["Psi"]->Dev_var, 4*cmmVarMap["Psi"]->Grid->N);
+//				writeTransferToBinaryFile(4*cmmVarMap["Psi"]->Grid->N, cmmVarMap["Psi"]->Dev_var, SettingsMain, sub_folder_name + "/Stream_function_Psi_H_psi", false);
 			}
 
 			// Velocity on psi grid : U_psi, x-direction and y-direction
-			if (save_var.find("Velocity") != std::string::npos or save_var.find("U") != std::string::npos) {
-				writeTranferToBinaryFile(cmmVarMap["Psi"]->Grid->N, cmmVarMap["Psi"]->Dev_var+1*cmmVarMap["Psi"]->Grid->N, SettingsMain, sub_folder_name + "/Velocity_UX_psi", false);
-				writeTranferToBinaryFile(cmmVarMap["Psi"]->Grid->N, cmmVarMap["Psi"]->Dev_var+2*cmmVarMap["Psi"]->Grid->N, SettingsMain, sub_folder_name + "/Velocity_UY_psi", false);
+			if (save_var.find("Velocity") != std::string::npos or save_var.find("U") != std::string::npos or save_all) {
+				writeTimeVariable(SettingsMain, "Velocity_UX_psi", t_now, *cmmVarMap["Psi"], 1*cmmVarMap["Psi"]->Grid->N);
+				writeTimeVariable(SettingsMain, "Velocity_UY_psi", t_now, *cmmVarMap["Psi"], 2*cmmVarMap["Psi"]->Grid->N);
 			}
 
 			// Backwards map on coarse grid in Hermite or single version : Chi_coarse, x- and y-direction
-			if (save_var.find("Map_b") != std::string::npos or save_var.find("Chi_b") != std::string::npos) {
-				writeTranferToBinaryFile(cmmVarMap["ChiX"]->Grid->N, cmmVarMap["ChiX"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiX_coarse", false);
-				writeTranferToBinaryFile(cmmVarMap["ChiY"]->Grid->N, cmmVarMap["ChiY"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiY_coarse", false);
+			if (save_var.find("Map_b") != std::string::npos or save_var.find("Chi_b") != std::string::npos or save_all) {
+				writeTimeVariable(SettingsMain, "Map_ChiX_coarse", t_now, *cmmVarMap["ChiX"]);
+				writeTimeVariable(SettingsMain, "Map_ChiY_coarse", t_now, *cmmVarMap["ChiY"]);
 			}
-			if (save_var.find("Map_H") != std::string::npos or save_var.find("Chi_H") != std::string::npos) {
-				writeTranferToBinaryFile(4*cmmVarMap["ChiX"]->Grid->N, cmmVarMap["ChiX"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiX_H_coarse", false);
-				writeTranferToBinaryFile(4*cmmVarMap["ChiY"]->Grid->N, cmmVarMap["ChiY"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiY_H_coarse", false);
+			if (save_var.find("Map_H") != std::string::npos or save_var.find("Chi_H") != std::string::npos or save_all) {
+				writeArr(SettingsMain, sub_folder_name, "Map_ChiX_H_coarse", cmmVarMap["ChiX"]->Dev_var, 4*cmmVarMap["ChiX"]->Grid->N);
+				writeArr(SettingsMain, sub_folder_name, "Map_ChiY_H_coarse", cmmVarMap["ChiY"]->Dev_var, 4*cmmVarMap["ChiY"]->Grid->N);
+//				writeTransferToBinaryFile(4*cmmVarMap["ChiX"]->Grid->N, cmmVarMap["ChiX"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiX_H_coarse", false);
+//				writeTransferToBinaryFile(4*cmmVarMap["ChiY"]->Grid->N, cmmVarMap["ChiY"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiY_H_coarse", false);
 			}
 
 			// Forwards map on coarse grid in Hermite or single version : Chi_f_coarse, x- and y-direction
-			if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos) {
-				writeTranferToBinaryFile(cmmVarMap["ChiX_f"]->Grid->N, cmmVarMap["ChiX_f"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiX_f_coarse", false);
-				writeTranferToBinaryFile(cmmVarMap["ChiY_f"]->Grid->N, cmmVarMap["ChiY_f"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiY_f_coarse", false);
+			if (SettingsMain.getForwardMap() and (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos or save_all)) {
+				writeTimeVariable(SettingsMain, "Map_ChiX_f_coarse", t_now, *cmmVarMap["ChiX_f"]);
+				writeTimeVariable(SettingsMain, "Map_ChiY_f_coarse", t_now, *cmmVarMap["ChiY_f"]);
 			}
-			if (save_var.find("Map_f_H") != std::string::npos or save_var.find("Chi_f_H") != std::string::npos) {
-				writeTranferToBinaryFile(4*cmmVarMap["ChiX_f"]->Grid->N, cmmVarMap["ChiX_f"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiX_f_H_coarse", false);
-				writeTranferToBinaryFile(4*cmmVarMap["ChiY_f"]->Grid->N, cmmVarMap["ChiY_f"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiY_f_H_coarse", false);
+			if (SettingsMain.getForwardMap() and (save_var.find("Map_f_H") != std::string::npos or save_var.find("Chi_f_H") != std::string::npos or save_all)) {
+				writeArr(SettingsMain, sub_folder_name, "Map_ChiX_f_H_coarse", cmmVarMap["ChiX_f"]->Dev_var, 4*cmmVarMap["ChiX_f"]->Grid->N);
+				writeArr(SettingsMain, sub_folder_name, "Map_ChiY_f_H_coarse", cmmVarMap["ChiY_f"]->Dev_var, 4*cmmVarMap["ChiY_f"]->Grid->N);
+//				writeTransferToBinaryFile(4*cmmVarMap["ChiX_f"]->Grid->N, cmmVarMap["ChiX_f"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiX_f_H_coarse", false);
+//				writeTransferToBinaryFile(4*cmmVarMap["ChiY_f"]->Grid->N, cmmVarMap["ChiY_f"]->Dev_var, SettingsMain, sub_folder_name + "/Map_ChiY_f_H_coarse", false);
+			}
+
+			/*
+			 *  particles, it was moved here because it is also controlled with saveComputational
+			 */
+			// save for every PartA_ that is found
+			ParticlesAdvected* particles_advected = SettingsMain.getParticlesAdvected();
+
+			sub_folder_name = "/Particle_data/Time_" + t_s_now;
+			std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
+
+			// create new subfolder for current timestep, doesn't matter if we try to create it several times
+			if (save_var.find("PartA_", 0) != std::string::npos or save_all) {
+				struct stat st = {0};
+				if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
+
+				if (!saved_any_var and SettingsMain.getVerbose() >= 4) {
+					writeAppendToBinaryFile(1, &t_now, SettingsMain, "/Monitoring_data/Debug_globals/Time_s");  // time vector for data
+				}
+
+				// construct message here as we are sure it is being saved something
+				message = "Processed particle data";
+			}
+
+			for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
+				// particle position first
+				if (save_var.find("PartA_" + to_str_0(i_p+1, 2)) != std::string::npos or save_all) {
+					std::string part_map_name = "PartA_Pos_P" + to_str_0(i_p+1, 2);
+					writePart(SettingsMain, sub_folder_name, "/Particles_advected_pos_P" + to_str_0(i_p+1, 2), *cmmPartMap[part_map_name]);
+				}
+				// particle velocity now
+				if (save_var.find("PartA_Vel_" + to_str_0(i_p+1, 2)) != std::string::npos or save_all) {
+					// copy data to host and save - but only if tau != 0
+					if (particles_advected[i_p].tau != 0) {
+						std::string part_map_name = "PartA_Vel_U" + to_str_0(i_p+1, 2);
+						writePart(SettingsMain, sub_folder_name, "/Particles_advected_vel_U" + to_str_0(i_p+1, 2), *cmmPartMap[part_map_name]);
+					}
+					// sample velocity values from current stream function at particle positions
+					else {
+						std::string part_map_name = "PartA_Pos_P" + to_str_0(i_p+1, 2);
+						CmmPart Part_Pos_now = *cmmPartMap[part_map_name];
+						k_h_sample_points_dxdy<<<Part_Pos_now.block, Part_Pos_now.thread>>>(*cmmVarMap["Psi"]->Grid, *cmmVarMap["Psi"]->Grid, cmmVarMap["Psi"]->Dev_var, Part_Pos_now.Dev_var, Dev_Temp, Part_Pos_now.num);
+						writeArr(SettingsMain, sub_folder_name, "/Particles_advected_vel_U" + to_str_0(i_p+1, 2), Dev_Temp, 2*Part_Pos_now.num);
+					}
+				}
 			}
 		}
 		return message;
@@ -370,7 +439,8 @@ std::string writeTimeStep(SettingsCMM SettingsMain, std::string i_num, TCudaGrid
 
 
 // script to save only one of the variables, needed because we need temporal arrays to save
-void writeTimeVariable(SettingsCMM SettingsMain, std::string data_name, double t_now, double *Dev_save, long int N) {
+// Data is located at Var.Dev_var + offset_start
+void writeTimeVariable(SettingsCMM SettingsMain, std::string data_name, double t_now, CmmVar2D Var, size_t offset_start) {
 	// create new subfolder for current timestep, doesn't matter if we try to create it several times
 	std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
 	std::string sub_folder_name = "/Time_data/Time_" + t_s_now;
@@ -378,25 +448,90 @@ void writeTimeVariable(SettingsCMM SettingsMain, std::string data_name, double t
 	struct stat st = {0};
 	if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
 
-	// copy and save
-	writeTranferToBinaryFile(N, Dev_save, SettingsMain, sub_folder_name + "/" + data_name, false);
+	writeVar(SettingsMain, sub_folder_name, data_name, Var, offset_start);
 }
 
-// script to save only one of the variables, but with offset
-void writeTimeVariable(SettingsCMM SettingsMain, std::string data_name, double t_now, double *Host_save, double *Dev_save, long int size_N, long int N, int offset) {
+
+// this function handles additionally the folder creation for zoom files
+void writeZoomVariable(SettingsCMM SettingsMain, std::string data_name, int zoom_num, int zoom_rep, double t_now, CmmVar2D Var, size_t offset_start) {
 	// create new subfolder for current timestep, doesn't matter if we try to create it several times
 	std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
-	std::string sub_folder_name = "/Time_data/Time_" + t_s_now;
+	std::string sub_folder_name = "/Zoom_data/Time_" + t_s_now;
 	std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
 	struct stat st = {0};
 	if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
+	// extra folder for specific zoom an repetition
+	std::string zr_s_now = "Zoom_" + to_str(zoom_num + 1) + "_rep_" + to_str(zoom_rep);
+	sub_folder_name += "/" + zr_s_now; folder_name_now += "/" + zr_s_now;
+	if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
 
-	// copy and save
-	cudaMemcpy2D(Host_save, sizeof(double), Dev_save, sizeof(double)*2, sizeof(double), N, cudaMemcpyDeviceToHost);
-	writeAllRealToBinaryFile(N, Host_save, SettingsMain, sub_folder_name + "/" + data_name);
+	writeVar(SettingsMain, sub_folder_name, data_name, Var, offset_start, zr_s_now);
 }
 
 
+void writeVar(SettingsCMM SettingsMain, std::string sub_folder_name, std::string data_name, CmmVar2D Var, size_t offset_start, std::string debug_name_add) {
+	// copy and save, but not for increased debug
+	if (SettingsMain.getVerbose() < 4) {
+		writeTransferToBinaryFile(Var.Grid->N, Var.Dev_var+offset_start, SettingsMain, sub_folder_name + "/" + data_name, false);
+	}
+	else {
+		std::string debug_add = "";
+		if (debug_name_add != "") debug_add = "_" + debug_name_add;
+		writeVarDebugGlobals(SettingsMain, data_name + debug_add, Var, offset_start);
+	}
+}
+void writePart(SettingsCMM SettingsMain, std::string sub_folder_name, std::string data_name, CmmPart Part, size_t offset_start, std::string debug_name_add) {
+	// copy and save, but not for increased debug
+	if (SettingsMain.getVerbose() < 4) {
+		writeTransferToBinaryFile(2*Part.num, Part.Dev_var+offset_start, SettingsMain, sub_folder_name + "/" + data_name, false);
+	}
+	else {
+		std::string debug_add = "";
+		if (debug_name_add != "") debug_add = "_" + debug_name_add;
+		writeDebugGlobals(SettingsMain, data_name + debug_add, Part.Dev_var, 2*Part.num, offset_start);
+	}
+}
+void writeArr(SettingsCMM SettingsMain, std::string sub_folder_name, std::string data_name, double* Var, size_t N, size_t offset_start, std::string debug_name_add) {
+	// copy and save, but not for increased debug
+	if (SettingsMain.getVerbose() < 4) {
+		writeTransferToBinaryFile(N, Var+offset_start, SettingsMain, sub_folder_name + "/" + data_name, false);
+	}
+	else {
+		std::string debug_add = "";
+		if (debug_name_add != "") debug_add = "_" + debug_name_add;
+		writeDebugGlobals(SettingsMain, data_name + debug_add, Var, N, offset_start);
+	}
+}
+
+
+// save min, max, avgf and L2 of variable, CmmVar2D so grid is given
+void writeVarDebugGlobals(SettingsCMM SettingsMain, std::string data_name, CmmVar2D Var, size_t offset_start) {
+	double mesure[4];
+	// MinMaxAvgL2
+	Compute_min(mesure[0], Var, offset_start); Compute_max(mesure[1], Var, offset_start);
+	Compute_avg(mesure[2], Var, offset_start); Compute_L2(mesure[3], Var, offset_start);
+	writeAppendToBinaryFile(1, mesure, SettingsMain, "/Monitoring_data/Debug_globals/" + data_name + "_Min");
+	writeAppendToBinaryFile(1, mesure+1, SettingsMain, "/Monitoring_data/Debug_globals/" + data_name + "_Max");
+	writeAppendToBinaryFile(1, mesure+2, SettingsMain, "/Monitoring_data/Debug_globals/" + data_name + "_Avg");
+	writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Debug_globals/" + data_name + "_L2");
+	// Hash in extra array
+	double hash[2]; Hash_array((char*)hash, Var.Dev_var, Var.Grid->N);
+	writeAppendToBinaryFile(2, hash, SettingsMain, "/Monitoring_data/Debug_globals/" + data_name + "_Hash");
+}
+// save min, max, avgf and L2 of particles, averaged is over N
+void writeDebugGlobals(SettingsCMM SettingsMain, std::string data_name, double* Var, size_t N, size_t offset_start) {
+	double mesure[4];
+	// MinMaxAvgL2
+	Compute_min(mesure[0], Var, N, offset_start); Compute_max(mesure[1], Var, N, offset_start);
+	Compute_avg(mesure[2], Var, N, offset_start); Compute_L2(mesure[3], Var, N, offset_start);
+	writeAppendToBinaryFile(1, mesure, SettingsMain, "/Monitoring_data/Debug_globals/" + data_name + "_Min");
+	writeAppendToBinaryFile(1, mesure+1, SettingsMain, "/Monitoring_data/Debug_globals/" + data_name + "_Max");
+	writeAppendToBinaryFile(1, mesure+2, SettingsMain, "/Monitoring_data/Debug_globals/" + data_name + "_Avg");
+	writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Debug_globals/" + data_name + "_L2");
+	// Hash in extra array
+	double hash[2]; Hash_array((char*)hash, Var, N);
+	writeAppendToBinaryFile(2, hash, SettingsMain, "/Monitoring_data/Debug_globals/" + data_name + "_Hash");
+}
 
 /*
  * Write particle positions
@@ -430,11 +565,13 @@ std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now
 		ParticlesAdvected* particles_advected = SettingsMain.getParticlesAdvected();
 		int pos_p = save_var.find("PartA_", 0);
 
+		std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
+		std::string sub_folder_name = "/Particle_data/Time_" + t_s_now;
+		std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
+
 		// create new subfolder for current timestep, doesn't matter if we try to create it several times
-		if (save_var.find("PartA_", 0) != std::string::npos or save_var.find("PartAVel_", 0) != std::string::npos) {
-			std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
-			std::string sub_folder_name = "/Particle_data/Time_" + t_s_now;
-			std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
+		bool save_all = save_var.find("All") != std::string::npos;  // master save switch
+		if (save_var.find("PartA_", 0) != std::string::npos or save_all) {
 			struct stat st = {0};
 			if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
 
@@ -444,34 +581,23 @@ std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now
 
 		for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
 			// particle position first
-			if (save_var.find("PartA_" + to_str_0(i_p+1, 2)) != std::string::npos) {
+			if (save_var.find("PartA_" + to_str_0(i_p+1, 2)) != std::string::npos or save_all) {
 				std::string part_map_name = "PartA_Pos_P" + to_str_0(i_p+1, 2);
-				CmmPart Part_Pos_now = *cmmPartMap[part_map_name];
-				writeTranferToBinaryFile(2*Part_Pos_now.num, Part_Pos_now.Dev_var, SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_pos_P" + to_str_0(i_p+1, 2), false);
-				// compute and safe hashing
-				double w_hash[2]; Hash_array((char*)w_hash, Part_Pos_now.Dev_var, 2*Part_Pos_now.num);
-				writeAppendToBinaryFile(2, w_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_particles_pos_P" + to_str_0(i_p+1, 2));
+				writePart(SettingsMain, sub_folder_name, "/Particles_advected_pos_P" + to_str_0(i_p+1, 2), *cmmPartMap[part_map_name]);
 			}
 			// particle velocity now
-			if (save_var.find("PartA_Vel_" + to_str_0(i_p+1, 2)) != std::string::npos) {
+			if (save_var.find("PartA_Vel_" + to_str_0(i_p+1, 2)) != std::string::npos or save_all) {
 				// copy data to host and save - but only if tau != 0
 				if (particles_advected[i_p].tau != 0) {
 					std::string part_map_name = "PartA_Vel_U" + to_str_0(i_p+1, 2);
-					CmmPart Part_Vel_now = *cmmPartMap[part_map_name];
-					writeTranferToBinaryFile(2*Part_Vel_now.num, Part_Vel_now.Dev_var, SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2), false);
-					// hashing
-					double w_hash[2]; Hash_array((char*)w_hash, Part_Vel_now.Dev_var, 2*particles_advected[i_p].num);
-					writeAppendToBinaryFile(2, w_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_particles_vel_U" + to_str_0(i_p+1, 2));
+					writePart(SettingsMain, sub_folder_name, "/Particles_advected_vel_U" + to_str_0(i_p+1, 2), *cmmPartMap[part_map_name]);
 				}
 				// sample velocity values from current stream function at particle positions
 				else {
 					std::string part_map_name = "PartA_Pos_P" + to_str_0(i_p+1, 2);
 					CmmPart Part_Pos_now = *cmmPartMap[part_map_name];
 					k_h_sample_points_dxdy<<<Part_Pos_now.block, Part_Pos_now.thread>>>(*Psi.Grid, *Psi.Grid, Psi.Dev_var, Part_Pos_now.Dev_var, Dev_Temp, Part_Pos_now.num);
-					writeTranferToBinaryFile(2*Part_Pos_now.num, Dev_Temp, SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2), false);
-					// hashing
-					double w_hash[2]; Hash_array((char*)w_hash, Dev_Temp, 2*particles_advected[i_p].num);
-					writeAppendToBinaryFile(2, w_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_particles_vel_U" + to_str_0(i_p+1, 2));
+					writeArr(SettingsMain, sub_folder_name, "/Particles_advected_vel_U" + to_str_0(i_p+1, 2), Dev_Temp, 2*cmmPartMap[part_map_name]->num);
 				}
 			}
 		}
@@ -498,13 +624,13 @@ void writeMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, CmmVar2D ChiX,
 	}
 
 	// save the active map
-	writeTranferToBinaryFile(4*Map_Stack.Grid->N, ChiX.Dev_var, SettingsMain, sub_folder_name + "/Map_ChiX"  + str_forward + "_H_coarse", false);
-	writeTranferToBinaryFile(4*Map_Stack.Grid->N, ChiY.Dev_var, SettingsMain, sub_folder_name + "/Map_ChiY"  + str_forward + "_H_coarse", false);
+	writeTransferToBinaryFile(4*Map_Stack.Grid->N, ChiX.Dev_var, SettingsMain, sub_folder_name + "/Map_ChiX"  + str_forward + "_H_coarse", false);
+	writeTransferToBinaryFile(4*Map_Stack.Grid->N, ChiY.Dev_var, SettingsMain, sub_folder_name + "/Map_ChiY"  + str_forward + "_H_coarse", false);
 
 	// save previous psi
 	if (!isForward) {
 		for (int i_psi = 1; i_psi < SettingsMain.getLagrangeOrder(); ++i_psi) {
-			writeTranferToBinaryFile(4*Psi.Grid->N, Psi.Dev_var, SettingsMain, sub_folder_name + "/Stream_function_Psi_H_psi_" + to_str(i_psi), false);
+			writeTransferToBinaryFile(4*Psi.Grid->N, Psi.Dev_var, SettingsMain, sub_folder_name + "/Stream_function_Psi_H_psi_" + to_str(i_psi), false);
 		}
 	}
 }
@@ -575,11 +701,11 @@ void writeParticlesState(SettingsCMM SettingsMain, CmmPart** Part_Pos, CmmPart**
 	// save all particle positions and velocities if tau != 0
 	for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
 		// save particle positions
-		writeTranferToBinaryFile(2*Part_Pos[i_p]->num, Part_Pos[i_p]->Dev_var, SettingsMain, sub_folder_name + "/Particles_advected_pos_P" + to_str_0(i_p+1, 2), false);
+		writeTransferToBinaryFile(2*Part_Pos[i_p]->num, Part_Pos[i_p]->Dev_var, SettingsMain, sub_folder_name + "/Particles_advected_pos_P" + to_str_0(i_p+1, 2), false);
 
 		// save all particle velocities if tau != 0
 		if (particles_advected[i_p].tau != 0) {
-			writeTranferToBinaryFile(2*Part_Vel[i_p]->num, Part_Vel[i_p]->Dev_var, SettingsMain, sub_folder_name + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2), false);
+			writeTransferToBinaryFile(2*Part_Vel[i_p]->num, Part_Vel[i_p]->Dev_var, SettingsMain, sub_folder_name + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2), false);
 		}
 	}
 }

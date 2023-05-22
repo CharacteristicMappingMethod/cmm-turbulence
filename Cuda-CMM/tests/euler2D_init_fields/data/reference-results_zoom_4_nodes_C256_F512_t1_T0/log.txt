@@ -1,0 +1,42 @@
+init_fields_zoom_4_nodes_C256_F512_t1_T0
+[2023-05-22.17:46:46]	Starting memory initialization 	 C-Time = 0h 0m 0.000234s
+[2023-05-22.17:46:46]	Number of CUDA devices = 1
+[2023-05-22.17:46:46]	Active CUDA device = 0
+[2023-05-22.17:46:46]	Cuda runtime version = 11080
+[2023-05-22.17:46:46]	Cuda driver version = 11070
+[2023-05-22.17:46:46]	CuFFT version = 10900
+[2023-05-22.17:46:46]	Solving = cmm_euler_2d
+[2023-05-22.17:46:46]	Initial condition = 4_nodes
+[2023-05-22.17:46:46]	Iter max = 0
+[2023-05-22.17:46:46]	Name of simulation = init_fields_zoom_4_nodes_C256_F512_t1_T0
+[2023-05-22.17:46:46]	Initialized backwards maps arrays: cudaSuccess
+[2023-05-22.17:46:46]	Initialized coarse vort array: cudaSuccess
+[2023-05-22.17:46:46]	Initialized vort_fine_init array: cudaSuccess
+[2023-05-22.17:46:46]	Initialized discrete initial array
+[2023-05-22.17:46:46]	Initialized stream function array: cudaSuccess
+[2023-05-22.17:46:46]	Initialized forward maps arrays: cudaSuccess
+[2023-05-22.17:46:46]	Initialized empty_vort variable: cudaSuccess
+[2023-05-22.17:46:46]	Initialized Sample variables: cudaSuccess
+[2023-05-22.17:46:46]	Initialized Zoom variables: cudaSuccess
+[2023-05-22.17:46:46]	Initialized cufft workplan: cudaSuccess
+[2023-05-22.17:46:46]	Initialized GPU temp array: cudaSuccess
+[2023-05-22.17:46:46]	Map size in MB = 4
+[2023-05-22.17:46:46]	Map stack length on CPU = 11
+[2023-05-22.17:46:46]	Initialized CPU map stack: cudaSuccess
+[2023-05-22.17:46:46]	Memory initialization finished 	 estimated GPU RAM = 0.0299 gb 	 estimated CPU RAM = 0.0461 gb 	 C-Time = 0h 0m 0.0809s
+[2023-05-22.17:46:46]	Starting simulation initialization 	 C-Time = 0h 0m 0.081s 	 Last Cuda Error = cudaSuccess
+[2023-05-22.17:46:46]	Init order = 1/3 	 Method = EulerExp 	 C-Time = 0h 0m 0.0819s
+[2023-05-22.17:46:46]	   Init step = 1/1 	 IncompErr = 1.8 	 C-Time = 0h 0m 0.122s
+[2023-05-22.17:46:46]	Init order = 2/3 	 Method = RK2 	 C-Time = 0h 0m 0.122s
+[2023-05-22.17:46:46]	   Init step = 1/2 	 IncompErr = 1.97 	 C-Time = 0h 0m 0.159s
+[2023-05-22.17:46:46]	   Init step = 2/2 	 IncompErr = 3.35 	 C-Time = 0h 0m 0.195s
+[2023-05-22.17:46:46]	Init order = 3/3 	 Method = RK3 	 C-Time = 0h 0m 0.195s
+[2023-05-22.17:46:46]	   Init step = 1/2 	 IncompErr = 1.17 	 C-Time = 0h 0m 0.248s
+[2023-05-22.17:46:46]	   Init step = 2/2 	 IncompErr = 1.09 	 C-Time = 0h 0m 0.3s
+[2023-05-22.17:46:46]	Processed zoom data 1 on grid 256
+[2023-05-22.17:46:46]	W min = -1.64 - W max = 2.8
+[2023-05-22.17:46:46]	Simulation initialization finished 	 Last Cuda Error = cudaSuccess 	 C-Time = 0h 0m 0.479s
+[2023-05-22.17:46:46]	Starting simulation loop 	 C-Time = 0h 0m 0.479s
+[2023-05-22.17:46:46]	Simulation loop finished 	 C-Time = 0h 0m 0.479s
+[2023-05-22.17:46:47]	Processed zoom data 1 on grid 256
+[2023-05-22.17:46:47]	Finished simulation 	 Last Cuda Error = cudaSuccess 	 C-Time = 0h 0m 0.649s

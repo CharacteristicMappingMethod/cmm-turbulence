@@ -12,11 +12,11 @@ final_time	=	1
 set_dt_by_steps	=	1
 steps_per_sec	=	1
 save_computational_num	=	1
-save_computational	=	{is_instant=0,time_start=0,time_end=10000,time_step=1,var=PartA_01-PartA_02,conv=1}
+save_computational	=	{is_instant=0,time_start=0,time_end=10000,time_step=1,var=All,conv=1}
 mem_RAM_CPU_remaps	=	50
 save_map_stack	=	0
 restart_time	=	0
-verbose	=	3
+verbose	=	4
 initial_condition	=	4_nodes
 initial_params	=	{0,0,0,0,0,0,0,0,0,0}
 initial_discrete	=	0
@@ -30,7 +30,7 @@ molly_stencil	=	0
 freq_cut_psi	=	128
 skip_remapping	=	1
 save_sample_num	=	1
-save_sample	=	{is_instant=0,time_start=0,time_end=10000,time_step=1,var=W-Psi-U,grid=256}
+save_sample	=	{is_instant=0,time_start=0,time_end=10000,time_step=1,var=All,grid=256}
 scalar_name	=	circular_ring
 scalar_discrete	=	0
 save_zoom_num	=	0

@@ -166,7 +166,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	if (SettingsMain.getVerbose() >= 4) { message = "Initialized vort_fine_init array"; logger.push(message); }
 
 	// discrete initial condition for vorticity, dynamically let size vanish if not needed
-	int type_discrete = -2 + (-10 + 2) * SettingsMain.getInitialDiscrete();  // -2 or -10 dependend on if it is needed
+	int type_discrete = -10 + (-2 + 10) * SettingsMain.getInitialDiscrete();  // -2 or -10 dependend on if it is needed
 	CmmVar2D Vort_discrete_init(SettingsMain.getInitialDiscreteGrid(), SettingsMain.getInitialDiscreteGrid(), 1, bounds, type_discrete);
 	cmmVarMap["Vort_discrete_init"] = &Vort_discrete_init; mb_used_RAM_GPU += Vort_discrete_init.RAM_size;
 	if (SettingsMain.getVerbose() >= 4) { message = "Initialized discrete initial array"; logger.push(message); }
@@ -177,10 +177,10 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	if (SettingsMain.getVerbose() >= 4) { message = "Initialized stream function array"; logger.push(message); }
 
 	// forward map, dynamically let size vanish if not needed
-	int type_forward = -1 + (-10 + 1) * SettingsMain.getForwardMap();  // -1 or -10 dependend on if it is needed
+	int type_forward = -10 + (-1 + 10) * SettingsMain.getForwardMap();  // -1 or -10 dependend on if it is needed
 	CmmVar2D ChiX_f(SettingsMain.getGridCoarse(), SettingsMain.getGridCoarse(), 1, bounds, type_forward);
 	CmmVar2D ChiY_f(SettingsMain.getGridCoarse(), SettingsMain.getGridCoarse(), 1, bounds, type_forward);
-	cmmVarMap["ChiY_f"] = &ChiY; cmmVarMap["ChiY_f"] = &ChiY_f; mb_used_RAM_GPU += ChiX_f.RAM_size + ChiY_f.RAM_size;
+	cmmVarMap["ChiX_f"] = &ChiX_f; cmmVarMap["ChiY_f"] = &ChiY_f; mb_used_RAM_GPU += ChiX_f.RAM_size + ChiY_f.RAM_size;
 	if (SettingsMain.getVerbose() >= 4) { message = "Initialized forward maps arrays"; logger.push(message); }
 
 	// additional grids or plans needed without variable attached to it
@@ -190,42 +190,25 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	if (SettingsMain.getVerbose() >= 4) { message = "Initialized empty_vort array"; logger.push(message); }
 
 	CmmVar2D* Sample[SettingsMain.getSaveSampleNum()];
-	double *Dev_Sample; size_t size_max_sample = 0;
+//	double *Dev_Sample; size_t size_max_sample = 0;
 	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); i_save++) {
-		Sample[i_save] = new CmmVar2D(SettingsMain.getSaveSample()[i_save].grid, SettingsMain.getSaveSample()[i_save].grid, 1, bounds, -10);
+		Sample[i_save] = new CmmVar2D(SettingsMain.getSaveSample()[i_save].grid, SettingsMain.getSaveSample()[i_save].grid, 1, SettingsMain.getDomainBoundsPointer(), -10);
 		cmmVarMap["Sample_" + to_str(i_save)] = Sample[i_save];
 		// directly free resources of this variable, as it is overwritten later
 		cudaFree(Sample[i_save]->Dev_var);
-
-		// compute size needed for this sampling
-		std::string sample_names = SettingsMain.getSaveSample()[i_save].var;
-//		// check if Hermitian array is in sample - disabled
-//		if (sample_names.find("_H") != std::string::npos) {
-//			size_max_sample = std::max(size_max_sample, (size_t)(3*Sample[i_save]->Grid->sizeNReal + Sample[i_save]->Grid->sizeNfft));
-//		}
-		// check if string is not empty, null or contains only whitespaces - well nice idea I had but we need the space anyways
-		// Note: Size is 2 times, as for derivatives we need a second array for storage, maybe here temp array can be reused
-//		if (!(sample_names.empty() || std::all_of(sample_names.begin(), sample_names.end(), [](char c){return std::isspace(c);}))) {
-		size_max_sample = std::max(size_max_sample, (size_t)(Sample[i_save]->Grid->sizeNReal + Sample[i_save]->Grid->sizeNfft));
-//		}
+		// the device memory is later included with the temporal variable
 	}
-	// allocate memory and set for each sample var
-	cudaMalloc((void**)&Dev_Sample, size_max_sample);
-	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); i_save++) {
-		Sample[i_save]->Dev_var = Dev_Sample;
-		Sample[i_save]->RAM_size = size_max_sample / 1e6;
-	}
-	mb_used_RAM_GPU += Sample[0]->RAM_size;
 	if (SettingsMain.getVerbose() >= 4) { message = "Initialized Sample variables"; logger.push(message); }
 
 	CmmVar2D* Zoom[SettingsMain.getSaveZoomNum()];
 	for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); i_save++) {
-		Zoom[i_save] = new CmmVar2D(SettingsMain.getSaveZoom()[i_save].grid, SettingsMain.getSaveZoom()[i_save].grid, 1, bounds, -10);
+		Zoom[i_save] = new CmmVar2D(SettingsMain.getSaveZoom()[i_save].grid, SettingsMain.getSaveZoom()[i_save].grid, 1, SettingsMain.getDomainBoundsPointer(), -10);
 		cmmVarMap["Zoom_" + to_str(i_save)] = Zoom[i_save];
 		// directly free resources of this variable, as it is overwritten later
 		cudaFree(Zoom[i_save]->Dev_var);
 		// the device memory is later included with the temporal variable
 	}
+	if (SettingsMain.getVerbose() >= 4) { message = "Initialized Zoom variables"; logger.push(message); }
 
 
 	/*******************************************************************
@@ -268,9 +251,34 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	*          Used for temporary copying and storing of data
 	*                       in various locations
 	*  casting (cufftDoubleReal*) makes them usable for double arrays
+	*
+	*  Different sizes are:
+	*  		Nfft: (2 x (Nx/2 + 1) x Ny		- this is slightly larger than NReal
+	*  		NReal: Nx x Ny
+	*
+	*  The different grid sizes checked are:
+	*  		- 1 x Fine Nfft (Sub-map initial condition, used for incomp threshold check)
+	*  		- 8 x Coarse NReal (Map X- and Y-direction in Hermite form, used for new map)
+	*  		- 1 x Psi Nfft (used for ???)
+	*  		- 1 x Vort Nfft (For evaluating stream function before shifting grid to Psi grid)
+	*  		- 1 x Discrete init Nfft (We need to create Hermite form for which we need temporal array)
+	*  		- 3 x Sample Nfft + 1 x PartF Num Sum (all memory usage is streamlined here), larger of the following:
+	*  			2 x NReal for sampling map, 1 x NReal for storing variables
+	*  			1 x NReal for storing variables, 1 x Nfft for computing derivatives
+	*  		- 3 x Zoom Nfft + 1 x PartF Num Sum (all memory usage is streamlined here)
+	*  			2 x NReal for sampling map, 1 x NReal for storing variables
+	*  		- 2 x PartA Num (sampling velocity values from Psi for fluid particles)
+	*
+	*  	The temporary memory is assigned to the following variables. Check for possible clashs when using!
+	*  		- Its own variable
+	*  		- empty_vort
+	*  		- All Sample_var
+	*  		- All Zoom_var
+	*
 	*******************************************************************/
 
 	// set after largest grid, checks are for failsave in case one chooses weird grid
+
 	size_t size_max_c = std::max(Vort_fine_init.Grid->sizeNfft, Vort_fine_init.Grid->sizeNReal);
 	size_max_c = std::max(size_max_c, 4*ChiX.Grid->sizeNReal + 4*ChiY.Grid->sizeNReal);
 	size_max_c = std::max(size_max_c, 2*Vort.Grid->sizeNfft);  // redundant, for palinstrophy
@@ -282,8 +290,8 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		size_max_c = std::max(size_max_c, Vort_discrete_init.Grid->sizeNReal);  // is basically redundant, but lets take it anyways
 	}
 	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
-		size_max_c = std::max(size_max_c, 2*Sample[i_save]->Grid->sizeNfft);
-		size_max_c = std::max(size_max_c, 2*Sample[i_save]->Grid->sizeNReal);  // is basically redundant, but lets take it anyways
+		size_max_c = std::max(size_max_c, 3*Sample[i_save]->Grid->sizeNReal);
+		size_max_c = std::max(size_max_c, 2*Sample[i_save]->Grid->sizeNfft + 1*Sample[i_save]->Grid->sizeNReal);
 		if (SettingsMain.getForwardMap() and SettingsMain.getParticlesForwarded()) {
 			// we need to save and transfer new particle positions somehow, in addition to map
 			size_t stacked_size = 2*Sample[i_save]->Grid->sizeNReal;
@@ -295,7 +303,6 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	}
 	for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); ++i_save) {
 		size_max_c = std::max(size_max_c, 3*Zoom[i_save]->Grid->sizeNReal);
-//		if (SettingsMain.getZoomSavePsi()) size_max_c = std::max(size_max_c, 4*Grid_zoom.sizeNReal);
 		if (SettingsMain.getForwardMap() and SettingsMain.getParticlesForwarded()) {
 			// we need to save and transfer new particle positions somehow, in addition to map
 			size_t stacked_size = 2*Zoom[i_save]->Grid->sizeNReal;
@@ -321,6 +328,11 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	// set empty_vort variable device memory after temporary variable, so that I can use it
 	empty_vort.Dev_var = (double*)Dev_Temp_C1;
 	empty_vort.RAM_size = size_max_c / 1e6;
+	// set sample variable device memory after temporary variable
+	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); i_save++) {
+		Sample[i_save]->Dev_var = (double*)Dev_Temp_C1;
+		Sample[i_save]->RAM_size = size_max_c / 1e6;
+	}
 	// set zoom variable device memory after temporary variable
 	for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); i_save++) {
 		Zoom[i_save]->Dev_var = (double*)Dev_Temp_C1;
@@ -594,7 +606,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 					evaluate_potential_from_density_hermite(SettingsMain, ChiX, ChiY, Vort_fine_init, Psi, empty_vort,
 								Dev_Temp_C1, SettingsMain.getMollyStencil(), SettingsMain.getFreqCutPsi());
 
-	 				// writeTranferToBinaryFile(Grid_psi.N, (cufftDoubleReal*)(Dev_Psi_real), SettingsMain, "/Stream_function_mollys", false);
+	 				// writeTransferToBinaryFile(Grid_psi.N, (cufftDoubleReal*)(Dev_Psi_real), SettingsMain, "/Stream_function_mollys", false);
 	 				// error("evaluate_potential_from_density_hermite: not nted yet",134);
 
 					// output step details to console
@@ -693,31 +705,6 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 
 	// save function to save variables, combined so we always save in the same way and location
 	save_functions(SettingsMain, logger, t0, dt, dt, Map_Stack, Map_Stack_f, cmmVarMap, cmmPartMap, Dev_Temp_C1);
-
-//	message = writeTimeStep(SettingsMain, t0, dt, dt, cmmVarMap);
-//	if (SettingsMain.getVerbose() >= 3 && message != "") logger.push(message);
-//
-//	// compute conservation if wanted
-//	message = compute_conservation_targets(SettingsMain, t0, dt, dt, cmmVarMap, Dev_Temp_C1);
-//	if (SettingsMain.getVerbose() >= 3 && message != "") logger.push(message);
-//
-//	// sample if wanted
-//	message = sample_compute_and_write_vlasov(SettingsMain, t0, dt, dt,
-//			Map_Stack, Map_Stack_f, cmmVarMap, Dev_Temp_C1,
-//			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread);
-//	if (SettingsMain.getVerbose() >= 3 && message != "") logger.push(message);
-//    cudaDeviceSynchronize();
-//
-//    // save particle position if interested in that
-//    message = writeParticles(SettingsMain, t0, dt, dt, Dev_particles_pos, Dev_particles_vel, *Psi.Grid, Psi.Dev_var, (cufftDoubleReal*)Dev_Temp_C1, particle_block, particle_thread);
-//	if (SettingsMain.getVerbose() >= 3 && message != "") logger.push(message);
-//
-//	// zoom if wanted, has to be done after particle initialization, maybe a bit useless at first instance
-//	message = compute_zoom(SettingsMain, t0, dt, dt,
-//			Map_Stack, Map_Stack_f, cmmVarMap, Dev_Temp_C1,
-//			Host_particles, Dev_particles_pos,
-//			Host_forward_particles_pos, Dev_forward_particles_pos, forward_particles_block, forward_particles_thread);
-//	if (SettingsMain.getVerbose() >= 3 && message != "") logger.push(message);
 
 	// displaying max and min of vorticity and velocity for plotting limits and cfl condition
 	// vorticity minimum
@@ -936,14 +923,6 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 			*				Variables on sampled grid if wanted
 			*				Particles together with fine particles
 			*******************************************************************/
-		// save function to save variables, combined so we always save in the same way and location
-		// if (loop_ctr >8) {
-		// 	 				writeTranferToBinaryFile(Grid_psi.N, (cufftDoubleReal*)(Dev_Psi_real), SettingsMain, "/Stream_function", false);
-		// 					writeTranferToBinaryFile(Grid_coarse.N, (cufftDoubleReal*)(Dev_W_coarse), SettingsMain, "/W_coarse", false);
-		// 					writeTranferToBinaryFile(Grid_fine.N, (cufftDoubleReal*)(Dev_W_H_fine_real), SettingsMain, "/W_fine", false);
-	 	// 			error("evaluate_potential_from_density_hermite: not nted yet",134);
-		// 			}
-		// save function to save variables, combined so we always save in the same way and location
     	save_functions(SettingsMain, logger, t_vec[loop_ctr_l+1], dt_vec[loop_ctr_l+1], dt, Map_Stack, Map_Stack_f, cmmVarMap, cmmPartMap, Dev_Temp_C1);
 
 		/*
@@ -1063,7 +1042,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 
 			// save final position
 			// copy data to host
-			writeTranferToBinaryFile(2*Part_Pos[i_p]->num, Part_Pos[i_p]->Dev_var, SettingsMain, "/Particle_data/Time_C1/Particles_pos_P" + to_str_0(i_p, 2), 0);
+			writeTransferToBinaryFile(2*Part_Pos[i_p]->num, Part_Pos[i_p]->Dev_var, SettingsMain, "/Particle_data/Time_C1/Particles_pos_P" + to_str_0(i_p, 2), 0);
 		}
 	}
 
@@ -1107,7 +1086,6 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	Psi.free_res();
 	ChiX_f.free_res(); ChiY_f.free_res();
 	empty_vort.free_res();
-	cudaFree(Dev_Sample);  // this frees dev space for all samples
 	cudaFree(fft_work_area);
 //	cudaFree(Dev_Temp_C1);  // allready freed from empty_vort
 	Map_Stack.free_res();

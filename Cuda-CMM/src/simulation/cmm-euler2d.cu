@@ -53,9 +53,6 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	*						 	 Constants							   *
 	*******************************************************************/
 	
-	// boundary information for translating, 6 coords for 3D - (x0, x1, y0, y1, z0, z1)
-	double bounds[6] = {0, twoPI, 0, twoPI, 0, 0};
-	double t0 = SettingsMain.getRestartTime();							// time - initial
 	double dt;															// time - step final
 	int iterMax;														// time - maximum iteration count for safety
 
@@ -130,82 +127,65 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
     std::map<std::string, CmmPart*> cmmPartMap;  // map containing all particle variables
 
     // backwards map
-	CmmVar2D ChiX(SettingsMain.getGridCoarse(), SettingsMain.getGridCoarse(), 1, bounds, -1);
-	CmmVar2D ChiY(SettingsMain.getGridCoarse(), SettingsMain.getGridCoarse(), 1, bounds, -1);
+	CmmVar2D ChiX(SettingsMain.getGridCoarse(), SettingsMain.getGridCoarse(), 1, SettingsMain.getDomainBoundsPointer(), -1);
+	CmmVar2D ChiY(SettingsMain.getGridCoarse(), SettingsMain.getGridCoarse(), 1, SettingsMain.getDomainBoundsPointer(), -1);
 	cmmVarMap["ChiX"] = &ChiX; cmmVarMap["ChiY"] = &ChiY; mb_used_RAM_GPU += ChiX.RAM_size + ChiY.RAM_size;
-	if (SettingsMain.getVerbose() >= 4) { message = "Initialized backwards maps arrays"; logger.push(message); }
+	if (SettingsMain.getVerbose() >= 4) { message = "Initialized backwards maps arrays: " + to_str(cudaGetErrorName(cudaGetLastError())); logger.push(message); }
 
 	// vorticity on coarse grid, needed only for saving
-	CmmVar2D Vort(SettingsMain.getGridCoarse(), SettingsMain.getGridCoarse(), 1, bounds, 0);
+	CmmVar2D Vort(SettingsMain.getGridCoarse(), SettingsMain.getGridCoarse(), 1, SettingsMain.getDomainBoundsPointer(), 0);
 	cmmVarMap["Vort"] = &Vort; mb_used_RAM_GPU += Vort.RAM_size;
-	if (SettingsMain.getVerbose() >= 4) { message = "Initialized coars vort array"; logger.push(message); }
+	if (SettingsMain.getVerbose() >= 4) { message = "Initialized coarse vort array: " + to_str(cudaGetErrorName(cudaGetLastError())); logger.push(message); }
 
 	// vorticity initial condition on fine grid for each sub-map
-	CmmVar2D Vort_fine_init(SettingsMain.getGridFine(), SettingsMain.getGridFine(), 1, bounds, -2);
+	CmmVar2D Vort_fine_init(SettingsMain.getGridFine(), SettingsMain.getGridFine(), 1, SettingsMain.getDomainBoundsPointer(), -2);
 	cmmVarMap["Vort_fine_init"] = &Vort_fine_init; mb_used_RAM_GPU += Vort_fine_init.RAM_size;
-	if (SettingsMain.getVerbose() >= 4) { message = "Initialized vort_fine_init array"; logger.push(message); }
+	if (SettingsMain.getVerbose() >= 4) { message = "Initialized vort_fine_init array: " + to_str(cudaGetErrorName(cudaGetLastError())); logger.push(message); }
 
 	// discrete initial condition for vorticity, dynamically let size vanish if not needed
-	int type_discrete = -2 + (-10 + 2) * SettingsMain.getInitialDiscrete();  // -2 or -10 dependend on if it is needed
-	CmmVar2D Vort_discrete_init(SettingsMain.getInitialDiscreteGrid(), SettingsMain.getInitialDiscreteGrid(), 1, bounds, type_discrete);
+	int type_discrete = -10 + (-2 + 10) * SettingsMain.getInitialDiscrete();  // -2 or -10 dependend on if it is needed
+	CmmVar2D Vort_discrete_init(SettingsMain.getInitialDiscreteGrid(), SettingsMain.getInitialDiscreteGrid(), 1, SettingsMain.getDomainBoundsPointer(), type_discrete);
 	cmmVarMap["Vort_discrete_init"] = &Vort_discrete_init; mb_used_RAM_GPU += Vort_discrete_init.RAM_size;
 	if (SettingsMain.getVerbose() >= 4) { message = "Initialized discrete initial array"; logger.push(message); }
 	
 	// psi map, depended on the lagrange order the length differs
-	CmmVar2D Psi(SettingsMain.getGridPsi(), SettingsMain.getGridPsi(), 1, bounds, SettingsMain.getLagrangeOrder());
+	CmmVar2D Psi(SettingsMain.getGridPsi(), SettingsMain.getGridPsi(), 1, SettingsMain.getDomainBoundsPointer(), SettingsMain.getLagrangeOrder());
 	cmmVarMap["Psi"] = &Psi; mb_used_RAM_GPU += Psi.RAM_size;
-	if (SettingsMain.getVerbose() >= 4) { message = "Initialized stream function array"; logger.push(message); }
+	if (SettingsMain.getVerbose() >= 4) { message = "Initialized stream function array: " + to_str(cudaGetErrorName(cudaGetLastError())); logger.push(message); }
 
 	// forward map, dynamically let size vanish if not needed
-	int type_forward = -1 + (-10 + 1) * SettingsMain.getForwardMap();  // -1 or -10 dependend on if it is needed
-	CmmVar2D ChiX_f(SettingsMain.getGridCoarse(), SettingsMain.getGridCoarse(), 1, bounds, type_forward);
-	CmmVar2D ChiY_f(SettingsMain.getGridCoarse(), SettingsMain.getGridCoarse(), 1, bounds, type_forward);
-	cmmVarMap["ChiY_f"] = &ChiY; cmmVarMap["ChiY_f"] = &ChiY_f; mb_used_RAM_GPU += ChiX_f.RAM_size + ChiY_f.RAM_size;
-	if (SettingsMain.getVerbose() >= 4) { message = "Initialized forward maps arrays"; logger.push(message); }
+	int type_forward = -10 + (-1 + 10) * SettingsMain.getForwardMap();  // -1 or -10 dependend on if it is needed
+	CmmVar2D ChiX_f(SettingsMain.getGridCoarse(), SettingsMain.getGridCoarse(), 1, SettingsMain.getDomainBoundsPointer(), type_forward);
+	CmmVar2D ChiY_f(SettingsMain.getGridCoarse(), SettingsMain.getGridCoarse(), 1, SettingsMain.getDomainBoundsPointer(), type_forward);
+	cmmVarMap["ChiX_f"] = &ChiX_f; cmmVarMap["ChiY_f"] = &ChiY_f; mb_used_RAM_GPU += ChiX_f.RAM_size + ChiY_f.RAM_size;
+	if (SettingsMain.getVerbose() >= 4) { message = "Initialized forward maps arrays: " + to_str(cudaGetErrorName(cudaGetLastError())); logger.push(message); }
 
 	// additional grids or plans needed without variable attached to it
 	// vorticity grid and plans do not have a variable
-	CmmVar2D empty_vort(SettingsMain.getGridVort(), SettingsMain.getGridVort(), 1, bounds, -10);
+	CmmVar2D empty_vort(SettingsMain.getGridVort(), SettingsMain.getGridVort(), 1, SettingsMain.getDomainBoundsPointer(), -10);
 	cmmVarMap["empty_vort"] = &empty_vort; mb_used_RAM_GPU += empty_vort.RAM_size;
-	if (SettingsMain.getVerbose() >= 4) { message = "Initialized empty_vort array"; logger.push(message); }
+	if (SettingsMain.getVerbose() >= 4) { message = "Initialized empty_vort variable: " + to_str(cudaGetErrorName(cudaGetLastError())); logger.push(message); }
 
 	CmmVar2D* Sample[SettingsMain.getSaveSampleNum()];
-	double *Dev_Sample; size_t size_max_sample = 0;
+//	double *Dev_Sample; size_t size_max_sample = 0;
 	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); i_save++) {
-		Sample[i_save] = new CmmVar2D(SettingsMain.getSaveSample()[i_save].grid, SettingsMain.getSaveSample()[i_save].grid, 1, bounds, -10);
+		Sample[i_save] = new CmmVar2D(SettingsMain.getSaveSample()[i_save].grid, SettingsMain.getSaveSample()[i_save].grid, 1, SettingsMain.getDomainBoundsPointer(), -10);
 		cmmVarMap["Sample_" + to_str(i_save)] = Sample[i_save];
 		// directly free resources of this variable, as it is overwritten later
 		cudaFree(Sample[i_save]->Dev_var);
-
-		// compute size needed for this sampling
-		std::string sample_names = SettingsMain.getSaveSample()[i_save].var;
-//		// check if Hermitian array is in sample - disabled
-//		if (sample_names.find("_H") != std::string::npos) {
-//			size_max_sample = std::max(size_max_sample, (size_t)(3*Sample[i_save]->Grid->sizeNReal + Sample[i_save]->Grid->sizeNfft));
-//		}
-		// check if string is not empty, null or contains only whitespaces - well nice idea I had but we need the space anyways
-		// Note: Size is 2 times, as for derivatives we need a second array for storage, maybe here temp array can be reused
-//		if (!(sample_names.empty() || std::all_of(sample_names.begin(), sample_names.end(), [](char c){return std::isspace(c);}))) {
-		size_max_sample = std::max(size_max_sample, (size_t)(Sample[i_save]->Grid->sizeNReal + Sample[i_save]->Grid->sizeNfft));
-//		}
+		// the device memory is later included with the temporal variable
 	}
-	// allocate memory and set for each sample var
-	cudaMalloc((void**)&Dev_Sample, size_max_sample);
-	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); i_save++) {
-		Sample[i_save]->Dev_var = Dev_Sample;
-		Sample[i_save]->RAM_size = size_max_sample / 1e6;
-	}
-	mb_used_RAM_GPU += Sample[0]->RAM_size;
-	if (SettingsMain.getVerbose() >= 4) { message = "Initialized Sample variables"; logger.push(message); }
+	if (SettingsMain.getVerbose() >= 4) { message = "Initialized Sample variables: " + to_str(cudaGetErrorName(cudaGetLastError())); logger.push(message); }
 
 	CmmVar2D* Zoom[SettingsMain.getSaveZoomNum()];
 	for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); i_save++) {
-		Zoom[i_save] = new CmmVar2D(SettingsMain.getSaveZoom()[i_save].grid, SettingsMain.getSaveZoom()[i_save].grid, 1, bounds, -10);
+		Zoom[i_save] = new CmmVar2D(SettingsMain.getSaveZoom()[i_save].grid, SettingsMain.getSaveZoom()[i_save].grid, 1, SettingsMain.getDomainBoundsPointer(), -10);
 		cmmVarMap["Zoom_" + to_str(i_save)] = Zoom[i_save];
 		// directly free resources of this variable, as it is overwritten later
 		cudaFree(Zoom[i_save]->Dev_var);
 		// the device memory is later included with the temporal variable
 	}
+	if (SettingsMain.getVerbose() >= 4) { message = "Initialized Zoom variables: " + to_str(cudaGetErrorName(cudaGetLastError())); logger.push(message); }
 
 
 	/*******************************************************************
@@ -239,7 +219,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	}
 
 	if (SettingsMain.getVerbose() >= 4) {
-		message = "Initialized cufft workplan"; logger.push(message);
+		message = "Initialized cufft workplan: " + to_str(cudaGetErrorName(cudaGetLastError())); logger.push(message);
 	}
 
 
@@ -248,9 +228,34 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	*          Used for temporary copying and storing of data
 	*                       in various locations
 	*  casting (cufftDoubleReal*) makes them usable for double arrays
+	*
+	*  Different sizes are:
+	*  		Nfft: (2 x (Nx/2 + 1) x Ny		- this is slightly larger than NReal
+	*  		NReal: Nx x Ny
+	*
+	*  The different grid sizes checked are:
+	*  		- 1 x Fine Nfft (Sub-map initial condition, used for incomp threshold check)
+	*  		- 8 x Coarse NReal (Map X- and Y-direction in Hermite form, used for new map)
+	*  		- 1 x Psi Nfft (used for ???)
+	*  		- 1 x Vort Nfft (For evaluating stream function before shifting grid to Psi grid)
+	*  		- 1 x Discrete init Nfft (We need to create Hermite form for which we need temporal array)
+	*  		- 3 x Sample Nfft + 1 x PartF Num Sum (all memory usage is streamlined here), larger of the following:
+	*  			2 x NReal for sampling map, 1 x NReal for storing variables
+	*  			1 x NReal for storing variables, 1 x Nfft for computing derivatives
+	*  		- 3 x Zoom Nfft + 1 x PartF Num Sum (all memory usage is streamlined here)
+	*  			2 x NReal for sampling map, 1 x NReal for storing variables
+	*  		- 2 x PartA Num (sampling velocity values from Psi for fluid particles)
+	*
+	*  	The temporary memory is assigned to the following variables. Check for possible clashs when using!
+	*  		- Its own variable
+	*  		- empty_vort
+	*  		- All Sample_var
+	*  		- All Zoom_var
+	*
 	*******************************************************************/
 
 	// set after largest grid, checks are for failsave in case one chooses weird grid
+
 	size_t size_max_c = std::max(Vort_fine_init.Grid->sizeNfft, Vort_fine_init.Grid->sizeNReal);
 	size_max_c = std::max(size_max_c, 4*ChiX.Grid->sizeNReal + 4*ChiY.Grid->sizeNReal);
 	size_max_c = std::max(size_max_c, 2*Vort.Grid->sizeNfft);  // redundant, for palinstrophy
@@ -262,11 +267,11 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		size_max_c = std::max(size_max_c, Vort_discrete_init.Grid->sizeNReal);  // is basically redundant, but lets take it anyways
 	}
 	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
-		size_max_c = std::max(size_max_c, 2*Sample[i_save]->Grid->sizeNfft);
-		size_max_c = std::max(size_max_c, 2*Sample[i_save]->Grid->sizeNReal);  // is basically redundant, but lets take it anyways
+		size_max_c = std::max(size_max_c, 3*Sample[i_save]->Grid->sizeNReal);
+		size_max_c = std::max(size_max_c, 2*Sample[i_save]->Grid->sizeNfft + 1*Sample[i_save]->Grid->sizeNReal);
 		if (SettingsMain.getForwardMap() and SettingsMain.getParticlesForwarded()) {
 			// we need to save and transfer new particle positions somehow, in addition to map
-			size_t stacked_size = 2*Sample[i_save]->Grid->sizeNReal;
+			size_t stacked_size = 3*Sample[i_save]->Grid->sizeNReal;
 			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
 				stacked_size += 2*SettingsMain.getParticlesForwarded()[i_p].num*sizeof(double);
 			}
@@ -275,10 +280,9 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	}
 	for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); ++i_save) {
 		size_max_c = std::max(size_max_c, 3*Zoom[i_save]->Grid->sizeNReal);
-//		if (SettingsMain.getZoomSavePsi()) size_max_c = std::max(size_max_c, 4*Grid_zoom.sizeNReal);
 		if (SettingsMain.getForwardMap() and SettingsMain.getParticlesForwarded()) {
 			// we need to save and transfer new particle positions somehow, in addition to map
-			size_t stacked_size = 2*Zoom[i_save]->Grid->sizeNReal;
+			size_t stacked_size = 3*Zoom[i_save]->Grid->sizeNReal;
 			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
 				stacked_size += 2*SettingsMain.getParticlesForwarded()[i_p].num*sizeof(double);
 			}
@@ -295,12 +299,17 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	mb_used_RAM_GPU += size_max_c / 1e6;
 
 	if (SettingsMain.getVerbose() >= 4) {
-		message = "Initialized GPU temp array"; logger.push(message);
+		message = "Initialized GPU temp array: " + to_str(cudaGetErrorName(cudaGetLastError())); logger.push(message);
 	}
 	
 	// set empty_vort variable device memory after temporary variable, so that I can use it
 	empty_vort.Dev_var = (double*)Dev_Temp_C1;
 	empty_vort.RAM_size = size_max_c / 1e6;
+	// set sample variable device memory after temporary variable
+	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); i_save++) {
+		Sample[i_save]->Dev_var = (double*)Dev_Temp_C1;
+		Sample[i_save]->RAM_size = size_max_c / 1e6;
+	}
 	// set zoom variable device memory after temporary variable
 	for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); i_save++) {
 		Zoom[i_save]->Dev_var = (double*)Dev_Temp_C1;
@@ -369,7 +378,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		message = "Map stack length on CPU = " + to_str(cpu_map_num); logger.push(message);
     }
 	if (SettingsMain.getVerbose() >= 4) {
-		message = "Initialized CPU map stack"; logger.push(message);
+		message = "Initialized CPU map stack: " + to_str(cudaGetErrorName(cudaGetLastError())); logger.push(message);
 	}
 	
 	
@@ -378,13 +387,13 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	*******************************************************************/
 
 	// initialize foward map stack dynamically to be super small if we are not computing it
-	TCudaGrid2D Grid_forward(1+(ChiX_f.Grid->NX-1)*SettingsMain.getForwardMap(), 1+(ChiX_f.Grid->NY-1)*SettingsMain.getForwardMap(), 1, bounds);
+	TCudaGrid2D Grid_forward(1+(ChiX_f.Grid->NX-1)*SettingsMain.getForwardMap(), 1+(ChiX_f.Grid->NY-1)*SettingsMain.getForwardMap(), 1, SettingsMain.getDomainBoundsPointer());
 	MapStack Map_Stack_f(&Grid_forward, cpu_map_num);
 	mb_used_RAM_GPU += 8*Grid_forward.sizeNReal / 1e6;
 	mb_used_RAM_CPU += cpu_map_num * map_size * SettingsMain.getForwardMap();
 
 	if (SettingsMain.getForwardMap() and SettingsMain.getVerbose() >= 4) {
-		message = "Initialized CPU forward map stack"; logger.push(message);
+		message = "Initialized CPU forward map stack: " + to_str(cudaGetErrorName(cudaGetLastError())); logger.push(message);
 	}
 
 	// initialize forward particles position, will stay constant over time though so a dynamic approach could be chosen later too
@@ -477,7 +486,8 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	// introduce part to console
 	if (SettingsMain.getVerbose() >= 2) {
 		message = "Starting simulation initialization"
-				  " \t C-Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6);
+				  " \t C-Time = " + format_duration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - begin).count()/1e6)
+			   +  " \t Last Cuda Error = " + to_str(cudaGetErrorName(cudaGetLastError()));
 		logger.push(message);
 	}
 		
@@ -673,7 +683,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	/*
 	 * Saving - all in on function
 	 */
-	save_functions(SettingsMain, logger, t0, dt, dt, Map_Stack, Map_Stack_f, cmmVarMap, cmmPartMap, Dev_Temp_C1);
+	save_functions(SettingsMain, logger, SettingsMain.getRestartTime(), dt, dt, Map_Stack, Map_Stack_f, cmmVarMap, cmmPartMap, Dev_Temp_C1);
 
 
 	// displaying max and min of vorticity and velocity for plotting limits and cfl condition
@@ -699,7 +709,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	double* dt_vec = new double[iterMax+SettingsMain.getLagrangeOrder()];
 
 	for (int i_l = 0; i_l < SettingsMain.getLagrangeOrder(); i_l++) {
-		t_vec[i_l] = t0 - (SettingsMain.getLagrangeOrder()-1 - i_l) * dt;
+		t_vec[i_l] = SettingsMain.getRestartTime() - (SettingsMain.getLagrangeOrder()-1 - i_l) * dt;
 		dt_vec[i_l] = dt;
 	}
 	int loop_ctr = 0;
@@ -1005,7 +1015,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 
 			// save final position
 			// copy data to host
-			writeTranferToBinaryFile(2*Part_Pos[i_p]->num, Part_Pos[i_p]->Dev_var, SettingsMain, "/Particle_data/Time_C1/Particles_pos_P" + to_str_0(i_p, 2), 0);
+			writeTransferToBinaryFile(2*Part_Pos[i_p]->num, Part_Pos[i_p]->Dev_var, SettingsMain, "/Particle_data/Time_C1/Particles_pos_P" + to_str_0(i_p, 2), 0);
 		}
 	}
 
@@ -1048,7 +1058,6 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 	Psi.free_res();
 	ChiX_f.free_res(); ChiY_f.free_res();
 	empty_vort.free_res();
-	cudaFree(Dev_Sample);  // this frees dev space for all samples
 	cudaFree(fft_work_area);
 //	cudaFree(Dev_Temp_C1);  // allready freed from empty_vort
 	Map_Stack.free_res();
