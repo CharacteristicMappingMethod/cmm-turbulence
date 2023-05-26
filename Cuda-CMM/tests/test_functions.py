@@ -327,10 +327,10 @@ def run_test(params: TestParams):
     # remove heavy data, as they are currently not needed
     for i_res in params.results_loc:
         res_ref = os.path.join(params.root_path, params.wkdir, "data", i_res)
-        # if os.path.isdir(os.path.join(res_ref, "Particle_data")): shutil.rmtree(os.path.join(res_ref, "Particle_data"))
-        # if os.path.isdir(os.path.join(res_ref, "Time_data")): shutil.rmtree(os.path.join(res_ref, "Time_data"))
-        # if os.path.isdir(os.path.join(res_ref, "Zoom_data")): shutil.rmtree(os.path.join(res_ref, "Zoom_data"))
-        # if os.path.isdir(os.path.join(res_ref, "MapStack")): shutil.rmtree(os.path.join(res_ref, "MapStack"))
+        if os.path.isdir(os.path.join(res_ref, "Particle_data")): shutil.rmtree(os.path.join(res_ref, "Particle_data"))
+        if os.path.isdir(os.path.join(res_ref, "Time_data")): shutil.rmtree(os.path.join(res_ref, "Time_data"))
+        if os.path.isdir(os.path.join(res_ref, "Zoom_data")): shutil.rmtree(os.path.join(res_ref, "Zoom_data"))
+        if os.path.isdir(os.path.join(res_ref, "MapStack")): shutil.rmtree(os.path.join(res_ref, "MapStack"))
 
     # overwrite reference results
     if (params.save_reference and compare_res[1] == 0) or params.save_force:
