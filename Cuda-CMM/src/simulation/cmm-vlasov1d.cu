@@ -664,7 +664,8 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 			logger.push(message);
 		}
 
-		readMapStack(SettingsMain, Map_Stack, ChiX, ChiY, Psi, false, SettingsMain.getRestartLocation());
+		message = readMapStack(SettingsMain, Map_Stack, ChiX, ChiY, Psi, false, SettingsMain.getRestartLocation());
+		if (message != "") { logger.push(message); logger.push("Exitting .."); exit(0); }
 
 		// output how many maps were loaded
 		if (SettingsMain.getVerbose() >= 2) {
@@ -673,7 +674,8 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		}
 
 		if (SettingsMain.getForwardMap()) {
-			readMapStack(SettingsMain, Map_Stack_f, ChiX_f, ChiY_f, Psi, true, SettingsMain.getRestartLocation());
+			message = readMapStack(SettingsMain, Map_Stack_f, ChiX_f, ChiY_f, Psi, true, SettingsMain.getRestartLocation());
+			if (message != "") { logger.push(message); logger.push("Exitting .."); exit(0); }
 			// output how many maps were loaded
 			if (SettingsMain.getVerbose() >= 2) {
 				message = "Loaded " + to_str(Map_Stack.map_stack_ctr) + " maps to forward map stack";
@@ -694,7 +696,8 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 				Vort.Dev_var, Vort_fine_init.Dev_var, *ChiX.Grid, *ChiX.Grid, *Vort_fine_init.Grid, 0, false);
 
 		// read in particles
-		readParticlesState(SettingsMain, Part_Pos, Part_Vel, SettingsMain.getRestartLocation());
+		message = readParticlesState(SettingsMain, Part_Pos, Part_Vel, SettingsMain.getRestartLocation());
+		if (message != "") { logger.push(message); logger.push("Exitting .."); exit(0); }
 		if (SettingsMain.getParticlesAdvectedNum() > 0) {
 			if (SettingsMain.getVerbose() >= 2) {
 				message = "Loaded data for particle sets";
@@ -853,7 +856,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 			if (!stack_saturated) {
 				if (SettingsMain.getVerbose() >= 2) {
 					message = "Refining Map : Step = " + to_str(loop_ctr)
-							+ " \t Maps = " + to_str(Map_Stack.map_stack_ctr)
+							+ " \t Maps = " + to_str(Map_Stack.map_stack_ctr+1)
 							+ " \t Gap = " + to_str(loop_ctr - old_ctr);
 					logger.push(message);
 				}
@@ -862,12 +865,16 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 				//adjusting initial conditions, compute vorticity hermite
 				translate_initial_condition_through_map_stack(Map_Stack, ChiX, ChiY, Vort_fine_init, Vort_discrete_init,
 							Dev_Temp_C1, SettingsMain.getInitialConditionNum(), SettingsMain.getInitialDiscrete(), ID_DIST_FUNC); // 2 is for distribution function switch
+
+				// copy map to Map Stack and save
+				if (SettingsMain.getSaveMapStack()) writeMapStack(SettingsMain, ChiX, ChiY, Psi, Map_Stack.map_stack_ctr, false);
 				Map_Stack.copy_map_to_host(ChiX.Dev_var, ChiY.Dev_var);
 
 				//resetting map
 				k_init_diffeo<<<ChiX.Grid->blocksPerGrid, ChiX.Grid->threadsPerBlock>>>(ChiX.Dev_var, ChiY.Dev_var, *ChiX.Grid);
 
 				if (SettingsMain.getForwardMap()) {
+					if (SettingsMain.getSaveMapStack()) writeMapStack(SettingsMain, ChiX_f, ChiY_f, Psi, Map_Stack.map_stack_ctr, false);
 					Map_Stack_f.copy_map_to_host(ChiX_f.Dev_var, ChiY_f.Dev_var);
 					k_init_diffeo<<<ChiX_f.Grid->blocksPerGrid, ChiX_f.Grid->threadsPerBlock>>>(ChiX_f.Dev_var, ChiY_f.Dev_var, *ChiX_f.Grid);
 				}
@@ -1056,18 +1063,18 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	// save map stack if wanted
 	if (SettingsMain.getSaveMapStack()) {
 		if (SettingsMain.getVerbose() >= 2) {
-			message = "Saving MapStack : Maps = " + to_str(Map_Stack.map_stack_ctr)
+			message = "Saving last Map of MapStack : Maps = " + to_str(Map_Stack.map_stack_ctr)
 				+ " \t Total size = " + to_str((Map_Stack.map_stack_ctr+1)*map_size)
 				+ "mb \t S-time = " + to_str(t_vec[loop_ctr + SettingsMain.getLagrangeOrder() - 1], 16); logger.push(message);
 		}
-		writeMapStack(SettingsMain, Map_Stack, ChiX, ChiY, Psi, false);
+		writeMapStack(SettingsMain, ChiX, ChiY, Psi, -1, false);
 
 		// save forward map stack
 		if (SettingsMain.getForwardMap()) {
 			if (SettingsMain.getVerbose() >= 2) {
-				message = "Saving forward MapStack : Maps = " + to_str(Map_Stack.map_stack_ctr) + " \t Total size = " + to_str((Map_Stack.map_stack_ctr+1)*map_size) + "mb"; logger.push(message);
+				message = "Saving last map of forward MapStack : Maps = " + to_str(Map_Stack.map_stack_ctr) + " \t Total size = " + to_str((Map_Stack.map_stack_ctr+1)*map_size) + "mb"; logger.push(message);
 			}
-			writeMapStack(SettingsMain, Map_Stack_f, ChiX_f, ChiY_f, Psi, true);
+			writeMapStack(SettingsMain, ChiX_f, ChiY_f, Psi, -1, true);
 		}
 
 		// write particle state, in case no particles, then nothing is written

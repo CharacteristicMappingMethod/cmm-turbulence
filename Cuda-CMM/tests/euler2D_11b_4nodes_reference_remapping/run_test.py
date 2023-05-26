@@ -26,8 +26,8 @@ import test_functions as test
 test_param_dict = {
     "name": "euler2D_11b",  # Specific name of test
     "wkdir": "tests/euler2D_11b_4nodes_reference_remapping",  # relative path from root to data folder of this test
-    "param_loc": "examples/euler2D/params-11b-4nodes-reference-remapping.txt",  # params file relative from root path
-    "results_loc": "11b-4nodes-reference-remapping_4_nodes_C256_F512_t32_T2",  # name of newly computed results
+    "param_loc": ["examples/euler2D/params-11b-4nodes-reference-remapping.txt"],  # params file relative from root path
+    "results_loc": ["11b-4nodes-reference-remapping_4_nodes_C256_F512_t32_T2"],  # name of newly computed results
     "reference_loc": "reference-results_4_nodes_C256_F512_t32_T2"  # name of reference results
 }
 

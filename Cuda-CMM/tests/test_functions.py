@@ -74,13 +74,16 @@ def parse_command_line(params: TestParams):
 # param_loc     - location of used parameter file
 def run_sim(params: TestParams):
     # run simulation
-    params.logInfo("Starting simulation")
-    process = Popen(
-        [os.path.join(params.root_path, params.exec_loc), 'param_file=' + os.path.join(params.root_path, params.param_loc),
-            'workspace=' + os.path.join(params.root_path, params.wkdir) + "/"
-        ], stdout=PIPE)
-    output, _error = process.communicate()
-    params.logInfo("Concluded simulation")
+    for i_count, i_params in enumerate(params.param_loc):
+        params.logInfo(f"Starting simulation {i_count+1} / {len(params.param_loc)}")
+        process = Popen(
+            [os.path.join(params.root_path, params.exec_loc), 'param_file=' + os.path.join(params.root_path, i_params),
+                'workspace=' + os.path.join(params.root_path, params.wkdir) + "/"
+            ], stdout=PIPE)
+        output, error = process.communicate()
+        if not "Finished simulation" in str(output):
+            params.logError(f"Simulation {i_count+1} / {len(params.param_loc)} exitted early!")
+        params.logInfo(f"Concluded simulation {i_count+1} / {len(params.param_loc)}")
 
 
 # function to read in monitoring and mesure values
@@ -116,12 +119,14 @@ def read_monitoring(params: TestParams, loc):
 # Global quantitities       - Mismatches are compared up to precision of eps_pass
 # Hash quantitities         - Only works for the same machine, then it should be equal
 def compare_mesure(params:TestParams, res_in, res_ref):
+    compare_res = np.array([0, 0])  # counter for passed or failed tests
+
     # compare keys
     if res_in.keys() != res_ref.keys():
         params.logError(f"Different data available for this simulation and reference results. This simulation: {res_in.keys()}, reference: {res_ref.keys()}")
+        compare_res[1] += 1
 
     # compare data
-    compare_res = np.array([0, 0])  # counter for passed or failed tests
     for i_res in res_in.keys():
         i_res_name = i_res.replace(".data", "")
         # check if this data is a sample data or computational data
@@ -177,12 +182,14 @@ def compare_mesure(params:TestParams, res_in, res_ref):
 # Global quantitities       - Mismatches are compared up to precision of eps_pass
 # Hash quantitities         - Only works for the same machine, then it should be equal
 def compare_debug(params: TestParams, res_in, res_ref):
+    compare_res = np.array([0, 0])  # counter for passed or failed tests
+
     # compare keys
     if res_in.keys() != res_ref.keys():
         params.logError(f"Different data available for this simulation and reference results. This simulation: {res_in.keys()}, reference: {res_ref.keys()}")
+        compare_res[1] += 1
 
     # compare data
-    compare_res = np.array([0, 0])  # counter for passed or failed tests
     for i_res in res_in.keys():
         i_res_name = i_res.replace(".data", "")
         # check if this data is a sample data or computational data
@@ -242,12 +249,14 @@ def compare_debug(params: TestParams, res_in, res_ref):
 # Remapping values          - Check if remapping occurs similar in quantity and at what time
 # Inc / Inv error           - if this matches, then it should be a strong hint on a similar simulation as it has to match every single step
 def compare_monitoring(params: TestParams, res_in, res_ref):
+    compare_res = np.array([0, 0])  # counter for passed or failed tests
+
     # compare keys
     if res_in.keys() != res_ref.keys():
         params.logError(f"Different data available for this simulation and reference results. This simulation: {res_in.keys()}, reference: {res_ref.keys()}")
+        compare_res[1] += 1
 
     # compare data
-    compare_res = np.array([0, 0])  # counter for passed or failed tests
     for i_res in res_in.keys():
         i_res_name = i_res.replace(".data", "")
         # check if this data is present in reference data
@@ -299,14 +308,15 @@ def compare_monitoring(params: TestParams, res_in, res_ref):
 
 def run_test(params: TestParams):
     # delete old simulation if it exists
-    if os.path.isdir(os.path.join(params.root_path, params.wkdir, "data", params.results_loc)):
-        shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", params.results_loc))
+    for i_res in params.results_loc:
+        if os.path.isdir(os.path.join(params.root_path, params.wkdir, "data", i_res)):
+            shutil.rmtree(os.path.join(params.root_path, params.wkdir, "data", i_res))
 
     # run simulation
     run_sim(params)
 
-    # load in simulation and reference data
-    [res_monitor_in, res_mesure_in, res_debug_in] = read_monitoring(params, loc=params.results_loc)
+    # load in simulation (from last simulation in case of several) and reference data
+    [res_monitor_in, res_mesure_in, res_debug_in] = read_monitoring(params, loc=params.results_loc[-1])
     [res_monitor_ref, res_mesure_ref, res_debug_ref] = read_monitoring(params, loc=params.reference_loc)
 
     # compare monitoring and mesure data
@@ -314,17 +324,21 @@ def run_test(params: TestParams):
     compare_res += compare_mesure(params, res_in=res_mesure_in, res_ref=res_mesure_ref)
     compare_res += compare_debug(params, res_in=res_debug_in, res_ref=res_debug_ref)
 
+    # remove heavy data, as they are currently not needed
+    for i_res in params.results_loc:
+        res_ref = os.path.join(params.root_path, params.wkdir, "data", i_res)
+        # if os.path.isdir(os.path.join(res_ref, "Particle_data")): shutil.rmtree(os.path.join(res_ref, "Particle_data"))
+        # if os.path.isdir(os.path.join(res_ref, "Time_data")): shutil.rmtree(os.path.join(res_ref, "Time_data"))
+        # if os.path.isdir(os.path.join(res_ref, "Zoom_data")): shutil.rmtree(os.path.join(res_ref, "Zoom_data"))
+        # if os.path.isdir(os.path.join(res_ref, "MapStack")): shutil.rmtree(os.path.join(res_ref, "MapStack"))
+
     # overwrite reference results
     if (params.save_reference and compare_res[1] == 0) or params.save_force:
         params.logInfo("Overwriting reference results")
         # rmtree is weird - we have to first remove old folder before copying
         rel_ref = os.path.join(params.root_path, params.wkdir, "data", params.reference_loc)
         if os.path.isdir(rel_ref): shutil.rmtree(rel_ref)
-        shutil.copytree(os.path.join(params.root_path, params.wkdir, "data", params.results_loc), rel_ref)
-        # remove particle and time data, as they are currently not needed
-        if os.path.isdir(os.path.join(rel_ref, "Particle_data")): shutil.rmtree(os.path.join(rel_ref, "Particle_data"))
-        if os.path.isdir(os.path.join(rel_ref, "Time_data")): shutil.rmtree(os.path.join(rel_ref, "Time_data"))
-        if os.path.isdir(os.path.join(rel_ref, "Zoom_data")): shutil.rmtree(os.path.join(rel_ref, "Zoom_data"))
+        shutil.copytree(os.path.join(params.root_path, params.wkdir, "data", params.results_loc[-1]), rel_ref)
     
     # final verdict
     logging.info(f'{params.name} - Completed with {compare_res[1]} mismatches and {compare_res[0]} passed comparisons')

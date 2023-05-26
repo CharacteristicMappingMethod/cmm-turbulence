@@ -26,8 +26,8 @@ import test_functions as test
 test_param_dict = {
     "name": "euler2D_one_step",  # Specific name of test
     "wkdir": "tests/euler2D_one_step",  # relative path from root to data folder of this test
-    "param_loc": "tests/euler2D_one_step/params.txt",  # params file relative from root path
-    "results_loc": "one_step_4_nodes_C256_F512_t1_T1",  # name of newly computed results
+    "param_loc": ["tests/euler2D_one_step/params.txt"],  # params file relative from root path
+    "results_loc": ["one_step_4_nodes_C256_F512_t1_T1"],  # name of newly computed results
     "reference_loc": "reference-results_4_nodes_C256_F512_t1_T1"  # name of reference results
 }
 

@@ -647,7 +647,7 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 						writeTimeVariable(SettingsMain, "Map_ChiX_f_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
 						cudaMemcpy2D(Sample_var->Dev_var+2*Sample_var->Grid->N, sizeof(double), Sample_var->Dev_var+1, sizeof(double)*2,
 								sizeof(double), Sample_var->Grid->N, cudaMemcpyDeviceToDevice);
-						writeTimeVariable(SettingsMain, "Map_ChiX_f_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
+						writeTimeVariable(SettingsMain, "Map_ChiY_f_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
 					}
 
 					// save position of forwarded particles, go through all and only safe the needed ones
@@ -683,7 +683,7 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 				writeTimeVariable(SettingsMain, "Map_ChiX_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
 				cudaMemcpy2D(Sample_var->Dev_var+2*Sample_var->Grid->N, sizeof(double), Sample_var->Dev_var+1, sizeof(double)*2,
 						sizeof(double), Sample_var->Grid->N, cudaMemcpyDeviceToDevice);
-				writeTimeVariable(SettingsMain, "Map_ChiX_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
+				writeTimeVariable(SettingsMain, "Map_ChiY_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
 			}
 
 			// passive scalar theta - 1 to switch for passive scalar
@@ -838,7 +838,7 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 						writeTimeVariable(SettingsMain, "Map_ChiX_f_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
 						cudaMemcpy2D(Sample_var->Dev_var+2*Sample_var->Grid->N, sizeof(double), Sample_var->Dev_var+1, sizeof(double)*2,
 								sizeof(double), Sample_var->Grid->N, cudaMemcpyDeviceToDevice);
-						writeTimeVariable(SettingsMain, "Map_ChiX_f_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
+						writeTimeVariable(SettingsMain, "Map_ChiY_f_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
 					}
 
 					// save position of forwarded particles, go through all and only safe the needed ones
@@ -874,7 +874,7 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 				writeTimeVariable(SettingsMain, "Map_ChiX_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
 				cudaMemcpy2D(Sample_var->Dev_var+2*Sample_var->Grid->N, sizeof(double), Sample_var->Dev_var+1, sizeof(double)*2,
 						sizeof(double), Sample_var->Grid->N, cudaMemcpyDeviceToDevice);
-				writeTimeVariable(SettingsMain, "Map_ChiX_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
+				writeTimeVariable(SettingsMain, "Map_ChiY_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
 			}
 
 			// passive scalar theta - 1 to switch for passive scalar

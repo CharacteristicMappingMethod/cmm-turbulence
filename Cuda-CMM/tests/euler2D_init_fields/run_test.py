@@ -26,50 +26,50 @@ import test_functions as test
 test_param_dict_none = {
     "name": "euler2D_init_fields_none",  # Specific name of test
     "wkdir": "tests/euler2D_init_fields",  # relative path from root to data folder of this test
-    "param_loc": "tests/euler2D_init_fields/params_none.txt",  # params file relative from root path
-    "results_loc": "init_fields_none_4_nodes_C256_F512_t1_T0",  # name of newly computed results
+    "param_loc": ["tests/euler2D_init_fields/params_none.txt"],  # params file relative from root path
+    "results_loc": ["init_fields_none_4_nodes_C256_F512_t1_T0"],  # name of newly computed results
     "reference_loc": "reference-results_none_4_nodes_C256_F512_t1_T0"  # name of reference results
 }
 test_param_dict_comp = {
     "name": "euler2D_init_fields_comp",  # Specific name of test
     "wkdir": "tests/euler2D_init_fields",  # relative path from root to data folder of this test
-    "param_loc": "tests/euler2D_init_fields/params_comp.txt",  # params file relative from root path
-    "results_loc": "init_fields_comp_4_nodes_C256_F512_t1_T0",  # name of newly computed results
+    "param_loc": ["tests/euler2D_init_fields/params_comp.txt"],  # params file relative from root path
+    "results_loc": ["init_fields_comp_4_nodes_C256_F512_t1_T0"],  # name of newly computed results
     "reference_loc": "reference-results_comp_4_nodes_C256_F512_t1_T0"  # name of reference results
 }
 test_param_dict_conv = {
     "name": "euler2D_init_fields_conv",  # Specific name of test
     "wkdir": "tests/euler2D_init_fields",  # relative path from root to data folder of this test
-    "param_loc": "tests/euler2D_init_fields/params_conv.txt",  # params file relative from root path
-    "results_loc": "init_fields_conv_4_nodes_C256_F512_t1_T0",  # name of newly computed results
+    "param_loc": ["tests/euler2D_init_fields/params_conv.txt"],  # params file relative from root path
+    "results_loc": ["init_fields_conv_4_nodes_C256_F512_t1_T0"],  # name of newly computed results
     "reference_loc": "reference-results_conv_4_nodes_C256_F512_t1_T0"  # name of reference results
 }
 test_param_dict_sample = {
     "name": "euler2D_init_fields_sample",  # Specific name of test
     "wkdir": "tests/euler2D_init_fields",  # relative path from root to data folder of this test
-    "param_loc": "tests/euler2D_init_fields/params_sample.txt",  # params file relative from root path
-    "results_loc": "init_fields_sample_4_nodes_C256_F512_t1_T0",  # name of newly computed results
+    "param_loc": ["tests/euler2D_init_fields/params_sample.txt"],  # params file relative from root path
+    "results_loc": ["init_fields_sample_4_nodes_C256_F512_t1_T0"],  # name of newly computed results
     "reference_loc": "reference-results_sample_4_nodes_C256_F512_t1_T0"  # name of reference results
 }
 test_param_dict_zoom = {
     "name": "euler2D_init_fields_zoom",  # Specific name of test
     "wkdir": "tests/euler2D_init_fields",  # relative path from root to data folder of this test
-    "param_loc": "tests/euler2D_init_fields/params_zoom.txt",  # params file relative from root path
-    "results_loc": "init_fields_zoom_4_nodes_C256_F512_t1_T0",  # name of newly computed results
+    "param_loc": ["tests/euler2D_init_fields/params_zoom.txt"],  # params file relative from root path
+    "results_loc": ["init_fields_zoom_4_nodes_C256_F512_t1_T0"],  # name of newly computed results
     "reference_loc": "reference-results_zoom_4_nodes_C256_F512_t1_T0"  # name of reference results
 }
 test_param_dict_particles = {
     "name": "euler2D_init_fields_particles",  # Specific name of test
     "wkdir": "tests/euler2D_init_fields",  # relative path from root to data folder of this test
-    "param_loc": "tests/euler2D_init_fields/params_particles.txt",  # params file relative from root path
-    "results_loc": "init_fields_particles_4_nodes_C256_F512_t1_T0",  # name of newly computed results
+    "param_loc": ["tests/euler2D_init_fields/params_particles.txt"],  # params file relative from root path
+    "results_loc": ["init_fields_particles_4_nodes_C256_F512_t1_T0"],  # name of newly computed results
     "reference_loc": "reference-results_particles_4_nodes_C256_F512_t1_T0"  # name of reference results
 }
 test_param_dict_forward = {
     "name": "euler2D_init_fields_forward",  # Specific name of test
     "wkdir": "tests/euler2D_init_fields",  # relative path from root to data folder of this test
-    "param_loc": "tests/euler2D_init_fields/params_forward.txt",  # params file relative from root path
-    "results_loc": "init_fields_forward_4_nodes_C256_F512_t1_T0",  # name of newly computed results
+    "param_loc": ["tests/euler2D_init_fields/params_forward.txt"],  # params file relative from root path
+    "results_loc": ["init_fields_forward_4_nodes_C256_F512_t1_T0"],  # name of newly computed results
     "reference_loc": "reference-results_forward_4_nodes_C256_F512_t1_T0"  # name of reference results
 }
 

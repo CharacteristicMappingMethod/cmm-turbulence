@@ -1,0 +1,83 @@
+
+Continuing simulation
+
+[2023-05-26.16:33:43]	Starting memory initialization 	 C-Time = 0h 0m 0.000275s
+[2023-05-26.16:33:43]	Number of CUDA devices = 1
+[2023-05-26.16:33:43]	Active CUDA device = 0
+[2023-05-26.16:33:43]	Cuda runtime version = 11080
+[2023-05-26.16:33:43]	Cuda driver version = 11070
+[2023-05-26.16:33:43]	CuFFT version = 10900
+[2023-05-26.16:33:43]	Solving = cmm_euler_2d
+[2023-05-26.16:33:43]	Initial condition = 4_nodes
+[2023-05-26.16:33:43]	Iter max = 33
+[2023-05-26.16:33:43]	Name of simulation = remap_4_nodes_C256_F512_t32_T2
+[2023-05-26.16:33:43]	Initialized backwards maps arrays: cudaSuccess
+[2023-05-26.16:33:43]	Initialized coarse vort array: cudaSuccess
+[2023-05-26.16:33:43]	Initialized vort_fine_init array: cudaSuccess
+[2023-05-26.16:33:43]	Initialized discrete initial array
+[2023-05-26.16:33:43]	Initialized stream function array: cudaSuccess
+[2023-05-26.16:33:43]	Initialized forward maps arrays: cudaSuccess
+[2023-05-26.16:33:43]	Initialized empty_vort variable: cudaSuccess
+[2023-05-26.16:33:43]	Initialized Sample variables: cudaSuccess
+[2023-05-26.16:33:43]	Initialized Zoom variables: cudaSuccess
+[2023-05-26.16:33:43]	Initialized cufft workplan: cudaSuccess
+[2023-05-26.16:33:43]	Initialized GPU temp array: cudaSuccess
+[2023-05-26.16:33:43]	Map size in MB = 4
+[2023-05-26.16:33:43]	Map stack length on CPU = 11
+[2023-05-26.16:33:43]	Initialized CPU map stack: cudaSuccess
+[2023-05-26.16:33:43]	Particles set P01 : Num = 1000 	 Tau = 0
+[2023-05-26.16:33:43]	Particles set P02 : Num = 1000 	 Tau = 0.5
+[2023-05-26.16:33:43]	Memory initialization finished 	 estimated GPU RAM = 0.03 gb 	 estimated CPU RAM = 0.0461 gb 	 C-Time = 0h 0m 0.122s
+[2023-05-26.16:33:43]	Starting simulation initialization 	 C-Time = 0h 0m 0.122s 	 Last Cuda Error = cudaSuccess
+[2023-05-26.16:33:43]	Initializing by loading previous state
+[2023-05-26.16:33:43]	Loaded 3 maps to map stack
+[2023-05-26.16:33:43]	Loaded data for particle sets
+[2023-05-26.16:33:43]	Processed particle data
+[2023-05-26.16:33:43]	Computed coarse Cons : Energ = 20.772341 	 Enstr = 23.687085 	 Palinstr = 45.807854 	 Wmax = 2.8
+[2023-05-26.16:33:43]	W min = -1.64 - W max = 2.8
+[2023-05-26.16:33:43]	Simulation initialization finished 	 Last Cuda Error = cudaSuccess 	 C-Time = 0h 0m 0.42s
+[2023-05-26.16:33:43]	Starting simulation loop 	 C-Time = 0h 0m 0.42s
+[2023-05-26.16:33:43]	Step = 1 	 S-Time = 1.03/2 	 E-inc = 7.18e-06 	 C-Time = 0h 0m 0.47s
+[2023-05-26.16:33:44]	Step = 2 	 S-Time = 1.06/2 	 E-inc = 8.8e-06 	 C-Time = 0h 0m 0.52s
+[2023-05-26.16:33:44]	Refining Map : Step = 2 	 Maps = 3 	 Gap = 2
+[2023-05-26.16:33:44]	Step = 3 	 S-Time = 1.09/2 	 E-inc = 1.04e-05 	 C-Time = 0h 0m 0.598s
+[2023-05-26.16:33:44]	Step = 4 	 S-Time = 1.12/2 	 E-inc = 5.24e-06 	 C-Time = 0h 0m 0.648s
+[2023-05-26.16:33:44]	Step = 5 	 S-Time = 1.16/2 	 E-inc = 6.22e-06 	 C-Time = 0h 0m 0.699s
+[2023-05-26.16:33:44]	Step = 6 	 S-Time = 1.19/2 	 E-inc = 6.22e-06 	 C-Time = 0h 0m 0.749s
+[2023-05-26.16:33:44]	Step = 7 	 S-Time = 1.22/2 	 E-inc = 6.22e-06 	 C-Time = 0h 0m 0.799s
+[2023-05-26.16:33:44]	Step = 8 	 S-Time = 1.25/2 	 E-inc = 6.22e-06 	 C-Time = 0h 0m 0.85s
+[2023-05-26.16:33:44]	Step = 9 	 S-Time = 1.28/2 	 E-inc = 6.22e-06 	 C-Time = 0h 0m 0.9s
+[2023-05-26.16:33:44]	Step = 10 	 S-Time = 1.31/2 	 E-inc = 7.05e-06 	 C-Time = 0h 0m 0.95s
+[2023-05-26.16:33:44]	Step = 11 	 S-Time = 1.34/2 	 E-inc = 8.69e-06 	 C-Time = 0h 0m 1s
+[2023-05-26.16:33:44]	Refining Map : Step = 11 	 Maps = 4 	 Gap = 9
+[2023-05-26.16:33:44]	Step = 12 	 S-Time = 1.38/2 	 E-inc = 1.05e-05 	 C-Time = 0h 0m 1.08s
+[2023-05-26.16:33:44]	Step = 13 	 S-Time = 1.41/2 	 E-inc = 5.33e-07 	 C-Time = 0h 0m 1.13s
+[2023-05-26.16:33:44]	Step = 14 	 S-Time = 1.44/2 	 E-inc = 1.46e-06 	 C-Time = 0h 0m 1.18s
+[2023-05-26.16:33:44]	Step = 15 	 S-Time = 1.47/2 	 E-inc = 2.83e-06 	 C-Time = 0h 0m 1.23s
+[2023-05-26.16:33:44]	Step = 16 	 S-Time = 1.5/2 	 E-inc = 4.68e-06 	 C-Time = 0h 0m 1.28s
+[2023-05-26.16:33:44]	Step = 17 	 S-Time = 1.53/2 	 E-inc = 6.9e-06 	 C-Time = 0h 0m 1.33s
+[2023-05-26.16:33:44]	Step = 18 	 S-Time = 1.56/2 	 E-inc = 9.52e-06 	 C-Time = 0h 0m 1.38s
+[2023-05-26.16:33:44]	Refining Map : Step = 18 	 Maps = 5 	 Gap = 7
+[2023-05-26.16:33:44]	Step = 19 	 S-Time = 1.59/2 	 E-inc = 1.28e-05 	 C-Time = 0h 0m 1.47s
+[2023-05-26.16:33:45]	Step = 20 	 S-Time = 1.62/2 	 E-inc = 9.3e-07 	 C-Time = 0h 0m 1.52s
+[2023-05-26.16:33:45]	Step = 21 	 S-Time = 1.66/2 	 E-inc = 2.49e-06 	 C-Time = 0h 0m 1.57s
+[2023-05-26.16:33:45]	Step = 22 	 S-Time = 1.69/2 	 E-inc = 4.85e-06 	 C-Time = 0h 0m 1.62s
+[2023-05-26.16:33:45]	Step = 23 	 S-Time = 1.72/2 	 E-inc = 7.99e-06 	 C-Time = 0h 0m 1.67s
+[2023-05-26.16:33:45]	Refining Map : Step = 23 	 Maps = 6 	 Gap = 5
+[2023-05-26.16:33:45]	Step = 24 	 S-Time = 1.75/2 	 E-inc = 1.18e-05 	 C-Time = 0h 0m 1.76s
+[2023-05-26.16:33:45]	Step = 25 	 S-Time = 1.78/2 	 E-inc = 1.41e-06 	 C-Time = 0h 0m 1.81s
+[2023-05-26.16:33:45]	Step = 26 	 S-Time = 1.81/2 	 E-inc = 3.73e-06 	 C-Time = 0h 0m 1.86s
+[2023-05-26.16:33:45]	Step = 27 	 S-Time = 1.84/2 	 E-inc = 7.02e-06 	 C-Time = 0h 0m 1.91s
+[2023-05-26.16:33:45]	Refining Map : Step = 27 	 Maps = 7 	 Gap = 4
+[2023-05-26.16:33:45]	Step = 28 	 S-Time = 1.88/2 	 E-inc = 1.15e-05 	 C-Time = 0h 0m 2.01s
+[2023-05-26.16:33:45]	Step = 29 	 S-Time = 1.91/2 	 E-inc = 1.98e-06 	 C-Time = 0h 0m 2.06s
+[2023-05-26.16:33:45]	Step = 30 	 S-Time = 1.94/2 	 E-inc = 5e-06 	 C-Time = 0h 0m 2.11s
+[2023-05-26.16:33:45]	Step = 31 	 S-Time = 1.97/2 	 E-inc = 9.45e-06 	 C-Time = 0h 0m 2.16s
+[2023-05-26.16:33:45]	Refining Map : Step = 31 	 Maps = 8 	 Gap = 4
+[2023-05-26.16:33:45]	Processed particle data
+[2023-05-26.16:33:45]	Computed coarse Cons : Energ = 20.628526 	 Enstr = 23.687087 	 Palinstr = 70.889822 	 Wmax = 2.8
+[2023-05-26.16:33:45]	Step = 32 	 S-Time = 2/2 	 E-inc = 1.54e-05 	 C-Time = 0h 0m 2.49s
+[2023-05-26.16:33:45]	Simulation loop finished 	 C-Time = 0h 0m 2.49s
+[2023-05-26.16:33:46]	Processed particle data
+[2023-05-26.16:33:46]	Computed coarse Cons : Energ = 20.628526 	 Enstr = 23.687087 	 Palinstr = 70.889822 	 Wmax = 2.8
+[2023-05-26.16:33:46]	Finished simulation 	 Last Cuda Error = cudaSuccess 	 C-Time = 0h 0m 2.73s

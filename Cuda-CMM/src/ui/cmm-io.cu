@@ -607,27 +607,26 @@ std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now
 }
 
 
-// save the map stack together with current map and psi
-void writeMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Psi, bool isForward) {
+// save one map to the map stack together with current psi
+void writeMapStack(SettingsCMM SettingsMain, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Psi, int map_num, bool isForward) {
 	// create new subfolder for mapstack, doesn't matter if we try to create it several times
 	std::string sub_folder_name = "/MapStack";
 	std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
 	struct stat st = {0};
 	if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
 
+	// change name if forward or backwards map
 	std::string str_forward = ""; if (isForward) str_forward = "_f";
+	// change name if part of stack or last active map
+	std::string map_name = to_str(map_num); if (map_num == -1) map_name = "coarse";
 
-	// save every map one by one
-	for (int i_map = 0; i_map < Map_Stack.map_stack_ctr; ++i_map) {
-		writeAllRealToBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM[i_map], SettingsMain, sub_folder_name + "/Map_ChiX" + str_forward + "_H_" + to_str(i_map));
-		writeAllRealToBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM[i_map], SettingsMain, sub_folder_name + "/Map_ChiY" + str_forward + "_H_" + to_str(i_map));
-	}
 
-	// save the active map
-	writeTransferToBinaryFile(4*Map_Stack.Grid->N, ChiX.Dev_var, SettingsMain, sub_folder_name + "/Map_ChiX"  + str_forward + "_H_coarse", false);
-	writeTransferToBinaryFile(4*Map_Stack.Grid->N, ChiY.Dev_var, SettingsMain, sub_folder_name + "/Map_ChiY"  + str_forward + "_H_coarse", false);
+	// save the map
+	writeTransferToBinaryFile(4*ChiX.Grid->N, ChiX.Dev_var, SettingsMain, sub_folder_name + "/Map_ChiX"  + str_forward + "_H_" + map_name, false);
+	writeTransferToBinaryFile(4*ChiY.Grid->N, ChiY.Dev_var, SettingsMain, sub_folder_name + "/Map_ChiY"  + str_forward + "_H_" + map_name, false);
 
 	// save previous psi
+	// it is saved and overwritten every time but in case the simulation crashes we can then always restart from last position
 	if (!isForward) {
 		for (int i_psi = 1; i_psi < SettingsMain.getLagrangeOrder(); ++i_psi) {
 			writeTransferToBinaryFile(4*Psi.Grid->N, Psi.Dev_var, SettingsMain, sub_folder_name + "/Stream_function_Psi_H_psi_" + to_str(i_psi), false);
@@ -658,7 +657,7 @@ int countFilesWithString(const std::string& dirPath, const std::string& searchSt
 }
 
 // read the map stack together with current map and psi
-void readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Psi,
+std::string readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Psi,
 		bool isForward, std::string data_name)
 {
 	// set default path
@@ -667,24 +666,41 @@ void readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, CmmVar2D ChiX, 
 		folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/MapStack";
 	}
 	std::string str_forward = ""; if (isForward) str_forward = "_f";
+	std::string message = "";
 
 	// read in every map one by one
 	for (int i_map = 0; i_map < countFilesWithString(folder_name_now, "Map_ChiX" + str_forward + "_H") - 1; ++i_map) {
-		readAllRealFromBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM[i_map], folder_name_now + "/Map_ChiX" + str_forward + "_H_" + to_str(i_map) + ".data");
-		readAllRealFromBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM[i_map], folder_name_now + "/Map_ChiY" + str_forward + "_H_" + to_str(i_map) + ".data");
+		bool read_X = readAllRealFromBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM[i_map], folder_name_now + "/Map_ChiX" + str_forward + "_H_" + to_str(i_map) + ".data");
+		bool read_Y = readAllRealFromBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM[i_map], folder_name_now + "/Map_ChiY" + str_forward + "_H_" + to_str(i_map) + ".data");
 		Map_Stack.map_stack_ctr++;
+
+		if (!read_X) {
+			message += "Failed to read in map " + to_str(i_map) + " at location " + folder_name_now + "/Map_ChiX" + str_forward + "_H_" + to_str(i_map) + ".data\n";
+		}
+		if (!read_Y) {
+			message += "Failed to read in map " + to_str(i_map) + " at location " + folder_name_now + "/Map_ChiY" + str_forward + "_H_" + to_str(i_map) + ".data\n";
+		}
 	}
 
 	// read the active map
-	readTransferFromBinaryFile(4*Map_Stack.Grid->N, ChiX.Dev_var, folder_name_now + "/Map_ChiX"  + str_forward + "_H_coarse.data");
-	readTransferFromBinaryFile(4*Map_Stack.Grid->N, ChiY.Dev_var, folder_name_now + "/Map_ChiY"  + str_forward + "_H_coarse.data");
-
+	bool read_X = readTransferFromBinaryFile(4*Map_Stack.Grid->N, ChiX.Dev_var, folder_name_now + "/Map_ChiX"  + str_forward + "_H_coarse.data");
+	bool read_Y = readTransferFromBinaryFile(4*Map_Stack.Grid->N, ChiY.Dev_var, folder_name_now + "/Map_ChiY"  + str_forward + "_H_coarse.data");
+	if (!read_X) {
+		message += "Failed to read in active map at location " + folder_name_now + "/Map_ChiX" + str_forward + "_H_coarse.data\n";
+	}
+	if (!read_Y) {
+		message += "Failed to read in active map at location " + folder_name_now + "/Map_ChiY" + str_forward + "_H_coarse.data\n";
+	}
 	// load previous psi
 	if (!isForward) {
 		for (int i_psi = 1; i_psi < SettingsMain.getLagrangeOrder(); ++i_psi) {
-			readTransferFromBinaryFile(4*Psi.Grid->N, Psi.Dev_var + i_psi*4*Psi.Grid->N, folder_name_now + "/Stream_function_Psi_H_psi_" + to_str(i_psi) + ".data");
+			bool read = readTransferFromBinaryFile(4*Psi.Grid->N, Psi.Dev_var + i_psi*4*Psi.Grid->N, folder_name_now + "/Stream_function_Psi_H_psi_" + to_str(i_psi) + ".data");
+			if (!read) {
+				message += "Failed to read in stream function" + to_str(i_psi) + " at location " + folder_name_now + "/Stream_function_Psi_H_psi_" + to_str(i_psi) + ".data\n";
+			}
 		}
 	}
+	return message;
 }
 
 
@@ -709,26 +725,35 @@ void writeParticlesState(SettingsCMM SettingsMain, CmmPart** Part_Pos, CmmPart**
 		}
 	}
 }
-void readParticlesState(SettingsCMM SettingsMain, CmmPart** Part_Pos, CmmPart** Part_Vel, std::string data_name) {
+std::string readParticlesState(SettingsCMM SettingsMain, CmmPart** Part_Pos, CmmPart** Part_Vel, std::string data_name) {
 	// set default path
 	std::string folder_name_now = data_name;
 	if (data_name == "") {
 		folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/MapStack";
 	}
+	std::string message = "";
 
 	// extract particle information
 	ParticlesAdvected* particles_advected = SettingsMain.getParticlesAdvected();
 
-	// save all particle positions and velocities if tau != 0
+	// read all particle positions and velocities if tau != 0
 	for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
-		// save particle positions
-		readTransferFromBinaryFile(2*Part_Pos[i_p]->num, Part_Pos[i_p]->Dev_var, folder_name_now + "/Particles_advected_pos_P" + to_str_0(i_p+1, 2) + ".data");
+		// read particle positions
+		bool read_success = readTransferFromBinaryFile(2*Part_Pos[i_p]->num, Part_Pos[i_p]->Dev_var, folder_name_now + "/Particles_advected_pos_P" + to_str_0(i_p+1, 2) + ".data");
+		if (!read_success) {
+			message += "Failed to read in particles pos " + to_str(i_p) + " at location " + folder_name_now + "/Particles_advected_pos_P" + to_str_0(i_p+1, 2) + ".data\n";
+		}
 
 		// save all particle velocities if tau != 0
 		if (particles_advected[i_p].tau != 0) {
-			readTransferFromBinaryFile(2*Part_Vel[i_p]->num, Part_Vel[i_p]->Dev_var, folder_name_now + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2) + ".data");
+			bool read_success = readTransferFromBinaryFile(2*Part_Vel[i_p]->num, Part_Vel[i_p]->Dev_var, folder_name_now + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2) + ".data");
+			if (!read_success) {
+				message += "Failed to read in particles vel " + to_str(i_p) + " at location " + folder_name_now + "/Particles_advected_vel_U" + to_str_0(i_p+1, 2) + ".data\n";
+			}
 		}
 	}
+
+	return message;
 }
 
 

@@ -1,7 +1,7 @@
 CMM Parameter file
 param_version	=	3
 
-workspace	=	../tests/euler2D_init_fields/
+workspace	=	../../tests/euler2D_init_fields/
 simulation_type	=	cmm_euler_2d
 sim_name	=	init_fields_forward
 grid_coarse	=	256
@@ -39,5 +39,5 @@ save_zoom	=	{is_instant=0,time_start=0,time_end=10000,time_step=1,var=All,grid=2
 forward_map	=	1
 particles_forwarded_num	=	2
 particles_forwarded	=	{num=1000,seed=0,init_name=uniform,init_time=0,init_param_1=3.141592653589793,init_param_2=3.141592653589793,init_param_3=6.283185307179586,init_param_4=6.283185307179586}
-particles_forwarded	=	{num=1000,seed=0,init_name=uniform,init_time=0,init_param_1=3.141592653589793,init_param_2=3.141592653589793,init_param_3=6.283185307179586,init_param_4=6.283185307179586}
+particles_forwarded	=	{num=1000,seed=0,init_name=uniform_grid,init_time=0,init_param_1=3.141592653589793,init_param_2=3.141592653589793,init_param_3=6.283185307179586,init_param_4=6.283185307179586}
 particles_advected_num	=	0

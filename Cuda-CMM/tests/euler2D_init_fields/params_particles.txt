@@ -36,4 +36,4 @@ save_zoom_num	=	0
 forward_map	=	0
 particles_advected_num	=	2
 particles_advected	=	{num=1000,tau=0,seed=0,time_integration=RK3,init_name=uniform,init_time=0,init_param_1=3.141592653589793,init_param_2=3.141592653589793,init_param_3=6.283185307179586,init_param_4=6.283185307179586}
-particles_advected	=	{num=1000,tau=0.5,seed=0,time_integration=RK3,init_name=uniform,init_time=0,init_param_1=3.141592653589793,init_param_2=3.141592653589793,init_param_3=6.283185307179586,init_param_4=6.283185307179586}
+particles_advected	=	{num=1000,tau=0.5,seed=0,time_integration=RK3,init_name=uniform_grid,init_time=0,init_param_1=3.141592653589793,init_param_2=3.141592653589793,init_param_3=6.283185307179586,init_param_4=6.283185307179586}

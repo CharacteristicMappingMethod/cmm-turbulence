@@ -1,7 +1,7 @@
 CMM Parameter file
 param_version	=	3
 
-workspace	=	../tests/euler2D_init_fields/
+workspace	=	../../tests/euler2D_init_fields/
 simulation_type	=	cmm_euler_2d
 sim_name	=	init_fields_comp
 grid_coarse	=	256

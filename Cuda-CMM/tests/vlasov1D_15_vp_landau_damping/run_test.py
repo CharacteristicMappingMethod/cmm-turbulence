@@ -26,8 +26,8 @@ import test_functions as test
 test_param_dict = {
     "name": "vlasov1D_15",  # Specific name of test
     "wkdir": "tests/vlasov1D_15_vp_landau_damping",  # relative path from root to data folder of this test
-    "param_loc": "tests/vlasov1D_15_vp_landau_damping/params-15b-vp-landau-damping.txt",  # params file relative from root path
-    "results_loc": "15-vp_landau_damping_C256_F512_t1024_T0.2",  # name of newly computed results
+    "param_loc": ["tests/vlasov1D_15_vp_landau_damping/params-15b-vp-landau-damping.txt"],  # params file relative from root path
+    "results_loc": ["15-vp_landau_damping_C256_F512_t1024_T0.2"],  # name of newly computed results
     "reference_loc": "reference-results_C256_F512_t1024_T0.2"  # name of reference results
 }
 

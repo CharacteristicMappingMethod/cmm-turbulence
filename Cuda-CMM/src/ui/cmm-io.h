@@ -82,11 +82,11 @@ void writeDebugGlobals(SettingsCMM SettingsMain, std::string data_name, double* 
 //std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
 //		std::map<std::string, CmmPart*> cmmPartMap, CmmVar2D Psi, double *Dev_Temp);
 
-void writeMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Psi, bool isForward);
-void readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Psi, bool isForward, std::string data_name);
+void writeMapStack(SettingsCMM SettingsMain, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Psi, int map_num, bool isForward);
+std::string readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Psi, bool isForward, std::string data_name);
 
 void writeParticlesState(SettingsCMM SettingsMain, CmmPart** Part_Pos, CmmPart** Part_Vel);
-void readParticlesState(SettingsCMM SettingsMain, CmmPart** Part_Pos, CmmPart** Part_Vel, std::string data_name);
+std::string readParticlesState(SettingsCMM SettingsMain, CmmPart** Part_Pos, CmmPart** Part_Vel, std::string data_name);
 
 class Logger
 {
