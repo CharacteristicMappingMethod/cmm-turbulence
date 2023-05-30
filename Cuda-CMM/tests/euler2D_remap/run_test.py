@@ -11,10 +11,7 @@
 #
 ########################################################################
 
-import os, shutil, sys
-from subprocess import PIPE, Popen  # run system commands
-import logging
-import numpy as np
+import os, sys
 
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 import test_functions as test

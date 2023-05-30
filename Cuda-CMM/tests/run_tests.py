@@ -11,7 +11,6 @@
 #
 ########################################################################
 
-import os
 import test_functions as test  # load testing functions
 import importlib  # load individual test files
 

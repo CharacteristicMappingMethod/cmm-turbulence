@@ -15,7 +15,6 @@ import os, shutil
 import logging
 import numpy as np
 import argparse
-import re  # check for number in name to differ sampling from computaional mesure data
 from subprocess import PIPE, Popen  # run system commands
 
 
@@ -307,6 +306,12 @@ def compare_monitoring(params: TestParams, res_in, res_ref):
 
 
 def run_test(params: TestParams):
+
+    # test if path is set correct by checking for executable
+    if not os.path.isfile(os.path.join(params.root_path, params.exec_loc)):
+        params.logError("Path to executable is not correct. Did you ensure to execute the script from its file location?")
+        exit()
+
     # delete old simulation if it exists
     for i_res in params.results_loc:
         if os.path.isdir(os.path.join(params.root_path, params.wkdir, "data", i_res)):

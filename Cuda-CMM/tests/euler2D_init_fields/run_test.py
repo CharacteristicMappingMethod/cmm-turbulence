@@ -11,10 +11,7 @@
 #
 ########################################################################
 
-import os, shutil, sys
-from subprocess import PIPE, Popen  # run system commands
-import logging
-import numpy as np
+import os, sys
 
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 import test_functions as test
@@ -78,37 +75,19 @@ test_param_dict_forward = {
 # executing this file directly runs all tests from this script
 if __name__ == "__main__":
 
-    params = test.TestParams(test_param_dict_none)
-    test.parse_command_line(params)
-    params.root_path = "../../"  # we have to adapt the root path
-    compare_pass = test.run_test(params)
+    # list of all tests in this batch
+    test_list = [
+        test_param_dict_none,
+        test_param_dict_comp,
+        test_param_dict_conv,
+        test_param_dict_sample,
+        test_param_dict_zoom,
+        test_param_dict_particles,
+        test_param_dict_forward
+    ]
 
-    params = test.TestParams(test_param_dict_comp)
-    test.parse_command_line(params)
-    params.root_path = "../../"  # we have to adapt the root path
-    compare_pass = test.run_test(params)
-
-    params = test.TestParams(test_param_dict_conv)
-    test.parse_command_line(params)
-    params.root_path = "../../"  # we have to adapt the root path
-    compare_pass = test.run_test(params)
-
-    params = test.TestParams(test_param_dict_sample)
-    test.parse_command_line(params)
-    params.root_path = "../../"  # we have to adapt the root path
-    compare_pass = test.run_test(params)
-
-    params = test.TestParams(test_param_dict_zoom)
-    test.parse_command_line(params)
-    params.root_path = "../../"  # we have to adapt the root path
-    compare_pass = test.run_test(params)
-
-    params = test.TestParams(test_param_dict_particles)
-    test.parse_command_line(params)
-    params.root_path = "../../"  # we have to adapt the root path
-    compare_pass = test.run_test(params)
-
-    params = test.TestParams(test_param_dict_forward)
-    test.parse_command_line(params)
-    params.root_path = "../../"  # we have to adapt the root path
-    compare_pass = test.run_test(params)
+    for i_test in test_list:
+        params = test.TestParams(i_test)
+        test.parse_command_line(params)
+        params.root_path = "../../"  # we have to adapt the root path when executed from here
+        compare_pass = test.run_test(params)
