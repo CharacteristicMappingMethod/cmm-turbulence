@@ -29,6 +29,7 @@ test_names = [
     ["euler2D_init_fields", "test_param_dict_forward"],  # check for initialization of euler2D, forwarded map but basically everything
     ["euler2D_one_step", "test_param_dict"],  # check for one time-step
     ["euler2D_11b_4nodes_reference_remapping", "test_param_dict"],  # check for reference simulation including one remapping and w particles
+    # ["euler2D_remap", "test_param_dict"],  # remapping test currently only works when executed from inside due to mapstack read in
     ["vlasov1D_15_vp_landau_damping", "test_param_dict"]  # vlasov test
 ]
 

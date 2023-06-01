@@ -126,7 +126,7 @@ bool readAllRealFromBinaryFile(size_t Len, double *var, std::string data_name)
 
 
 void writeTransferToBinaryFile(size_t Len, double *d_var, SettingsCMM SettingsMain, std::string data_name, bool do_append)  {
-	int chunkSize = 1024;
+	size_t chunkSize = 1024;
 	std::string fileName = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + data_name + ".data";
 	std::ofstream file;
 	if (!do_append) file.open(fileName.c_str(), std::ios::out | std::ios::binary);
@@ -171,7 +171,7 @@ void writeTransferToBinaryFile(size_t Len, double *d_var, SettingsCMM SettingsMa
 	file.close();
 }
 bool readTransferFromBinaryFile(size_t Len, double *d_var, std::string data_name) {
-	int chunkSize = 1024;
+	size_t chunkSize = 1024;
 	std::string fileName = data_name;
 	std::ifstream file(fileName.c_str(), std::ios::in | std::ios::binary);
 	bool open_file;

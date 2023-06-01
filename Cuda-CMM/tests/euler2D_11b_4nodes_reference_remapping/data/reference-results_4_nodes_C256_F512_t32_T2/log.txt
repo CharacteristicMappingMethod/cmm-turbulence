@@ -1,125 +1,125 @@
 11b-4nodes-reference-remapping_4_nodes_C256_F512_t32_T2
-[2023-05-22.18:11:47]	Starting memory initialization 	 C-Time = 0h 0m 0.000233s
-[2023-05-22.18:11:47]	Number of CUDA devices = 1
-[2023-05-22.18:11:47]	Active CUDA device = 0
-[2023-05-22.18:11:47]	Cuda runtime version = 11080
-[2023-05-22.18:11:47]	Cuda driver version = 11070
-[2023-05-22.18:11:47]	CuFFT version = 10900
-[2023-05-22.18:11:47]	Solving = cmm_euler_2d
-[2023-05-22.18:11:47]	Initial condition = 4_nodes
-[2023-05-22.18:11:47]	Iter max = 67
-[2023-05-22.18:11:47]	Name of simulation = 11b-4nodes-reference-remapping_4_nodes_C256_F512_t32_T2
-[2023-05-22.18:11:48]	Initialized backwards maps arrays: cudaSuccess
-[2023-05-22.18:11:48]	Initialized coarse vort array: cudaSuccess
-[2023-05-22.18:11:48]	Initialized vort_fine_init array: cudaSuccess
-[2023-05-22.18:11:48]	Initialized discrete initial array
-[2023-05-22.18:11:48]	Initialized stream function array: cudaSuccess
-[2023-05-22.18:11:48]	Initialized forward maps arrays: cudaSuccess
-[2023-05-22.18:11:48]	Initialized empty_vort variable: cudaSuccess
-[2023-05-22.18:11:48]	Initialized Sample variables: cudaSuccess
-[2023-05-22.18:11:48]	Initialized Zoom variables: cudaSuccess
-[2023-05-22.18:11:48]	Initialized cufft workplan: cudaSuccess
-[2023-05-22.18:11:48]	Initialized GPU temp array: cudaSuccess
-[2023-05-22.18:11:48]	Map size in MB = 4
-[2023-05-22.18:11:48]	Map stack length on CPU = 11
-[2023-05-22.18:11:48]	Initialized CPU map stack: cudaSuccess
-[2023-05-22.18:11:48]	Particles set P01 : Num = 1000 	 Tau = 0
-[2023-05-22.18:11:48]	Particles set P02 : Num = 1000 	 Tau = 0.5
-[2023-05-22.18:11:48]	Memory initialization finished 	 estimated GPU RAM = 0.03 gb 	 estimated CPU RAM = 0.0461 gb 	 C-Time = 0h 0m 0.14s
-[2023-05-22.18:11:48]	Starting simulation initialization 	 C-Time = 0h 0m 0.14s 	 Last Cuda Error = cudaSuccess
-[2023-05-22.18:11:48]	Init order = 1/3 	 Method = EulerExp 	 C-Time = 0h 0m 0.141s
-[2023-05-22.18:11:48]	   Init step = 1/1 	 IncompErr = 0.00176 	 C-Time = 0h 0m 0.18s
-[2023-05-22.18:11:48]	Init order = 2/3 	 Method = RK2 	 C-Time = 0h 0m 0.181s
-[2023-05-22.18:11:48]	   Init step = 1/2 	 IncompErr = 9.53e-07 	 C-Time = 0h 0m 0.216s
-[2023-05-22.18:11:48]	   Init step = 2/2 	 IncompErr = 2.28e-06 	 C-Time = 0h 0m 0.251s
-[2023-05-22.18:11:48]	Init order = 3/3 	 Method = RK3 	 C-Time = 0h 0m 0.251s
-[2023-05-22.18:11:48]	   Init step = 1/2 	 IncompErr = 4.72e-07 	 C-Time = 0h 0m 0.3s
-[2023-05-22.18:11:48]	   Init step = 2/2 	 IncompErr = 1.32e-06 	 C-Time = 0h 0m 0.349s
-[2023-05-22.18:11:48]	Processed particle data
-[2023-05-22.18:11:48]	Computed coarse Cons : Energ = 20.671338 	 Enstr = 23.687051 	 Palinstr = 37.504497 	 Wmax = 2.8
-[2023-05-22.18:11:48]	Processed sample data 1 on grid 256, Cons : Energ = 20.671338 	 Enstr = 23.687051 	 Palinstr = 37.504497 	 Wmax = 2.8
-[2023-05-22.18:11:48]	W min = -1.64 - W max = 2.8
-[2023-05-22.18:11:48]	Simulation initialization finished 	 Last Cuda Error = cudaSuccess 	 C-Time = 0h 0m 0.732s
-[2023-05-22.18:11:48]	Starting simulation loop 	 C-Time = 0h 0m 0.732s
-[2023-05-22.18:11:48]	Step = 1 	 S-Time = 0.0312/2 	 E-inc = 4.72e-07 	 C-Time = 0h 0m 0.782s
-[2023-05-22.18:11:48]	Step = 2 	 S-Time = 0.0625/2 	 E-inc = 1.32e-06 	 C-Time = 0h 0m 0.832s
-[2023-05-22.18:11:48]	Step = 3 	 S-Time = 0.0938/2 	 E-inc = 2.39e-06 	 C-Time = 0h 0m 0.883s
-[2023-05-22.18:11:48]	Step = 4 	 S-Time = 0.125/2 	 E-inc = 3.66e-06 	 C-Time = 0h 0m 0.933s
-[2023-05-22.18:11:48]	Step = 5 	 S-Time = 0.156/2 	 E-inc = 5.14e-06 	 C-Time = 0h 0m 0.984s
-[2023-05-22.18:11:48]	Step = 6 	 S-Time = 0.188/2 	 E-inc = 6.72e-06 	 C-Time = 0h 0m 1.03s
-[2023-05-22.18:11:48]	Step = 7 	 S-Time = 0.219/2 	 E-inc = 8.39e-06 	 C-Time = 0h 0m 1.09s
-[2023-05-22.18:11:49]	Step = 8 	 S-Time = 0.25/2 	 E-inc = 1.01e-05 	 C-Time = 0h 0m 1.14s
-[2023-05-22.18:11:49]	Step = 9 	 S-Time = 0.281/2 	 E-inc = 1.18e-05 	 C-Time = 0h 0m 1.19s
-[2023-05-22.18:11:49]	Step = 10 	 S-Time = 0.312/2 	 E-inc = 1.37e-05 	 C-Time = 0h 0m 1.24s
-[2023-05-22.18:11:49]	Step = 11 	 S-Time = 0.344/2 	 E-inc = 1.57e-05 	 C-Time = 0h 0m 1.29s
-[2023-05-22.18:11:49]	Step = 12 	 S-Time = 0.375/2 	 E-inc = 1.79e-05 	 C-Time = 0h 0m 1.34s
-[2023-05-22.18:11:49]	Step = 13 	 S-Time = 0.406/2 	 E-inc = 2e-05 	 C-Time = 0h 0m 1.39s
-[2023-05-22.18:11:49]	Step = 14 	 S-Time = 0.438/2 	 E-inc = 2.22e-05 	 C-Time = 0h 0m 1.44s
-[2023-05-22.18:11:49]	Step = 15 	 S-Time = 0.469/2 	 E-inc = 2.44e-05 	 C-Time = 0h 0m 1.49s
-[2023-05-22.18:11:49]	Processed particle data
-[2023-05-22.18:11:49]	Computed coarse Cons : Energ = 20.671322 	 Enstr = 23.687065 	 Palinstr = 38.685757 	 Wmax = 2.8
-[2023-05-22.18:11:49]	Processed sample data 1 on grid 256, Cons : Energ = 20.671322 	 Enstr = 23.687065 	 Palinstr = 38.685757 	 Wmax = 2.8
-[2023-05-22.18:11:49]	Step = 16 	 S-Time = 0.5/2 	 E-inc = 2.66e-05 	 C-Time = 0h 0m 1.91s
-[2023-05-22.18:11:49]	Step = 17 	 S-Time = 0.531/2 	 E-inc = 2.89e-05 	 C-Time = 0h 0m 1.96s
-[2023-05-22.18:11:49]	Step = 18 	 S-Time = 0.562/2 	 E-inc = 3.11e-05 	 C-Time = 0h 0m 2.01s
-[2023-05-22.18:11:49]	Step = 19 	 S-Time = 0.594/2 	 E-inc = 3.33e-05 	 C-Time = 0h 0m 2.06s
-[2023-05-22.18:11:50]	Step = 20 	 S-Time = 0.625/2 	 E-inc = 3.55e-05 	 C-Time = 0h 0m 2.12s
-[2023-05-22.18:11:50]	Step = 21 	 S-Time = 0.656/2 	 E-inc = 3.77e-05 	 C-Time = 0h 0m 2.17s
-[2023-05-22.18:11:50]	Step = 22 	 S-Time = 0.688/2 	 E-inc = 3.98e-05 	 C-Time = 0h 0m 2.22s
-[2023-05-22.18:11:50]	Step = 23 	 S-Time = 0.719/2 	 E-inc = 4.19e-05 	 C-Time = 0h 0m 2.27s
-[2023-05-22.18:11:50]	Step = 24 	 S-Time = 0.75/2 	 E-inc = 4.4e-05 	 C-Time = 0h 0m 2.32s
-[2023-05-22.18:11:50]	Step = 25 	 S-Time = 0.781/2 	 E-inc = 4.61e-05 	 C-Time = 0h 0m 2.37s
-[2023-05-22.18:11:50]	Step = 26 	 S-Time = 0.812/2 	 E-inc = 4.81e-05 	 C-Time = 0h 0m 2.42s
-[2023-05-22.18:11:50]	Step = 27 	 S-Time = 0.844/2 	 E-inc = 5.01e-05 	 C-Time = 0h 0m 2.47s
-[2023-05-22.18:11:50]	Step = 28 	 S-Time = 0.875/2 	 E-inc = 5.2e-05 	 C-Time = 0h 0m 2.52s
-[2023-05-22.18:11:50]	Step = 29 	 S-Time = 0.906/2 	 E-inc = 5.39e-05 	 C-Time = 0h 0m 2.57s
-[2023-05-22.18:11:50]	Step = 30 	 S-Time = 0.938/2 	 E-inc = 5.58e-05 	 C-Time = 0h 0m 2.62s
-[2023-05-22.18:11:50]	Step = 31 	 S-Time = 0.969/2 	 E-inc = 5.76e-05 	 C-Time = 0h 0m 2.67s
-[2023-05-22.18:11:50]	Processed particle data
-[2023-05-22.18:11:50]	Computed coarse Cons : Energ = 20.671304 	 Enstr = 23.687079 	 Palinstr = 42.99305 	 Wmax = 2.8
-[2023-05-22.18:11:51]	Processed sample data 1 on grid 256, Cons : Energ = 20.671304 	 Enstr = 23.687079 	 Palinstr = 42.99305 	 Wmax = 2.8
-[2023-05-22.18:11:51]	Step = 32 	 S-Time = 1/2 	 E-inc = 5.94e-05 	 C-Time = 0h 0m 3.1s
-[2023-05-22.18:11:51]	Step = 33 	 S-Time = 1.03/2 	 E-inc = 6.11e-05 	 C-Time = 0h 0m 3.15s
-[2023-05-22.18:11:51]	Step = 34 	 S-Time = 1.06/2 	 E-inc = 6.28e-05 	 C-Time = 0h 0m 3.2s
-[2023-05-22.18:11:51]	Step = 35 	 S-Time = 1.09/2 	 E-inc = 6.45e-05 	 C-Time = 0h 0m 3.25s
-[2023-05-22.18:11:51]	Step = 36 	 S-Time = 1.12/2 	 E-inc = 6.61e-05 	 C-Time = 0h 0m 3.3s
-[2023-05-22.18:11:51]	Step = 37 	 S-Time = 1.16/2 	 E-inc = 6.77e-05 	 C-Time = 0h 0m 3.35s
-[2023-05-22.18:11:51]	Step = 38 	 S-Time = 1.19/2 	 E-inc = 6.92e-05 	 C-Time = 0h 0m 3.4s
-[2023-05-22.18:11:51]	Step = 39 	 S-Time = 1.22/2 	 E-inc = 7.08e-05 	 C-Time = 0h 0m 3.45s
-[2023-05-22.18:11:51]	Step = 40 	 S-Time = 1.25/2 	 E-inc = 7.22e-05 	 C-Time = 0h 0m 3.5s
-[2023-05-22.18:11:51]	Step = 41 	 S-Time = 1.28/2 	 E-inc = 7.37e-05 	 C-Time = 0h 0m 3.56s
-[2023-05-22.18:11:51]	Step = 42 	 S-Time = 1.31/2 	 E-inc = 7.51e-05 	 C-Time = 0h 0m 3.61s
-[2023-05-22.18:11:51]	Step = 43 	 S-Time = 1.34/2 	 E-inc = 7.65e-05 	 C-Time = 0h 0m 3.66s
-[2023-05-22.18:11:51]	Step = 44 	 S-Time = 1.38/2 	 E-inc = 7.79e-05 	 C-Time = 0h 0m 3.71s
-[2023-05-22.18:11:51]	Step = 45 	 S-Time = 1.41/2 	 E-inc = 7.93e-05 	 C-Time = 0h 0m 3.76s
-[2023-05-22.18:11:51]	Step = 46 	 S-Time = 1.44/2 	 E-inc = 8.06e-05 	 C-Time = 0h 0m 3.81s
-[2023-05-22.18:11:51]	Step = 47 	 S-Time = 1.47/2 	 E-inc = 8.87e-05 	 C-Time = 0h 0m 3.86s
-[2023-05-22.18:11:51]	Refining Map : Step = 47 	 Maps = 0 	 Gap = 47
-[2023-05-22.18:11:52]	Processed particle data
-[2023-05-22.18:11:52]	Computed coarse Cons : Energ = 20.671286 	 Enstr = 23.687093 	 Palinstr = 52.548689 	 Wmax = 2.8
-[2023-05-22.18:11:52]	Processed sample data 1 on grid 256, Cons : Energ = 20.671286 	 Enstr = 23.687093 	 Palinstr = 52.548689 	 Wmax = 2.8
-[2023-05-22.18:11:52]	Step = 48 	 S-Time = 1.5/2 	 E-inc = 0.000104 	 C-Time = 0h 0m 4.3s
-[2023-05-22.18:11:52]	Step = 49 	 S-Time = 1.53/2 	 E-inc = 7.48e-07 	 C-Time = 0h 0m 4.35s
-[2023-05-22.18:11:52]	Step = 50 	 S-Time = 1.56/2 	 E-inc = 2.03e-06 	 C-Time = 0h 0m 4.4s
-[2023-05-22.18:11:52]	Step = 51 	 S-Time = 1.59/2 	 E-inc = 3.98e-06 	 C-Time = 0h 0m 4.45s
-[2023-05-22.18:11:52]	Step = 52 	 S-Time = 1.62/2 	 E-inc = 6.57e-06 	 C-Time = 0h 0m 4.5s
-[2023-05-22.18:11:52]	Step = 53 	 S-Time = 1.66/2 	 E-inc = 9.63e-06 	 C-Time = 0h 0m 4.55s
-[2023-05-22.18:11:52]	Step = 54 	 S-Time = 1.69/2 	 E-inc = 1.35e-05 	 C-Time = 0h 0m 4.6s
-[2023-05-22.18:11:52]	Step = 55 	 S-Time = 1.72/2 	 E-inc = 1.8e-05 	 C-Time = 0h 0m 4.65s
-[2023-05-22.18:11:52]	Step = 56 	 S-Time = 1.75/2 	 E-inc = 2.31e-05 	 C-Time = 0h 0m 4.7s
-[2023-05-22.18:11:52]	Step = 57 	 S-Time = 1.78/2 	 E-inc = 2.89e-05 	 C-Time = 0h 0m 4.76s
-[2023-05-22.18:11:52]	Step = 58 	 S-Time = 1.81/2 	 E-inc = 3.53e-05 	 C-Time = 0h 0m 4.81s
-[2023-05-22.18:11:52]	Step = 59 	 S-Time = 1.84/2 	 E-inc = 4.25e-05 	 C-Time = 0h 0m 4.86s
-[2023-05-22.18:11:52]	Step = 60 	 S-Time = 1.88/2 	 E-inc = 5.05e-05 	 C-Time = 0h 0m 4.91s
-[2023-05-22.18:11:52]	Step = 61 	 S-Time = 1.91/2 	 E-inc = 5.93e-05 	 C-Time = 0h 0m 4.96s
-[2023-05-22.18:11:52]	Step = 62 	 S-Time = 1.94/2 	 E-inc = 6.92e-05 	 C-Time = 0h 0m 5.01s
-[2023-05-22.18:11:52]	Step = 63 	 S-Time = 1.97/2 	 E-inc = 8e-05 	 C-Time = 0h 0m 5.06s
-[2023-05-22.18:11:53]	Processed particle data
-[2023-05-22.18:11:53]	Computed coarse Cons : Energ = 20.671274 	 Enstr = 23.687108 	 Palinstr = 70.437597 	 Wmax = 2.8
-[2023-05-22.18:11:53]	Processed sample data 1 on grid 256, Cons : Energ = 20.671274 	 Enstr = 23.687108 	 Palinstr = 70.437599 	 Wmax = 2.8
-[2023-05-22.18:11:53]	Step = 64 	 S-Time = 2/2 	 E-inc = 9.21e-05 	 C-Time = 0h 0m 5.48s
-[2023-05-22.18:11:53]	Simulation loop finished 	 C-Time = 0h 0m 5.48s
-[2023-05-22.18:11:53]	Processed particle data
-[2023-05-22.18:11:53]	Computed coarse Cons : Energ = 20.671274 	 Enstr = 23.687108 	 Palinstr = 70.437597 	 Wmax = 2.8
-[2023-05-22.18:11:53]	Processed sample data 1 on grid 256, Cons : Energ = 20.671274 	 Enstr = 23.687108 	 Palinstr = 70.437599 	 Wmax = 2.8
-[2023-05-22.18:11:53]	Finished simulation 	 Last Cuda Error = cudaSuccess 	 C-Time = 0h 0m 5.86s
+[2023-05-30.13:22:07]	Starting memory initialization 	 C-Time = 0h 0m 0.000204s
+[2023-05-30.13:22:08]	Number of CUDA devices = 1
+[2023-05-30.13:22:08]	Active CUDA device = 0
+[2023-05-30.13:22:08]	Cuda runtime version = 11080
+[2023-05-30.13:22:08]	Cuda driver version = 11070
+[2023-05-30.13:22:08]	CuFFT version = 10900
+[2023-05-30.13:22:08]	Solving = cmm_euler_2d
+[2023-05-30.13:22:08]	Initial condition = 4_nodes
+[2023-05-30.13:22:08]	Iter max = 67
+[2023-05-30.13:22:08]	Name of simulation = 11b-4nodes-reference-remapping_4_nodes_C256_F512_t32_T2
+[2023-05-30.13:22:08]	Initialized backwards maps arrays: cudaSuccess
+[2023-05-30.13:22:08]	Initialized coarse vort array: cudaSuccess
+[2023-05-30.13:22:08]	Initialized vort_fine_init array: cudaSuccess
+[2023-05-30.13:22:08]	Initialized discrete initial array
+[2023-05-30.13:22:08]	Initialized stream function array: cudaSuccess
+[2023-05-30.13:22:08]	Initialized forward maps arrays: cudaSuccess
+[2023-05-30.13:22:08]	Initialized empty_vort variable: cudaSuccess
+[2023-05-30.13:22:08]	Initialized Sample variables: cudaSuccess
+[2023-05-30.13:22:08]	Initialized Zoom variables: cudaSuccess
+[2023-05-30.13:22:08]	Initialized cufft workplan: cudaSuccess
+[2023-05-30.13:22:08]	Initialized GPU temp array: cudaSuccess
+[2023-05-30.13:22:08]	Map size in MB = 4
+[2023-05-30.13:22:08]	Map stack length on CPU = 11
+[2023-05-30.13:22:08]	Initialized CPU map stack: cudaSuccess
+[2023-05-30.13:22:08]	Particles set P01 : Num = 1000 	 Tau = 0
+[2023-05-30.13:22:08]	Particles set P02 : Num = 1000 	 Tau = 0.5
+[2023-05-30.13:22:08]	Memory initialization finished 	 estimated GPU RAM = 0.03 gb 	 estimated CPU RAM = 0.0461 gb 	 C-Time = 0h 0m 0.14s
+[2023-05-30.13:22:08]	Starting simulation initialization 	 C-Time = 0h 0m 0.14s 	 Last Cuda Error = cudaSuccess
+[2023-05-30.13:22:08]	Init order = 1/3 	 Method = EulerExp 	 C-Time = 0h 0m 0.142s
+[2023-05-30.13:22:08]	   Init step = 1/1 	 IncompErr = 0.00176 	 C-Time = 0h 0m 0.18s
+[2023-05-30.13:22:08]	Init order = 2/3 	 Method = RK2 	 C-Time = 0h 0m 0.181s
+[2023-05-30.13:22:08]	   Init step = 1/2 	 IncompErr = 9.53e-07 	 C-Time = 0h 0m 0.216s
+[2023-05-30.13:22:08]	   Init step = 2/2 	 IncompErr = 2.28e-06 	 C-Time = 0h 0m 0.251s
+[2023-05-30.13:22:08]	Init order = 3/3 	 Method = RK3 	 C-Time = 0h 0m 0.251s
+[2023-05-30.13:22:08]	   Init step = 1/2 	 IncompErr = 4.72e-07 	 C-Time = 0h 0m 0.3s
+[2023-05-30.13:22:08]	   Init step = 2/2 	 IncompErr = 1.32e-06 	 C-Time = 0h 0m 0.349s
+[2023-05-30.13:22:08]	Processed particle data
+[2023-05-30.13:22:08]	Computed coarse Cons : Energ = 20.671338 	 Enstr = 23.687051 	 Palinstr = 37.504497 	 Wmax = 2.8
+[2023-05-30.13:22:08]	Processed sample data 1 on grid 256, Cons : Energ = 20.671338 	 Enstr = 23.687051 	 Palinstr = 37.504497 	 Wmax = 2.8
+[2023-05-30.13:22:08]	W min = -1.64 - W max = 2.8
+[2023-05-30.13:22:08]	Simulation initialization finished 	 Last Cuda Error = cudaSuccess 	 C-Time = 0h 0m 0.739s
+[2023-05-30.13:22:08]	Starting simulation loop 	 C-Time = 0h 0m 0.739s
+[2023-05-30.13:22:08]	Step = 1 	 S-Time = 0.0312/2 	 E-inc = 4.72e-07 	 C-Time = 0h 0m 0.789s
+[2023-05-30.13:22:08]	Step = 2 	 S-Time = 0.0625/2 	 E-inc = 1.32e-06 	 C-Time = 0h 0m 0.839s
+[2023-05-30.13:22:08]	Step = 3 	 S-Time = 0.0938/2 	 E-inc = 2.39e-06 	 C-Time = 0h 0m 0.89s
+[2023-05-30.13:22:08]	Step = 4 	 S-Time = 0.125/2 	 E-inc = 3.66e-06 	 C-Time = 0h 0m 0.941s
+[2023-05-30.13:22:08]	Step = 5 	 S-Time = 0.156/2 	 E-inc = 5.14e-06 	 C-Time = 0h 0m 0.992s
+[2023-05-30.13:22:09]	Step = 6 	 S-Time = 0.188/2 	 E-inc = 6.72e-06 	 C-Time = 0h 0m 1.04s
+[2023-05-30.13:22:09]	Step = 7 	 S-Time = 0.219/2 	 E-inc = 8.39e-06 	 C-Time = 0h 0m 1.09s
+[2023-05-30.13:22:09]	Step = 8 	 S-Time = 0.25/2 	 E-inc = 1.01e-05 	 C-Time = 0h 0m 1.14s
+[2023-05-30.13:22:09]	Step = 9 	 S-Time = 0.281/2 	 E-inc = 1.18e-05 	 C-Time = 0h 0m 1.19s
+[2023-05-30.13:22:09]	Step = 10 	 S-Time = 0.312/2 	 E-inc = 1.37e-05 	 C-Time = 0h 0m 1.25s
+[2023-05-30.13:22:09]	Step = 11 	 S-Time = 0.344/2 	 E-inc = 1.57e-05 	 C-Time = 0h 0m 1.3s
+[2023-05-30.13:22:09]	Step = 12 	 S-Time = 0.375/2 	 E-inc = 1.79e-05 	 C-Time = 0h 0m 1.35s
+[2023-05-30.13:22:09]	Step = 13 	 S-Time = 0.406/2 	 E-inc = 2e-05 	 C-Time = 0h 0m 1.4s
+[2023-05-30.13:22:09]	Step = 14 	 S-Time = 0.438/2 	 E-inc = 2.22e-05 	 C-Time = 0h 0m 1.45s
+[2023-05-30.13:22:09]	Step = 15 	 S-Time = 0.469/2 	 E-inc = 2.44e-05 	 C-Time = 0h 0m 1.5s
+[2023-05-30.13:22:09]	Processed particle data
+[2023-05-30.13:22:09]	Computed coarse Cons : Energ = 20.671322 	 Enstr = 23.687065 	 Palinstr = 38.685757 	 Wmax = 2.8
+[2023-05-30.13:22:09]	Processed sample data 1 on grid 256, Cons : Energ = 20.671322 	 Enstr = 23.687065 	 Palinstr = 38.685757 	 Wmax = 2.8
+[2023-05-30.13:22:09]	Step = 16 	 S-Time = 0.5/2 	 E-inc = 2.66e-05 	 C-Time = 0h 0m 1.94s
+[2023-05-30.13:22:09]	Step = 17 	 S-Time = 0.531/2 	 E-inc = 2.89e-05 	 C-Time = 0h 0m 1.99s
+[2023-05-30.13:22:10]	Step = 18 	 S-Time = 0.562/2 	 E-inc = 3.11e-05 	 C-Time = 0h 0m 2.05s
+[2023-05-30.13:22:10]	Step = 19 	 S-Time = 0.594/2 	 E-inc = 3.33e-05 	 C-Time = 0h 0m 2.1s
+[2023-05-30.13:22:10]	Step = 20 	 S-Time = 0.625/2 	 E-inc = 3.55e-05 	 C-Time = 0h 0m 2.15s
+[2023-05-30.13:22:10]	Step = 21 	 S-Time = 0.656/2 	 E-inc = 3.77e-05 	 C-Time = 0h 0m 2.2s
+[2023-05-30.13:22:10]	Step = 22 	 S-Time = 0.688/2 	 E-inc = 3.98e-05 	 C-Time = 0h 0m 2.25s
+[2023-05-30.13:22:10]	Step = 23 	 S-Time = 0.719/2 	 E-inc = 4.19e-05 	 C-Time = 0h 0m 2.3s
+[2023-05-30.13:22:10]	Step = 24 	 S-Time = 0.75/2 	 E-inc = 4.4e-05 	 C-Time = 0h 0m 2.35s
+[2023-05-30.13:22:10]	Step = 25 	 S-Time = 0.781/2 	 E-inc = 4.61e-05 	 C-Time = 0h 0m 2.4s
+[2023-05-30.13:22:10]	Step = 26 	 S-Time = 0.812/2 	 E-inc = 4.81e-05 	 C-Time = 0h 0m 2.45s
+[2023-05-30.13:22:10]	Step = 27 	 S-Time = 0.844/2 	 E-inc = 5.01e-05 	 C-Time = 0h 0m 2.5s
+[2023-05-30.13:22:10]	Step = 28 	 S-Time = 0.875/2 	 E-inc = 5.2e-05 	 C-Time = 0h 0m 2.55s
+[2023-05-30.13:22:10]	Step = 29 	 S-Time = 0.906/2 	 E-inc = 5.39e-05 	 C-Time = 0h 0m 2.6s
+[2023-05-30.13:22:10]	Step = 30 	 S-Time = 0.938/2 	 E-inc = 5.58e-05 	 C-Time = 0h 0m 2.66s
+[2023-05-30.13:22:10]	Step = 31 	 S-Time = 0.969/2 	 E-inc = 5.76e-05 	 C-Time = 0h 0m 2.71s
+[2023-05-30.13:22:10]	Processed particle data
+[2023-05-30.13:22:10]	Computed coarse Cons : Energ = 20.671304 	 Enstr = 23.687079 	 Palinstr = 42.99305 	 Wmax = 2.8
+[2023-05-30.13:22:11]	Processed sample data 1 on grid 256, Cons : Energ = 20.671304 	 Enstr = 23.687079 	 Palinstr = 42.99305 	 Wmax = 2.8
+[2023-05-30.13:22:11]	Step = 32 	 S-Time = 1/2 	 E-inc = 5.94e-05 	 C-Time = 0h 0m 3.13s
+[2023-05-30.13:22:11]	Step = 33 	 S-Time = 1.03/2 	 E-inc = 6.11e-05 	 C-Time = 0h 0m 3.18s
+[2023-05-30.13:22:11]	Step = 34 	 S-Time = 1.06/2 	 E-inc = 6.28e-05 	 C-Time = 0h 0m 3.23s
+[2023-05-30.13:22:11]	Step = 35 	 S-Time = 1.09/2 	 E-inc = 6.45e-05 	 C-Time = 0h 0m 3.28s
+[2023-05-30.13:22:11]	Step = 36 	 S-Time = 1.12/2 	 E-inc = 6.61e-05 	 C-Time = 0h 0m 3.34s
+[2023-05-30.13:22:11]	Step = 37 	 S-Time = 1.16/2 	 E-inc = 6.77e-05 	 C-Time = 0h 0m 3.39s
+[2023-05-30.13:22:11]	Step = 38 	 S-Time = 1.19/2 	 E-inc = 6.92e-05 	 C-Time = 0h 0m 3.44s
+[2023-05-30.13:22:11]	Step = 39 	 S-Time = 1.22/2 	 E-inc = 7.08e-05 	 C-Time = 0h 0m 3.49s
+[2023-05-30.13:22:11]	Step = 40 	 S-Time = 1.25/2 	 E-inc = 7.22e-05 	 C-Time = 0h 0m 3.54s
+[2023-05-30.13:22:11]	Step = 41 	 S-Time = 1.28/2 	 E-inc = 7.37e-05 	 C-Time = 0h 0m 3.59s
+[2023-05-30.13:22:11]	Step = 42 	 S-Time = 1.31/2 	 E-inc = 7.51e-05 	 C-Time = 0h 0m 3.64s
+[2023-05-30.13:22:11]	Step = 43 	 S-Time = 1.34/2 	 E-inc = 7.65e-05 	 C-Time = 0h 0m 3.69s
+[2023-05-30.13:22:11]	Step = 44 	 S-Time = 1.38/2 	 E-inc = 7.79e-05 	 C-Time = 0h 0m 3.74s
+[2023-05-30.13:22:11]	Step = 45 	 S-Time = 1.41/2 	 E-inc = 7.93e-05 	 C-Time = 0h 0m 3.79s
+[2023-05-30.13:22:11]	Step = 46 	 S-Time = 1.44/2 	 E-inc = 8.06e-05 	 C-Time = 0h 0m 3.84s
+[2023-05-30.13:22:11]	Step = 47 	 S-Time = 1.47/2 	 E-inc = 8.87e-05 	 C-Time = 0h 0m 3.9s
+[2023-05-30.13:22:11]	Refining Map : Step = 47 	 Maps = 0 	 Gap = 47
+[2023-05-30.13:22:12]	Processed particle data
+[2023-05-30.13:22:12]	Computed coarse Cons : Energ = 20.671286 	 Enstr = 23.687093 	 Palinstr = 52.548689 	 Wmax = 2.8
+[2023-05-30.13:22:12]	Processed sample data 1 on grid 256, Cons : Energ = 20.671286 	 Enstr = 23.687093 	 Palinstr = 52.548689 	 Wmax = 2.8
+[2023-05-30.13:22:12]	Step = 48 	 S-Time = 1.5/2 	 E-inc = 0.000104 	 C-Time = 0h 0m 4.34s
+[2023-05-30.13:22:12]	Step = 49 	 S-Time = 1.53/2 	 E-inc = 7.48e-07 	 C-Time = 0h 0m 4.39s
+[2023-05-30.13:22:12]	Step = 50 	 S-Time = 1.56/2 	 E-inc = 2.03e-06 	 C-Time = 0h 0m 4.44s
+[2023-05-30.13:22:12]	Step = 51 	 S-Time = 1.59/2 	 E-inc = 3.98e-06 	 C-Time = 0h 0m 4.49s
+[2023-05-30.13:22:12]	Step = 52 	 S-Time = 1.62/2 	 E-inc = 6.57e-06 	 C-Time = 0h 0m 4.54s
+[2023-05-30.13:22:12]	Step = 53 	 S-Time = 1.66/2 	 E-inc = 9.63e-06 	 C-Time = 0h 0m 4.59s
+[2023-05-30.13:22:12]	Step = 54 	 S-Time = 1.69/2 	 E-inc = 1.35e-05 	 C-Time = 0h 0m 4.64s
+[2023-05-30.13:22:12]	Step = 55 	 S-Time = 1.72/2 	 E-inc = 1.8e-05 	 C-Time = 0h 0m 4.69s
+[2023-05-30.13:22:12]	Step = 56 	 S-Time = 1.75/2 	 E-inc = 2.31e-05 	 C-Time = 0h 0m 4.74s
+[2023-05-30.13:22:12]	Step = 57 	 S-Time = 1.78/2 	 E-inc = 2.89e-05 	 C-Time = 0h 0m 4.79s
+[2023-05-30.13:22:12]	Step = 58 	 S-Time = 1.81/2 	 E-inc = 3.53e-05 	 C-Time = 0h 0m 4.84s
+[2023-05-30.13:22:12]	Step = 59 	 S-Time = 1.84/2 	 E-inc = 4.25e-05 	 C-Time = 0h 0m 4.89s
+[2023-05-30.13:22:12]	Step = 60 	 S-Time = 1.88/2 	 E-inc = 5.05e-05 	 C-Time = 0h 0m 4.95s
+[2023-05-30.13:22:12]	Step = 61 	 S-Time = 1.91/2 	 E-inc = 5.93e-05 	 C-Time = 0h 0m 5s
+[2023-05-30.13:22:13]	Step = 62 	 S-Time = 1.94/2 	 E-inc = 6.92e-05 	 C-Time = 0h 0m 5.05s
+[2023-05-30.13:22:13]	Step = 63 	 S-Time = 1.97/2 	 E-inc = 8e-05 	 C-Time = 0h 0m 5.1s
+[2023-05-30.13:22:13]	Processed particle data
+[2023-05-30.13:22:13]	Computed coarse Cons : Energ = 20.671274 	 Enstr = 23.687108 	 Palinstr = 70.437597 	 Wmax = 2.8
+[2023-05-30.13:22:13]	Processed sample data 1 on grid 256, Cons : Energ = 20.671274 	 Enstr = 23.687108 	 Palinstr = 70.437599 	 Wmax = 2.8
+[2023-05-30.13:22:13]	Step = 64 	 S-Time = 2/2 	 E-inc = 9.21e-05 	 C-Time = 0h 0m 5.52s
+[2023-05-30.13:22:13]	Simulation loop finished 	 C-Time = 0h 0m 5.52s
+[2023-05-30.13:22:13]	Processed particle data
+[2023-05-30.13:22:13]	Computed coarse Cons : Energ = 20.671274 	 Enstr = 23.687108 	 Palinstr = 70.437597 	 Wmax = 2.8
+[2023-05-30.13:22:13]	Processed sample data 1 on grid 256, Cons : Energ = 20.671274 	 Enstr = 23.687108 	 Palinstr = 70.437599 	 Wmax = 2.8
+[2023-05-30.13:22:13]	Finished simulation 	 Last Cuda Error = cudaSuccess 	 C-Time = 0h 0m 5.9s
