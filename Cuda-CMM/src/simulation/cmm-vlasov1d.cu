@@ -664,7 +664,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 			logger.push(message);
 		}
 
-		message = readMapStack(SettingsMain, Map_Stack, ChiX, ChiY, Psi, false, SettingsMain.getRestartLocation());
+		message = readMapStack(SettingsMain, Map_Stack, cmmVarMap, false, SettingsMain.getRestartLocation());
 		if (message != "") { logger.push(message); logger.push("Exitting .."); exit(0); }
 
 		// output how many maps were loaded
@@ -674,7 +674,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		}
 
 		if (SettingsMain.getForwardMap()) {
-			message = readMapStack(SettingsMain, Map_Stack_f, ChiX_f, ChiY_f, Psi, true, SettingsMain.getRestartLocation());
+			message = readMapStack(SettingsMain, Map_Stack, cmmVarMap, true, SettingsMain.getRestartLocation());
 			if (message != "") { logger.push(message); logger.push("Exitting .."); exit(0); }
 			// output how many maps were loaded
 			if (SettingsMain.getVerbose() >= 2) {
@@ -683,9 +683,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 			}
 		}
 
-		//setting initial conditions for vorticity by translating with initial grid
-		translate_initial_condition_through_map_stack(Map_Stack, ChiX, ChiY, Vort_fine_init, Vort_discrete_init,
-					Dev_Temp_C1, SettingsMain.getInitialConditionNum(), SettingsMain.getInitialDiscrete(), ID_DIST_FUNC);
+		// initial condition is computed within readMapStack
 
 		// compute stream hermite with current maps
 		evaluate_potential_from_density_hermite(SettingsMain, ChiX, ChiY, Vort_fine_init, Psi, empty_vort,

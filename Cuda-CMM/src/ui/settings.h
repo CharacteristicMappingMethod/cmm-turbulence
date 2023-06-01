@@ -155,7 +155,7 @@ class SettingsCMM {
 
 private:
 	// main properties, needed to be able to run
-	std::string workspace, sim_name, file_name, simulation_type;
+	std::string workspace, sim_name, file_name, simulation_type; int simulation_type_num;
 	int grid_coarse, grid_fine, grid_psi, grid_vort;
 	std::string initial_condition; double initial_params[10] = {0};
 	std::string initial_discrete_location;
@@ -230,7 +230,13 @@ public:
 	std::string getWorkspace() const { return workspace; }
 	void setWorkspace(std::string Workspace) { workspace = Workspace; }
 	std::string getSimulationType() const { return simulation_type; }
-	void setSimulationType(std::string SimulationType) { simulation_type = SimulationType; }
+	void setSimulationType(std::string SimulationType) {
+		simulation_type = SimulationType;
+		// set num coinciding with k_h_sample_from_init
+		if(simulation_type == "cmm_euler_2d") simulation_type_num = 0;
+		else if(simulation_type == "cmm_vlasov_poisson_1d") simulation_type_num = 2;
+	}
+	int getSimulationTypeNum() const { return simulation_type_num; }
 	std::string getSimName() const { return sim_name; }
 	void setSimName(std::string simName) { sim_name = simName; }
 	std::string getFileName() const { return file_name; }

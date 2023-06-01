@@ -331,7 +331,7 @@ __global__ void k_normalize_1D_h(cufftDoubleComplex *F, TCudaGrid2D Grid)
 
 __global__ void zero_padding_1D(cufftDoubleComplex *In, cufftDoubleComplex *Out, TCudaGrid2D Grid_out, TCudaGrid2D Grid_in) {
 	int iXc = (blockDim.x * blockIdx.x + threadIdx.x);
-	int iYc = 0;
+//	int iYc = 0;
 
 	if(iXc >= Grid_out.NX_fft || iXc < 0 )
 		return;

@@ -70,6 +70,10 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 std::string compute_zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, MapStack Map_Stack, MapStack Map_Stack_f,
 		std::map<std::string, CmmVar2D*> cmmVarMap, std::map<std::string, CmmPart*> cmmPartMap);
 
+// read map stack involves computing initial condition field so it has to be here and not in cmm-io.h
+std::string readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, std::map<std::string, CmmVar2D*> cmmVarMap,
+		bool isForward, std::string data_name);
+
 // check all targets to compute the next intermediate step
 double compute_next_timestep(SettingsCMM SettingsMain, double t_now, double dt_now);
 

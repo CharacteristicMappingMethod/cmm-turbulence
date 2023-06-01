@@ -640,7 +640,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			logger.push(message);
 		}
 
-		message = readMapStack(SettingsMain, Map_Stack, ChiX, ChiY, Psi, false, SettingsMain.getRestartLocation());
+		message = readMapStack(SettingsMain, Map_Stack, cmmVarMap, false, SettingsMain.getRestartLocation());
 		if (message != "") { logger.push(message); logger.push("Exitting .."); exit(0); }
 
 		// output how many maps were loaded
@@ -650,7 +650,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		}
 
 		if (SettingsMain.getForwardMap()) {
-			message = readMapStack(SettingsMain, Map_Stack_f, ChiX_f, ChiY_f, Psi, true, SettingsMain.getRestartLocation());
+			message = readMapStack(SettingsMain, Map_Stack, cmmVarMap, true, SettingsMain.getRestartLocation());
 			if (message != "") { logger.push(message); logger.push("Exitting .."); exit(0); }
 			// output how many maps were loaded
 			if (SettingsMain.getVerbose() >= 2) {
@@ -659,9 +659,7 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 			}
 		}
 
-		//setting initial conditions for vorticity by translating with initial grid
-		translate_initial_condition_through_map_stack(Map_Stack, ChiX, ChiY, Vort_fine_init, Vort_discrete_init,
-					Dev_Temp_C1, SettingsMain.getInitialConditionNum(), SettingsMain.getInitialDiscrete());
+		// initial condition is computed within readMapStack
 
 		// compute first psi, stream hermite from vorticity
 		evaluate_stream_hermite(ChiX, ChiY, Vort_fine_init, Psi, empty_vort,
