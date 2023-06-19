@@ -63,6 +63,12 @@ def parse_command_line(params: TestParams):
 
     if args.verbose: params.debug_level = 1
     if args.architecture: params.same_architecture = True
+    else:
+        # display some informations to user, that comparing from different architecture can fail tests
+        params.logInfo("Tests were not specified to run from the same architecture.\n"\
+                       "Please be aware, that reference results computed with different architecture or hardware may result in several results deviating enough to be considered a mismatch.\n"\
+                       "Some common differences: Err_inc in order of 1e-10 to 1e-12, Higher order quantities in order up to 1e-12\n"\
+                       "Map and particle positions may deviate strongly due to domain warping")
     if args.reference: params.save_reference = True
     if args.force: params.save_force = True
 
