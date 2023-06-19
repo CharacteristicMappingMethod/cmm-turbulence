@@ -14,6 +14,7 @@
 #ifndef __CUDA_GRID_2D_H__
 #define __CUDA_GRID_2D_H__
 
+#include <cstddef>  // for size_t
 #include <cufft.h>
 #include <cufftXt.h>
 
@@ -25,19 +26,42 @@ struct TCudaGrid2D
 {
 	public:
 		int NX, NY, NZ, NX_fft;
-		long long int N, Nfft;
+		size_t N, Nfft;
 
 		double hx, hy, hz;
 		double bounds[6];
 
 		dim3 threadsPerBlock, blocksPerGrid, fft_blocks;
 
-		long long int sizeNReal, sizeNComplex, sizeNfft;
+		size_t sizeNReal, sizeNComplex, sizeNfft;
 
 		TCudaGrid2D(int NX, int NY, int NZ, double *bounds);
 };
 
 void fill_grid(TCudaGrid2D *Grid, int NX, int NY, int NZ, double *bounds);
+
+class CmmVar2D {
+public:
+	double *Dev_var; double RAM_size; int type;
+	TCudaGrid2D *Grid;
+	cufftHandle plan_D2Z, plan_Z2D; size_t plan_size[2];
+	// we should get 1D plans without further memory usage so just define them for everything
+	cufftHandle plan_1D_D2Z, plan_1D_Z2D; size_t plan_1D_size[2];
+
+	CmmVar2D(int NX, int NY, int NZ, double *bounds, int type);
+
+	void setWorkArea(void *fft_work_area);
+	void free_res();
+};
+class CmmPart {
+public:
+	double *Dev_var; double RAM_size; double tau_p; size_t num; size_t sizeN;
+	const int thread = 256; int block;
+
+	CmmPart(size_t num, double tau_p);
+
+	void free_res();
+};
 
 // class for map stack thingies, because I am always just transferring this everywhere
 class MapStack {

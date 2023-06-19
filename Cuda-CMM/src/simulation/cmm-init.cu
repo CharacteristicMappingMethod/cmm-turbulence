@@ -308,8 +308,7 @@ __device__ double d_init_scalar(double x, double y, int scalar_num) {
 *			Initial conditions for particles					   *
 *******************************************************************/
 
-__host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain, int particle_thread, int particle_block,
-		TCudaGrid2D Grid, int particle_type, int i_p) {
+__host__ void init_particles(SettingsCMM SettingsMain, CmmPart Part, TCudaGrid2D Grid, int particle_type, int i_p) {
 
 	// unpack all parameters according to type
 	long long int seed;
@@ -358,30 +357,30 @@ __host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain
 		case 0:  // uniformly distributed in rectangle, warped to domain
 		{
 			// create initial positions from random distribution
-			curandGenerateUniformDouble(prng, Dev_particles_pos, 2*num);
+			curandGenerateUniformDouble(prng, Part.Dev_var, 2*num);
 			// project 0-1 onto particle frame
-			k_rescale<<<particle_block, particle_thread>>>(num, Dev_particles_pos, Grid);
+			k_rescale<<<Part.block, Part.thread>>>(num, Part.Dev_var, Grid);
 
 			break;
 		}
 		case 1:  // normally distributed with given mean and standard deviation, warped to domain
 		{
 			// create all values with standard variance around 0.5, 0.5 is subtracted later in k_rescale
-			curandGenerateNormalDouble( prng, Dev_particles_pos, 2*num, 0.5, 1.0);
+			curandGenerateNormalDouble( prng, Part.Dev_var, 2*num, 0.5, 1.0);
 			// project 0-1 onto particle frame
-			k_rescale<<<particle_block, particle_thread>>>(num, Dev_particles_pos, Grid); break;
+			k_rescale<<<Part.block, Part.thread>>>(num, Part.Dev_var, Grid); break;
 		}
 		case 2:  // distributed in a circle, warped to domain
 		{
-			k_part_init_circle<<<particle_block, particle_thread>>>(num, Dev_particles_pos, Grid); break;
+			k_part_init_circle<<<Part.block, Part.thread>>>(num, Part.Dev_var, Grid); break;
 		}
 		case 3:  // uniform grid with equal amount of points in x- and y-direction, warped to domain
 		{
-			k_part_init_uniform_grid<<<particle_block, particle_thread>>>(num, Dev_particles_pos, Grid); break;
+			k_part_init_uniform_grid<<<Part.block, Part.thread>>>(num, Part.Dev_var, Grid); break;
 		}
 		case 4:  // sine distribution fitting for vortex sheets, warped to domain
 		{
-			k_part_init_sine_sheets<<<particle_block, particle_thread>>>(num, Dev_particles_pos, Grid); break;
+			k_part_init_sine_sheets<<<Part.block, Part.thread>>>(num, Part.Dev_var, Grid); break;
 		}
 
 		default:

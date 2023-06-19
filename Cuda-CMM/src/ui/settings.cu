@@ -62,10 +62,12 @@ void SettingsCMM::setPresets() {
 	 *  1	-	Initialization and finishing output
 	 *  2	-	Step and Saving output
 	 *  3	-	Version stuff and Conservation results
-	 *  4	-	Array initialization details
+	 *  4	-	Array initialization details, does not save quantities but only debug globals
 	 */
 	int verbose = 3;
 
+	// boundary information for translating, 6 coords for 3D - (x0, x1, y0, y1, z0, z1)
+	double domain_bounds[6]= {0, twoPI, 0, twoPI, 0, 0};
 	// set time properties
 	double final_time = 3;  // end of computation
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
@@ -75,6 +77,8 @@ void SettingsCMM::setPresets() {
 
 	/*
 	 * Which variables do we want to save? Best separated by a "-"
+	 * Save all available variables: "All"
+	 *
 	 * Vorticity: "Vorticity", "W"
 	 *
 	 * Stream function: "Stream", "Psi"
@@ -88,6 +92,7 @@ void SettingsCMM::setPresets() {
 	 * Gradient of vorticity: "Grad_W" - only for sample
 	 *
 	 * Passive scalar: "Scalar", "Theta" - not for computational_var
+	 * Distribution function: "Dist", "F"
 	 * Advected Particles: "PartA_XX" - not for sample_var, XX is the particle computation number
 	 * Advected Particles velocity: "PartA_Vel_XX" - only for computational_var, XX is the particle computation number
 	 *
@@ -253,7 +258,7 @@ void SettingsCMM::setPresets() {
 	setWorkspace(workspace); setSimName(sim_name); setSimulationType(simulation_type);
 	setGridCoarse(grid_coarse); setGridFine(grid_fine);
 	setGridPsi(grid_psi); setGridVort(grid_vort);
-	setFinalTime(final_time);
+	setDomainBounds(domain_bounds); setFinalTime(final_time);
 	setSetDtBySteps(set_dt_by_steps); setFactorDtByGrid(factor_dt_by_grid); setStepsPerSec(steps_per_sec);
 	// setDomainBounds(bounds);
 	
@@ -346,22 +351,23 @@ int SettingsCMM::setVariable(std::string command_full, std::string delimiter) {
 		// construct two substrings
 		std::string command = command_full.substr(0, pos_equal);
 		std::string value = command_full.substr(pos_equal+delimiter.length(), command_full.length());
-		double b[6]={0,0,0,0,0,0};
 		// big if else for different commands
 		// this beast is becoming larger and larger, i should convert it to something more automatic
 		// link to site for that: https://stackoverflow.com/questions/4480788/c-c-switch-case-with-string
 		if (command == "workspace") setWorkspace(value);
 		else if (command == "simulation_type") setSimulationType(value);
 		else if (command == "sim_name") setSimName(value);
-		else if (command == "domain_bounds") {
-			parseString(value, b);		
-			setDomainBounds(b);
-		}
 		else if (command == "grid_coarse") setGridCoarse(std::stoi(value));
 		else if (command == "grid_fine") setGridFine(std::stoi(value));
 		else if (command == "grid_psi") setGridPsi(std::stoi(value));
 		else if (command == "grid_vort") setGridVort(std::stoi(value));
 
+
+		else if (command == "domain_bounds") {
+			double b[6]={0,0,0,0,0,0};
+			parseString(value, b);		
+			setDomainBounds(b);
+		}
 		else if (command == "final_time") setFinalTime(std::stod(value));
 		else if (command == "factor_dt_by_grid") setFactorDtByGrid(std::stod(value));
 		else if (command == "steps_per_sec") setStepsPerSec(std::stoi(value));

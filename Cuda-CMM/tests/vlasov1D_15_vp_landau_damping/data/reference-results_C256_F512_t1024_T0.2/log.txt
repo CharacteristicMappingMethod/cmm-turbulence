@@ -1,0 +1,328 @@
+15-vp_landau_damping_C256_F512_t1024_T0.2
+[2023-05-30.13:22:13]	
+
+
+╔════════════════════════════════════════════╗
+║          Starting Vlasov 1D Simulation     ║
+╚════════════════════════════════════════════╝
+
+Initial condition: Landau Damping
+
+
+[2023-05-30.13:22:13]	Starting memory initialization 	 C-Time = 0h 0m 0.000311s
+[2023-05-30.13:22:13]	Number of CUDA devices = 1
+[2023-05-30.13:22:13]	Active CUDA device = 0
+[2023-05-30.13:22:13]	Cuda runtime version = 11080
+[2023-05-30.13:22:13]	Cuda driver version = 11070
+[2023-05-30.13:22:13]	CuFFT version = 10900
+[2023-05-30.13:22:13]	Solving = cmm_vlasov_poisson_1d
+[2023-05-30.13:22:13]	Initial condition = landau_damping
+[2023-05-30.13:22:13]	Iter max = 215
+[2023-05-30.13:22:13]	Name of simulation = 15-vp_landau_damping_C256_F512_t1024_T0.2
+[2023-05-30.13:22:14]	Initialized backwards maps arrays
+[2023-05-30.13:22:14]	Initialized coars vort array
+[2023-05-30.13:22:14]	Initialized vort_fine_init array
+[2023-05-30.13:22:14]	Initialized discrete initial array
+[2023-05-30.13:22:14]	Initialized stream function array
+[2023-05-30.13:22:14]	Initialized forward maps arrays
+[2023-05-30.13:22:14]	Initialized empty_vort array
+[2023-05-30.13:22:14]	Initialized Sample variables
+[2023-05-30.13:22:14]	Initialized Zoom variables
+[2023-05-30.13:22:14]	Initialized cufft workplan
+[2023-05-30.13:22:14]	Initialized GPU temp array
+[2023-05-30.13:22:14]	Map size in MB = 4
+[2023-05-30.13:22:14]	Map stack length on CPU = 119
+[2023-05-30.13:22:14]	Initialized CPU map stack
+[2023-05-30.13:22:14]	Memory initialization finished 	 estimated GPU RAM = 0.0299 gb 	 estimated CPU RAM = 0.499 gb 	 C-Time = 0h 0m 0.122s
+[2023-05-30.13:22:14]	Starting simulation initialization 	 C-Time = 0h 0m 0.122s
+[2023-05-30.13:22:14]	Init order = 1/3 	 Method = EulerExp 	 C-Time = 0h 0m 0.124s
+[2023-05-30.13:22:14]	   Init step = 1/1 	 IncompErr = 1.33e-05 	 C-Time = 0h 0m 0.159s
+[2023-05-30.13:22:14]	Init order = 2/3 	 Method = RK2 	 C-Time = 0h 0m 0.159s
+[2023-05-30.13:22:14]	   Init step = 1/2 	 IncompErr = 6.88e-05 	 C-Time = 0h 0m 0.193s
+[2023-05-30.13:22:14]	   Init step = 2/2 	 IncompErr = 0.000131 	 C-Time = 0h 0m 0.225s
+[2023-05-30.13:22:14]	Init order = 3/3 	 Method = RK3 	 C-Time = 0h 0m 0.226s
+[2023-05-30.13:22:14]	   Init step = 1/2 	 IncompErr = 6.96e-05 	 C-Time = 0h 0m 0.272s
+[2023-05-30.13:22:14]	   Init step = 2/2 	 IncompErr = 0.000135 	 C-Time = 0h 0m 0.318s
+[2023-05-30.13:22:14]	Processed particle data
+[2023-05-30.13:22:14]	Computed coarse Cons : Etot = 6.2891366 	 Ekin = 6.2831853 	 Epot = 0.005951284 	 Mass = 12.566371
+[2023-05-30.13:22:14]	Saved sample data 1 on grid 256, Cons : Etot = 1.8412939 	 Ekin = 1.8410184 	 Epot = 0.00027544888 	 Mass = 4.0406576
+[2023-05-30.13:22:14]	W min = 0 - W max = 0.419
+[2023-05-30.13:22:14]	Simulation initialization finished 	 Last Cuda Error = cudaSuccess 	 C-Time = 0h 0m 0.632s
+[2023-05-30.13:22:14]	Starting simulation loop 	 C-Time = 0h 0m 0.632s
+[2023-05-30.13:22:14]	Step = 1 	 S-Time = 0.000977/0.2 	 E-inc = 7e-05 	 C-Time = 0h 0m 0.68s
+[2023-05-30.13:22:14]	Step = 2 	 S-Time = 0.00195/0.2 	 E-inc = 0.000132 	 C-Time = 0h 0m 0.727s
+[2023-05-30.13:22:14]	Step = 3 	 S-Time = 0.00293/0.2 	 E-inc = 0.000193 	 C-Time = 0h 0m 0.775s
+[2023-05-30.13:22:14]	Step = 4 	 S-Time = 0.00391/0.2 	 E-inc = 0.000259 	 C-Time = 0h 0m 0.823s
+[2023-05-30.13:22:14]	Step = 5 	 S-Time = 0.00488/0.2 	 E-inc = 0.000329 	 C-Time = 0h 0m 0.87s
+[2023-05-30.13:22:14]	Step = 6 	 S-Time = 0.00586/0.2 	 E-inc = 0.000405 	 C-Time = 0h 0m 0.918s
+[2023-05-30.13:22:14]	Step = 7 	 S-Time = 0.00684/0.2 	 E-inc = 0.000488 	 C-Time = 0h 0m 0.965s
+[2023-05-30.13:22:14]	Step = 8 	 S-Time = 0.00781/0.2 	 E-inc = 0.000577 	 C-Time = 0h 0m 1.01s
+[2023-05-30.13:22:14]	Step = 9 	 S-Time = 0.00879/0.2 	 E-inc = 0.000673 	 C-Time = 0h 0m 1.06s
+[2023-05-30.13:22:15]	Step = 10 	 S-Time = 0.00977/0.2 	 E-inc = 0.000772 	 C-Time = 0h 0m 1.11s
+[2023-05-30.13:22:15]	Processed particle data
+[2023-05-30.13:22:15]	Computed coarse Cons : Etot = 6.2891368 	 Ekin = 6.2831859 	 Epot = 0.0059509311 	 Mass = 12.566371
+[2023-05-30.13:22:15]	Saved sample data 1 on grid 256, Cons : Etot = 1.841288 	 Ekin = 1.8410126 	 Epot = 0.00027542429 	 Mass = 4.0406526
+[2023-05-30.13:22:15]	Step = 11 	 S-Time = 0.01/0.2 	 E-inc = 0.00078 	 C-Time = 0h 0m 1.46s
+[2023-05-30.13:22:15]	Step = 12 	 S-Time = 0.011/0.2 	 E-inc = 0.000877 	 C-Time = 0h 0m 1.5s
+[2023-05-30.13:22:15]	Step = 13 	 S-Time = 0.012/0.2 	 E-inc = 0.000971 	 C-Time = 0h 0m 1.55s
+[2023-05-30.13:22:15]	Step = 14 	 S-Time = 0.0129/0.2 	 E-inc = 0.00106 	 C-Time = 0h 0m 1.6s
+[2023-05-30.13:22:15]	Step = 15 	 S-Time = 0.0139/0.2 	 E-inc = 0.00116 	 C-Time = 0h 0m 1.65s
+[2023-05-30.13:22:15]	Step = 16 	 S-Time = 0.0149/0.2 	 E-inc = 0.00129 	 C-Time = 0h 0m 1.69s
+[2023-05-30.13:22:15]	Step = 17 	 S-Time = 0.0159/0.2 	 E-inc = 0.00142 	 C-Time = 0h 0m 1.74s
+[2023-05-30.13:22:15]	Step = 18 	 S-Time = 0.0168/0.2 	 E-inc = 0.00156 	 C-Time = 0h 0m 1.79s
+[2023-05-30.13:22:15]	Step = 19 	 S-Time = 0.0178/0.2 	 E-inc = 0.00171 	 C-Time = 0h 0m 1.84s
+[2023-05-30.13:22:15]	Step = 20 	 S-Time = 0.0188/0.2 	 E-inc = 0.00186 	 C-Time = 0h 0m 1.88s
+[2023-05-30.13:22:15]	Step = 21 	 S-Time = 0.0198/0.2 	 E-inc = 0.00201 	 C-Time = 0h 0m 1.93s
+[2023-05-30.13:22:16]	Processed particle data
+[2023-05-30.13:22:16]	Computed coarse Cons : Etot = 6.2891376 	 Ekin = 6.2831877 	 Epot = 0.0059498733 	 Mass = 12.566371
+[2023-05-30.13:22:16]	Saved sample data 1 on grid 256, Cons : Etot = 1.8412705 	 Ekin = 1.8409951 	 Epot = 0.00027537751 	 Mass = 4.0406378
+[2023-05-30.13:22:16]	Step = 22 	 S-Time = 0.02/0.2 	 E-inc = 0.00207 	 C-Time = 0h 0m 2.28s
+[2023-05-30.13:22:16]	Step = 23 	 S-Time = 0.021/0.2 	 E-inc = 0.00223 	 C-Time = 0h 0m 2.32s
+[2023-05-30.13:22:16]	Step = 24 	 S-Time = 0.022/0.2 	 E-inc = 0.00239 	 C-Time = 0h 0m 2.37s
+[2023-05-30.13:22:16]	Step = 25 	 S-Time = 0.0229/0.2 	 E-inc = 0.00256 	 C-Time = 0h 0m 2.42s
+[2023-05-30.13:22:16]	Step = 26 	 S-Time = 0.0239/0.2 	 E-inc = 0.00273 	 C-Time = 0h 0m 2.47s
+[2023-05-30.13:22:16]	Step = 27 	 S-Time = 0.0249/0.2 	 E-inc = 0.00291 	 C-Time = 0h 0m 2.51s
+[2023-05-30.13:22:16]	Step = 28 	 S-Time = 0.0259/0.2 	 E-inc = 0.00309 	 C-Time = 0h 0m 2.56s
+[2023-05-30.13:22:16]	Step = 29 	 S-Time = 0.0268/0.2 	 E-inc = 0.00328 	 C-Time = 0h 0m 2.61s
+[2023-05-30.13:22:16]	Step = 30 	 S-Time = 0.0278/0.2 	 E-inc = 0.00348 	 C-Time = 0h 0m 2.66s
+[2023-05-30.13:22:16]	Step = 31 	 S-Time = 0.0288/0.2 	 E-inc = 0.00368 	 C-Time = 0h 0m 2.7s
+[2023-05-30.13:22:16]	Step = 32 	 S-Time = 0.0298/0.2 	 E-inc = 0.00388 	 C-Time = 0h 0m 2.75s
+[2023-05-30.13:22:16]	Processed particle data
+[2023-05-30.13:22:16]	Computed coarse Cons : Etot = 6.2891389 	 Ekin = 6.2831907 	 Epot = 0.0059481119 	 Mass = 12.566371
+[2023-05-30.13:22:17]	Saved sample data 1 on grid 256, Cons : Etot = 1.8412415 	 Ekin = 1.8409662 	 Epot = 0.00027530847 	 Mass = 4.0406131
+[2023-05-30.13:22:17]	Step = 33 	 S-Time = 0.03/0.2 	 E-inc = 0.00398 	 C-Time = 0h 0m 3.1s
+[2023-05-30.13:22:17]	Step = 34 	 S-Time = 0.031/0.2 	 E-inc = 0.00418 	 C-Time = 0h 0m 3.15s
+[2023-05-30.13:22:17]	Step = 35 	 S-Time = 0.032/0.2 	 E-inc = 0.0044 	 C-Time = 0h 0m 3.2s
+[2023-05-30.13:22:17]	Step = 36 	 S-Time = 0.0329/0.2 	 E-inc = 0.00461 	 C-Time = 0h 0m 3.24s
+[2023-05-30.13:22:17]	Step = 37 	 S-Time = 0.0339/0.2 	 E-inc = 0.00483 	 C-Time = 0h 0m 3.29s
+[2023-05-30.13:22:17]	Step = 38 	 S-Time = 0.0349/0.2 	 E-inc = 0.00506 	 C-Time = 0h 0m 3.34s
+[2023-05-30.13:22:17]	Step = 39 	 S-Time = 0.0359/0.2 	 E-inc = 0.00529 	 C-Time = 0h 0m 3.39s
+[2023-05-30.13:22:17]	Step = 40 	 S-Time = 0.0368/0.2 	 E-inc = 0.00552 	 C-Time = 0h 0m 3.43s
+[2023-05-30.13:22:17]	Step = 41 	 S-Time = 0.0378/0.2 	 E-inc = 0.00576 	 C-Time = 0h 0m 3.48s
+[2023-05-30.13:22:17]	Step = 42 	 S-Time = 0.0388/0.2 	 E-inc = 0.00601 	 C-Time = 0h 0m 3.53s
+[2023-05-30.13:22:17]	Step = 43 	 S-Time = 0.0398/0.2 	 E-inc = 0.00627 	 C-Time = 0h 0m 3.58s
+[2023-05-30.13:22:17]	Processed particle data
+[2023-05-30.13:22:17]	Computed coarse Cons : Etot = 6.2891406 	 Ekin = 6.283195 	 Epot = 0.005945649 	 Mass = 12.566371
+[2023-05-30.13:22:17]	Saved sample data 1 on grid 256, Cons : Etot = 1.841201 	 Ekin = 1.8409258 	 Epot = 0.00027521715 	 Mass = 4.0405786
+[2023-05-30.13:22:17]	Step = 44 	 S-Time = 0.04/0.2 	 E-inc = 0.0064 	 C-Time = 0h 0m 3.92s
+[2023-05-30.13:22:17]	Step = 45 	 S-Time = 0.041/0.2 	 E-inc = 0.00667 	 C-Time = 0h 0m 3.97s
+[2023-05-30.13:22:17]	Step = 46 	 S-Time = 0.042/0.2 	 E-inc = 0.00695 	 C-Time = 0h 0m 4.02s
+[2023-05-30.13:22:18]	Step = 47 	 S-Time = 0.0429/0.2 	 E-inc = 0.00723 	 C-Time = 0h 0m 4.07s
+[2023-05-30.13:22:18]	Step = 48 	 S-Time = 0.0439/0.2 	 E-inc = 0.00751 	 C-Time = 0h 0m 4.11s
+[2023-05-30.13:22:18]	Step = 49 	 S-Time = 0.0449/0.2 	 E-inc = 0.00779 	 C-Time = 0h 0m 4.16s
+[2023-05-30.13:22:18]	Step = 50 	 S-Time = 0.0459/0.2 	 E-inc = 0.00808 	 C-Time = 0h 0m 4.21s
+[2023-05-30.13:22:18]	Step = 51 	 S-Time = 0.0468/0.2 	 E-inc = 0.00837 	 C-Time = 0h 0m 4.26s
+[2023-05-30.13:22:18]	Step = 52 	 S-Time = 0.0478/0.2 	 E-inc = 0.00867 	 C-Time = 0h 0m 4.3s
+[2023-05-30.13:22:18]	Step = 53 	 S-Time = 0.0488/0.2 	 E-inc = 0.00897 	 C-Time = 0h 0m 4.35s
+[2023-05-30.13:22:18]	Step = 54 	 S-Time = 0.0498/0.2 	 E-inc = 0.00928 	 C-Time = 0h 0m 4.4s
+[2023-05-30.13:22:18]	Processed particle data
+[2023-05-30.13:22:18]	Computed coarse Cons : Etot = 6.2891429 	 Ekin = 6.2832004 	 Epot = 0.0059424868 	 Mass = 12.566371
+[2023-05-30.13:22:18]	Saved sample data 1 on grid 256, Cons : Etot = 1.8411491 	 Ekin = 1.840874 	 Epot = 0.00027510355 	 Mass = 4.0405343
+[2023-05-30.13:22:18]	Step = 55 	 S-Time = 0.05/0.2 	 E-inc = 0.00946 	 C-Time = 0h 0m 4.75s
+[2023-05-30.13:22:18]	Step = 56 	 S-Time = 0.051/0.2 	 E-inc = 0.00978 	 C-Time = 0h 0m 4.8s
+[2023-05-30.13:22:18]	Refining Map : Step = 56 	 Maps = 0 	 Gap = 56
+[2023-05-30.13:22:18]	Step = 57 	 S-Time = 0.052/0.2 	 E-inc = 0.0101 	 C-Time = 0h 0m 4.86s
+[2023-05-30.13:22:18]	Step = 58 	 S-Time = 0.0529/0.2 	 E-inc = 6.99e-05 	 C-Time = 0h 0m 4.91s
+[2023-05-30.13:22:18]	Step = 59 	 S-Time = 0.0539/0.2 	 E-inc = 0.000133 	 C-Time = 0h 0m 4.95s
+[2023-05-30.13:22:18]	Step = 60 	 S-Time = 0.0549/0.2 	 E-inc = 0.000193 	 C-Time = 0h 0m 5s
+[2023-05-30.13:22:18]	Step = 61 	 S-Time = 0.0559/0.2 	 E-inc = 0.000259 	 C-Time = 0h 0m 5.05s
+[2023-05-30.13:22:19]	Step = 62 	 S-Time = 0.0568/0.2 	 E-inc = 0.000329 	 C-Time = 0h 0m 5.1s
+[2023-05-30.13:22:19]	Step = 63 	 S-Time = 0.0578/0.2 	 E-inc = 0.000405 	 C-Time = 0h 0m 5.14s
+[2023-05-30.13:22:19]	Step = 64 	 S-Time = 0.0588/0.2 	 E-inc = 0.000487 	 C-Time = 0h 0m 5.19s
+[2023-05-30.13:22:19]	Step = 65 	 S-Time = 0.0598/0.2 	 E-inc = 0.000577 	 C-Time = 0h 0m 5.24s
+[2023-05-30.13:22:19]	Processed particle data
+[2023-05-30.13:22:19]	Computed coarse Cons : Etot = 6.2891481 	 Ekin = 6.283207 	 Epot = 0.0059410158 	 Mass = 12.566371
+[2023-05-30.13:22:19]	Saved sample data 1 on grid 256, Cons : Etot = 1.8410858 	 Ekin = 1.8408108 	 Epot = 0.00027496764 	 Mass = 4.0404803
+[2023-05-30.13:22:19]	Step = 66 	 S-Time = 0.06/0.2 	 E-inc = 0.000584 	 C-Time = 0h 0m 5.59s
+[2023-05-30.13:22:19]	Step = 67 	 S-Time = 0.061/0.2 	 E-inc = 0.00068 	 C-Time = 0h 0m 5.64s
+[2023-05-30.13:22:19]	Step = 68 	 S-Time = 0.062/0.2 	 E-inc = 0.000778 	 C-Time = 0h 0m 5.69s
+[2023-05-30.13:22:19]	Step = 69 	 S-Time = 0.0629/0.2 	 E-inc = 0.000875 	 C-Time = 0h 0m 5.74s
+[2023-05-30.13:22:19]	Step = 70 	 S-Time = 0.0639/0.2 	 E-inc = 0.000968 	 C-Time = 0h 0m 5.78s
+[2023-05-30.13:22:19]	Step = 71 	 S-Time = 0.0649/0.2 	 E-inc = 0.00105 	 C-Time = 0h 0m 5.83s
+[2023-05-30.13:22:19]	Step = 72 	 S-Time = 0.0659/0.2 	 E-inc = 0.00115 	 C-Time = 0h 0m 5.88s
+[2023-05-30.13:22:19]	Step = 73 	 S-Time = 0.0668/0.2 	 E-inc = 0.00128 	 C-Time = 0h 0m 5.93s
+[2023-05-30.13:22:19]	Step = 74 	 S-Time = 0.0678/0.2 	 E-inc = 0.00142 	 C-Time = 0h 0m 5.97s
+[2023-05-30.13:22:19]	Step = 75 	 S-Time = 0.0688/0.2 	 E-inc = 0.00156 	 C-Time = 0h 0m 6.02s
+[2023-05-30.13:22:20]	Step = 76 	 S-Time = 0.0698/0.2 	 E-inc = 0.00171 	 C-Time = 0h 0m 6.07s
+[2023-05-30.13:22:20]	Processed particle data
+[2023-05-30.13:22:20]	Computed coarse Cons : Etot = 6.289152 	 Ekin = 6.2832149 	 Epot = 0.0059371516 	 Mass = 12.566371
+[2023-05-30.13:22:20]	Saved sample data 1 on grid 256, Cons : Etot = 1.8410111 	 Ekin = 1.8407363 	 Epot = 0.00027480943 	 Mass = 4.0404165
+[2023-05-30.13:22:20]	Step = 77 	 S-Time = 0.07/0.2 	 E-inc = 0.00176 	 C-Time = 0h 0m 6.42s
+[2023-05-30.13:22:20]	Step = 78 	 S-Time = 0.071/0.2 	 E-inc = 0.0019 	 C-Time = 0h 0m 6.47s
+[2023-05-30.13:22:20]	Step = 79 	 S-Time = 0.072/0.2 	 E-inc = 0.00206 	 C-Time = 0h 0m 6.52s
+[2023-05-30.13:22:20]	Step = 80 	 S-Time = 0.0729/0.2 	 E-inc = 0.00221 	 C-Time = 0h 0m 6.57s
+[2023-05-30.13:22:20]	Step = 81 	 S-Time = 0.0739/0.2 	 E-inc = 0.00238 	 C-Time = 0h 0m 6.61s
+[2023-05-30.13:22:20]	Step = 82 	 S-Time = 0.0749/0.2 	 E-inc = 0.00255 	 C-Time = 0h 0m 6.66s
+[2023-05-30.13:22:20]	Step = 83 	 S-Time = 0.0759/0.2 	 E-inc = 0.00272 	 C-Time = 0h 0m 6.71s
+[2023-05-30.13:22:20]	Step = 84 	 S-Time = 0.0768/0.2 	 E-inc = 0.0029 	 C-Time = 0h 0m 6.76s
+[2023-05-30.13:22:20]	Step = 85 	 S-Time = 0.0778/0.2 	 E-inc = 0.00308 	 C-Time = 0h 0m 6.8s
+[2023-05-30.13:22:20]	Step = 86 	 S-Time = 0.0788/0.2 	 E-inc = 0.00327 	 C-Time = 0h 0m 6.85s
+[2023-05-30.13:22:20]	Step = 87 	 S-Time = 0.0798/0.2 	 E-inc = 0.00347 	 C-Time = 0h 0m 6.9s
+[2023-05-30.13:22:21]	Processed particle data
+[2023-05-30.13:22:21]	Computed coarse Cons : Etot = 6.2891565 	 Ekin = 6.2832239 	 Epot = 0.0059325889 	 Mass = 12.566371
+[2023-05-30.13:22:21]	Saved sample data 1 on grid 256, Cons : Etot = 1.8409253 	 Ekin = 1.8406506 	 Epot = 0.00027462894 	 Mass = 4.0403432
+[2023-05-30.13:22:21]	Step = 88 	 S-Time = 0.08/0.2 	 E-inc = 0.00356 	 C-Time = 0h 0m 7.25s
+[2023-05-30.13:22:21]	Step = 89 	 S-Time = 0.081/0.2 	 E-inc = 0.00376 	 C-Time = 0h 0m 7.3s
+[2023-05-30.13:22:21]	Step = 90 	 S-Time = 0.082/0.2 	 E-inc = 0.00396 	 C-Time = 0h 0m 7.35s
+[2023-05-30.13:22:21]	Step = 91 	 S-Time = 0.0829/0.2 	 E-inc = 0.00416 	 C-Time = 0h 0m 7.39s
+[2023-05-30.13:22:21]	Step = 92 	 S-Time = 0.0839/0.2 	 E-inc = 0.00437 	 C-Time = 0h 0m 7.44s
+[2023-05-30.13:22:21]	Step = 93 	 S-Time = 0.0849/0.2 	 E-inc = 0.00459 	 C-Time = 0h 0m 7.49s
+[2023-05-30.13:22:21]	Step = 94 	 S-Time = 0.0859/0.2 	 E-inc = 0.00481 	 C-Time = 0h 0m 7.54s
+[2023-05-30.13:22:21]	Step = 95 	 S-Time = 0.0868/0.2 	 E-inc = 0.00504 	 C-Time = 0h 0m 7.59s
+[2023-05-30.13:22:21]	Step = 96 	 S-Time = 0.0878/0.2 	 E-inc = 0.00527 	 C-Time = 0h 0m 7.63s
+[2023-05-30.13:22:21]	Step = 97 	 S-Time = 0.0888/0.2 	 E-inc = 0.00551 	 C-Time = 0h 0m 7.68s
+[2023-05-30.13:22:21]	Step = 98 	 S-Time = 0.0898/0.2 	 E-inc = 0.00575 	 C-Time = 0h 0m 7.73s
+[2023-05-30.13:22:21]	Processed particle data
+[2023-05-30.13:22:21]	Computed coarse Cons : Etot = 6.2891615 	 Ekin = 6.2832342 	 Epot = 0.0059273307 	 Mass = 12.566371
+[2023-05-30.13:22:22]	Saved sample data 1 on grid 256, Cons : Etot = 1.8408282 	 Ekin = 1.8405537 	 Epot = 0.00027442623 	 Mass = 4.0402602
+[2023-05-30.13:22:22]	Step = 99 	 S-Time = 0.09/0.2 	 E-inc = 0.00588 	 C-Time = 0h 0m 8.08s
+[2023-05-30.13:22:22]	Step = 100 	 S-Time = 0.091/0.2 	 E-inc = 0.00612 	 C-Time = 0h 0m 8.13s
+[2023-05-30.13:22:22]	Step = 101 	 S-Time = 0.092/0.2 	 E-inc = 0.00638 	 C-Time = 0h 0m 8.18s
+[2023-05-30.13:22:22]	Step = 102 	 S-Time = 0.0929/0.2 	 E-inc = 0.00665 	 C-Time = 0h 0m 8.22s
+[2023-05-30.13:22:22]	Step = 103 	 S-Time = 0.0939/0.2 	 E-inc = 0.00692 	 C-Time = 0h 0m 8.27s
+[2023-05-30.13:22:22]	Step = 104 	 S-Time = 0.0949/0.2 	 E-inc = 0.0072 	 C-Time = 0h 0m 8.32s
+[2023-05-30.13:22:22]	Step = 105 	 S-Time = 0.0959/0.2 	 E-inc = 0.00748 	 C-Time = 0h 0m 8.37s
+[2023-05-30.13:22:22]	Step = 106 	 S-Time = 0.0968/0.2 	 E-inc = 0.00776 	 C-Time = 0h 0m 8.41s
+[2023-05-30.13:22:22]	Step = 107 	 S-Time = 0.0978/0.2 	 E-inc = 0.00805 	 C-Time = 0h 0m 8.46s
+[2023-05-30.13:22:22]	Step = 108 	 S-Time = 0.0988/0.2 	 E-inc = 0.00834 	 C-Time = 0h 0m 8.51s
+[2023-05-30.13:22:22]	Step = 109 	 S-Time = 0.0998/0.2 	 E-inc = 0.00864 	 C-Time = 0h 0m 8.56s
+[2023-05-30.13:22:22]	Processed particle data
+[2023-05-30.13:22:22]	Computed coarse Cons : Etot = 6.289167 	 Ekin = 6.2832456 	 Epot = 0.0059213804 	 Mass = 12.566371
+[2023-05-30.13:22:22]	Saved sample data 1 on grid 256, Cons : Etot = 1.8407199 	 Ekin = 1.8404457 	 Epot = 0.00027420138 	 Mass = 4.0401676
+[2023-05-30.13:22:22]	Step = 110 	 S-Time = 0.1/0.2 	 E-inc = 0.00881 	 C-Time = 0h 0m 8.94s
+[2023-05-30.13:22:22]	Step = 111 	 S-Time = 0.101/0.2 	 E-inc = 0.00912 	 C-Time = 0h 0m 8.98s
+[2023-05-30.13:22:22]	Step = 112 	 S-Time = 0.102/0.2 	 E-inc = 0.00943 	 C-Time = 0h 0m 9.03s
+[2023-05-30.13:22:23]	Step = 113 	 S-Time = 0.103/0.2 	 E-inc = 0.00975 	 C-Time = 0h 0m 9.08s
+[2023-05-30.13:22:23]	Refining Map : Step = 113 	 Maps = 1 	 Gap = 57
+[2023-05-30.13:22:23]	Step = 114 	 S-Time = 0.104/0.2 	 E-inc = 0.0101 	 C-Time = 0h 0m 9.15s
+[2023-05-30.13:22:23]	Step = 115 	 S-Time = 0.105/0.2 	 E-inc = 6.97e-05 	 C-Time = 0h 0m 9.19s
+[2023-05-30.13:22:23]	Step = 116 	 S-Time = 0.106/0.2 	 E-inc = 0.000132 	 C-Time = 0h 0m 9.24s
+[2023-05-30.13:22:23]	Step = 117 	 S-Time = 0.107/0.2 	 E-inc = 0.000193 	 C-Time = 0h 0m 9.29s
+[2023-05-30.13:22:23]	Step = 118 	 S-Time = 0.108/0.2 	 E-inc = 0.000258 	 C-Time = 0h 0m 9.34s
+[2023-05-30.13:22:23]	Step = 119 	 S-Time = 0.109/0.2 	 E-inc = 0.000328 	 C-Time = 0h 0m 9.38s
+[2023-05-30.13:22:23]	Step = 120 	 S-Time = 0.11/0.2 	 E-inc = 0.000404 	 C-Time = 0h 0m 9.43s
+[2023-05-30.13:22:23]	Processed particle data
+[2023-05-30.13:22:23]	Computed coarse Cons : Etot = 6.2891752 	 Ekin = 6.2832582 	 Epot = 0.005916989 	 Mass = 12.566371
+[2023-05-30.13:22:23]	Saved sample data 1 on grid 256, Cons : Etot = 1.8406006 	 Ekin = 1.8403267 	 Epot = 0.00027395447 	 Mass = 4.0400655
+[2023-05-30.13:22:23]	Step = 121 	 S-Time = 0.11/0.2 	 E-inc = 0.000408 	 C-Time = 0h 0m 9.79s
+[2023-05-30.13:22:23]	Step = 122 	 S-Time = 0.111/0.2 	 E-inc = 0.000492 	 C-Time = 0h 0m 9.84s
+[2023-05-30.13:22:23]	Step = 123 	 S-Time = 0.112/0.2 	 E-inc = 0.000582 	 C-Time = 0h 0m 9.89s
+[2023-05-30.13:22:23]	Step = 124 	 S-Time = 0.113/0.2 	 E-inc = 0.000678 	 C-Time = 0h 0m 9.93s
+[2023-05-30.13:22:23]	Step = 125 	 S-Time = 0.114/0.2 	 E-inc = 0.000776 	 C-Time = 0h 0m 9.98s
+[2023-05-30.13:22:23]	Step = 126 	 S-Time = 0.115/0.2 	 E-inc = 0.000873 	 C-Time = 0h 0m 10s
+[2023-05-30.13:22:24]	Step = 127 	 S-Time = 0.116/0.2 	 E-inc = 0.000966 	 C-Time = 0h 0m 10.1s
+[2023-05-30.13:22:24]	Step = 128 	 S-Time = 0.117/0.2 	 E-inc = 0.00105 	 C-Time = 0h 0m 10.1s
+[2023-05-30.13:22:24]	Step = 129 	 S-Time = 0.118/0.2 	 E-inc = 0.00115 	 C-Time = 0h 0m 10.2s
+[2023-05-30.13:22:24]	Step = 130 	 S-Time = 0.119/0.2 	 E-inc = 0.00128 	 C-Time = 0h 0m 10.2s
+[2023-05-30.13:22:24]	Step = 131 	 S-Time = 0.12/0.2 	 E-inc = 0.00142 	 C-Time = 0h 0m 10.3s
+[2023-05-30.13:22:24]	Processed particle data
+[2023-05-30.13:22:24]	Computed coarse Cons : Etot = 6.2891824 	 Ekin = 6.283272 	 Epot = 0.0059103542 	 Mass = 12.566371
+[2023-05-30.13:22:24]	Saved sample data 1 on grid 256, Cons : Etot = 1.8404703 	 Ekin = 1.8401966 	 Epot = 0.00027368559 	 Mass = 4.0399539
+[2023-05-30.13:22:24]	Step = 132 	 S-Time = 0.12/0.2 	 E-inc = 0.00146 	 C-Time = 0h 0m 10.6s
+[2023-05-30.13:22:24]	Step = 133 	 S-Time = 0.121/0.2 	 E-inc = 0.0016 	 C-Time = 0h 0m 10.7s
+[2023-05-30.13:22:24]	Step = 134 	 S-Time = 0.122/0.2 	 E-inc = 0.00174 	 C-Time = 0h 0m 10.7s
+[2023-05-30.13:22:24]	Step = 135 	 S-Time = 0.123/0.2 	 E-inc = 0.00189 	 C-Time = 0h 0m 10.8s
+[2023-05-30.13:22:24]	Step = 136 	 S-Time = 0.124/0.2 	 E-inc = 0.00204 	 C-Time = 0h 0m 10.8s
+[2023-05-30.13:22:24]	Step = 137 	 S-Time = 0.125/0.2 	 E-inc = 0.0022 	 C-Time = 0h 0m 10.9s
+[2023-05-30.13:22:24]	Step = 138 	 S-Time = 0.126/0.2 	 E-inc = 0.00237 	 C-Time = 0h 0m 10.9s
+[2023-05-30.13:22:24]	Step = 139 	 S-Time = 0.127/0.2 	 E-inc = 0.00254 	 C-Time = 0h 0m 11s
+[2023-05-30.13:22:24]	Step = 140 	 S-Time = 0.128/0.2 	 E-inc = 0.00271 	 C-Time = 0h 0m 11s
+[2023-05-30.13:22:24]	Step = 141 	 S-Time = 0.129/0.2 	 E-inc = 0.00289 	 C-Time = 0h 0m 11.1s
+[2023-05-30.13:22:25]	Step = 142 	 S-Time = 0.13/0.2 	 E-inc = 0.00308 	 C-Time = 0h 0m 11.1s
+[2023-05-30.13:22:25]	Processed particle data
+[2023-05-30.13:22:25]	Computed coarse Cons : Etot = 6.2891901 	 Ekin = 6.283287 	 Epot = 0.0059030315 	 Mass = 12.566371
+[2023-05-30.13:22:25]	Saved sample data 1 on grid 256, Cons : Etot = 1.840329 	 Ekin = 1.8400556 	 Epot = 0.00027339484 	 Mass = 4.0398328
+[2023-05-30.13:22:25]	Step = 143 	 S-Time = 0.13/0.2 	 E-inc = 0.00316 	 C-Time = 0h 0m 11.5s
+[2023-05-30.13:22:25]	Step = 144 	 S-Time = 0.131/0.2 	 E-inc = 0.00334 	 C-Time = 0h 0m 11.5s
+[2023-05-30.13:22:25]	Step = 145 	 S-Time = 0.132/0.2 	 E-inc = 0.00354 	 C-Time = 0h 0m 11.6s
+[2023-05-30.13:22:25]	Step = 146 	 S-Time = 0.133/0.2 	 E-inc = 0.00373 	 C-Time = 0h 0m 11.6s
+[2023-05-30.13:22:25]	Step = 147 	 S-Time = 0.134/0.2 	 E-inc = 0.00394 	 C-Time = 0h 0m 11.7s
+[2023-05-30.13:22:25]	Step = 148 	 S-Time = 0.135/0.2 	 E-inc = 0.00414 	 C-Time = 0h 0m 11.7s
+[2023-05-30.13:22:25]	Step = 149 	 S-Time = 0.136/0.2 	 E-inc = 0.00435 	 C-Time = 0h 0m 11.7s
+[2023-05-30.13:22:25]	Step = 150 	 S-Time = 0.137/0.2 	 E-inc = 0.00457 	 C-Time = 0h 0m 11.8s
+[2023-05-30.13:22:25]	Step = 151 	 S-Time = 0.138/0.2 	 E-inc = 0.00479 	 C-Time = 0h 0m 11.8s
+[2023-05-30.13:22:25]	Step = 152 	 S-Time = 0.139/0.2 	 E-inc = 0.00502 	 C-Time = 0h 0m 11.9s
+[2023-05-30.13:22:25]	Step = 153 	 S-Time = 0.14/0.2 	 E-inc = 0.00525 	 C-Time = 0h 0m 11.9s
+[2023-05-30.13:22:26]	Processed particle data
+[2023-05-30.13:22:26]	Computed coarse Cons : Etot = 6.2891982 	 Ekin = 6.2833032 	 Epot = 0.0058950252 	 Mass = 12.566371
+[2023-05-30.13:22:26]	Saved sample data 1 on grid 256, Cons : Etot = 1.8401768 	 Ekin = 1.8399037 	 Epot = 0.00027308236 	 Mass = 4.0397023
+[2023-05-30.13:22:26]	Step = 154 	 S-Time = 0.14/0.2 	 E-inc = 0.00537 	 C-Time = 0h 0m 12.3s
+[2023-05-30.13:22:26]	Step = 155 	 S-Time = 0.141/0.2 	 E-inc = 0.00561 	 C-Time = 0h 0m 12.4s
+[2023-05-30.13:22:26]	Step = 156 	 S-Time = 0.142/0.2 	 E-inc = 0.00585 	 C-Time = 0h 0m 12.4s
+[2023-05-30.13:22:26]	Step = 157 	 S-Time = 0.143/0.2 	 E-inc = 0.0061 	 C-Time = 0h 0m 12.4s
+[2023-05-30.13:22:26]	Step = 158 	 S-Time = 0.144/0.2 	 E-inc = 0.00636 	 C-Time = 0h 0m 12.5s
+[2023-05-30.13:22:26]	Step = 159 	 S-Time = 0.145/0.2 	 E-inc = 0.00662 	 C-Time = 0h 0m 12.5s
+[2023-05-30.13:22:26]	Step = 160 	 S-Time = 0.146/0.2 	 E-inc = 0.00689 	 C-Time = 0h 0m 12.6s
+[2023-05-30.13:22:26]	Step = 161 	 S-Time = 0.147/0.2 	 E-inc = 0.00717 	 C-Time = 0h 0m 12.6s
+[2023-05-30.13:22:26]	Step = 162 	 S-Time = 0.148/0.2 	 E-inc = 0.00744 	 C-Time = 0h 0m 12.7s
+[2023-05-30.13:22:26]	Step = 163 	 S-Time = 0.149/0.2 	 E-inc = 0.00773 	 C-Time = 0h 0m 12.7s
+[2023-05-30.13:22:26]	Step = 164 	 S-Time = 0.15/0.2 	 E-inc = 0.00802 	 C-Time = 0h 0m 12.8s
+[2023-05-30.13:22:26]	Processed particle data
+[2023-05-30.13:22:26]	Computed coarse Cons : Etot = 6.2892069 	 Ekin = 6.2833205 	 Epot = 0.0058863399 	 Mass = 12.566371
+[2023-05-30.13:22:27]	Saved sample data 1 on grid 256, Cons : Etot = 1.8400137 	 Ekin = 1.839741 	 Epot = 0.0002727483 	 Mass = 4.0395624
+[2023-05-30.13:22:27]	Step = 165 	 S-Time = 0.15/0.2 	 E-inc = 0.00818 	 C-Time = 0h 0m 13.1s
+[2023-05-30.13:22:27]	Step = 166 	 S-Time = 0.151/0.2 	 E-inc = 0.00848 	 C-Time = 0h 0m 13.2s
+[2023-05-30.13:22:27]	Step = 167 	 S-Time = 0.152/0.2 	 E-inc = 0.00878 	 C-Time = 0h 0m 13.2s
+[2023-05-30.13:22:27]	Step = 168 	 S-Time = 0.153/0.2 	 E-inc = 0.00908 	 C-Time = 0h 0m 13.3s
+[2023-05-30.13:22:27]	Step = 169 	 S-Time = 0.154/0.2 	 E-inc = 0.00939 	 C-Time = 0h 0m 13.3s
+[2023-05-30.13:22:27]	Step = 170 	 S-Time = 0.155/0.2 	 E-inc = 0.00971 	 C-Time = 0h 0m 13.4s
+[2023-05-30.13:22:27]	Refining Map : Step = 170 	 Maps = 2 	 Gap = 57
+[2023-05-30.13:22:27]	Step = 171 	 S-Time = 0.156/0.2 	 E-inc = 0.01 	 C-Time = 0h 0m 13.4s
+[2023-05-30.13:22:27]	Step = 172 	 S-Time = 0.157/0.2 	 E-inc = 6.95e-05 	 C-Time = 0h 0m 13.5s
+[2023-05-30.13:22:27]	Step = 173 	 S-Time = 0.158/0.2 	 E-inc = 0.000132 	 C-Time = 0h 0m 13.5s
+[2023-05-30.13:22:27]	Step = 174 	 S-Time = 0.159/0.2 	 E-inc = 0.000193 	 C-Time = 0h 0m 13.6s
+[2023-05-30.13:22:27]	Step = 175 	 S-Time = 0.16/0.2 	 E-inc = 0.000257 	 C-Time = 0h 0m 13.6s
+[2023-05-30.13:22:27]	Processed particle data
+[2023-05-30.13:22:27]	Computed coarse Cons : Etot = 6.2892181 	 Ekin = 6.2833391 	 Epot = 0.0058790824 	 Mass = 12.566371
+[2023-05-30.13:22:27]	Saved sample data 1 on grid 256, Cons : Etot = 1.8398399 	 Ekin = 1.8395675 	 Epot = 0.00027239284 	 Mass = 4.0394133
+[2023-05-30.13:22:27]	Step = 176 	 S-Time = 0.16/0.2 	 E-inc = 0.000259 	 C-Time = 0h 0m 14s
+[2023-05-30.13:22:27]	Step = 177 	 S-Time = 0.161/0.2 	 E-inc = 0.00033 	 C-Time = 0h 0m 14.1s
+[2023-05-30.13:22:28]	Step = 178 	 S-Time = 0.162/0.2 	 E-inc = 0.000407 	 C-Time = 0h 0m 14.1s
+[2023-05-30.13:22:28]	Step = 179 	 S-Time = 0.163/0.2 	 E-inc = 0.000491 	 C-Time = 0h 0m 14.1s
+[2023-05-30.13:22:28]	Step = 180 	 S-Time = 0.164/0.2 	 E-inc = 0.000581 	 C-Time = 0h 0m 14.2s
+[2023-05-30.13:22:28]	Step = 181 	 S-Time = 0.165/0.2 	 E-inc = 0.000677 	 C-Time = 0h 0m 14.2s
+[2023-05-30.13:22:28]	Step = 182 	 S-Time = 0.166/0.2 	 E-inc = 0.000774 	 C-Time = 0h 0m 14.3s
+[2023-05-30.13:22:28]	Step = 183 	 S-Time = 0.167/0.2 	 E-inc = 0.000871 	 C-Time = 0h 0m 14.3s
+[2023-05-30.13:22:28]	Step = 184 	 S-Time = 0.168/0.2 	 E-inc = 0.000964 	 C-Time = 0h 0m 14.4s
+[2023-05-30.13:22:28]	Step = 185 	 S-Time = 0.169/0.2 	 E-inc = 0.00105 	 C-Time = 0h 0m 14.4s
+[2023-05-30.13:22:28]	Step = 186 	 S-Time = 0.17/0.2 	 E-inc = 0.00115 	 C-Time = 0h 0m 14.5s
+[2023-05-30.13:22:28]	Processed particle data
+[2023-05-30.13:22:28]	Computed coarse Cons : Etot = 6.2892285 	 Ekin = 6.2833588 	 Epot = 0.0058697396 	 Mass = 12.566371
+[2023-05-30.13:22:28]	Saved sample data 1 on grid 256, Cons : Etot = 1.8396554 	 Ekin = 1.8393834 	 Epot = 0.00027201614 	 Mass = 4.0392548
+[2023-05-30.13:22:28]	Step = 187 	 S-Time = 0.17/0.2 	 E-inc = 0.00119 	 C-Time = 0h 0m 14.9s
+[2023-05-30.13:22:28]	Step = 188 	 S-Time = 0.171/0.2 	 E-inc = 0.00132 	 C-Time = 0h 0m 14.9s
+[2023-05-30.13:22:28]	Step = 189 	 S-Time = 0.172/0.2 	 E-inc = 0.00145 	 C-Time = 0h 0m 14.9s
+[2023-05-30.13:22:28]	Step = 190 	 S-Time = 0.173/0.2 	 E-inc = 0.00159 	 C-Time = 0h 0m 15s
+[2023-05-30.13:22:28]	Step = 191 	 S-Time = 0.174/0.2 	 E-inc = 0.00173 	 C-Time = 0h 0m 15s
+[2023-05-30.13:22:29]	Step = 192 	 S-Time = 0.175/0.2 	 E-inc = 0.00188 	 C-Time = 0h 0m 15.1s
+[2023-05-30.13:22:29]	Step = 193 	 S-Time = 0.176/0.2 	 E-inc = 0.00204 	 C-Time = 0h 0m 15.1s
+[2023-05-30.13:22:29]	Step = 194 	 S-Time = 0.177/0.2 	 E-inc = 0.0022 	 C-Time = 0h 0m 15.2s
+[2023-05-30.13:22:29]	Step = 195 	 S-Time = 0.178/0.2 	 E-inc = 0.00236 	 C-Time = 0h 0m 15.2s
+[2023-05-30.13:22:29]	Step = 196 	 S-Time = 0.179/0.2 	 E-inc = 0.00253 	 C-Time = 0h 0m 15.3s
+[2023-05-30.13:22:29]	Step = 197 	 S-Time = 0.18/0.2 	 E-inc = 0.00271 	 C-Time = 0h 0m 15.3s
+[2023-05-30.13:22:29]	Processed particle data
+[2023-05-30.13:22:29]	Computed coarse Cons : Etot = 6.2892393 	 Ekin = 6.2833796 	 Epot = 0.005859725 	 Mass = 12.566371
+[2023-05-30.13:22:29]	Saved sample data 1 on grid 256, Cons : Etot = 1.8394602 	 Ekin = 1.8391886 	 Epot = 0.00027161836 	 Mass = 4.0390871
+[2023-05-30.13:22:29]	Step = 198 	 S-Time = 0.18/0.2 	 E-inc = 0.00278 	 C-Time = 0h 0m 15.7s
+[2023-05-30.13:22:29]	Step = 199 	 S-Time = 0.181/0.2 	 E-inc = 0.00296 	 C-Time = 0h 0m 15.7s
+[2023-05-30.13:22:29]	Step = 200 	 S-Time = 0.182/0.2 	 E-inc = 0.00314 	 C-Time = 0h 0m 15.8s
+[2023-05-30.13:22:29]	Step = 201 	 S-Time = 0.183/0.2 	 E-inc = 0.00333 	 C-Time = 0h 0m 15.8s
+[2023-05-30.13:22:29]	Step = 202 	 S-Time = 0.184/0.2 	 E-inc = 0.00352 	 C-Time = 0h 0m 15.9s
+[2023-05-30.13:22:29]	Step = 203 	 S-Time = 0.185/0.2 	 E-inc = 0.00371 	 C-Time = 0h 0m 15.9s
+[2023-05-30.13:22:29]	Step = 204 	 S-Time = 0.186/0.2 	 E-inc = 0.00392 	 C-Time = 0h 0m 16s
+[2023-05-30.13:22:29]	Step = 205 	 S-Time = 0.187/0.2 	 E-inc = 0.00412 	 C-Time = 0h 0m 16s
+[2023-05-30.13:22:30]	Step = 206 	 S-Time = 0.188/0.2 	 E-inc = 0.00434 	 C-Time = 0h 0m 16.1s
+[2023-05-30.13:22:30]	Step = 207 	 S-Time = 0.189/0.2 	 E-inc = 0.00456 	 C-Time = 0h 0m 16.1s
+[2023-05-30.13:22:30]	Step = 208 	 S-Time = 0.19/0.2 	 E-inc = 0.00478 	 C-Time = 0h 0m 16.2s
+[2023-05-30.13:22:30]	Processed particle data
+[2023-05-30.13:22:30]	Computed coarse Cons : Etot = 6.2892506 	 Ekin = 6.2834016 	 Epot = 0.005849044 	 Mass = 12.566371
+[2023-05-30.13:22:30]	Saved sample data 1 on grid 256, Cons : Etot = 1.8392544 	 Ekin = 1.8389832 	 Epot = 0.00027119973 	 Mass = 4.0389102
+[2023-05-30.13:22:30]	Step = 209 	 S-Time = 0.19/0.2 	 E-inc = 0.00489 	 C-Time = 0h 0m 16.5s
+[2023-05-30.13:22:30]	Step = 210 	 S-Time = 0.191/0.2 	 E-inc = 0.00511 	 C-Time = 0h 0m 16.6s
+[2023-05-30.13:22:30]	Step = 211 	 S-Time = 0.192/0.2 	 E-inc = 0.00534 	 C-Time = 0h 0m 16.6s
+[2023-05-30.13:22:30]	Step = 212 	 S-Time = 0.193/0.2 	 E-inc = 0.00558 	 C-Time = 0h 0m 16.7s
+[2023-05-30.13:22:30]	Step = 213 	 S-Time = 0.194/0.2 	 E-inc = 0.00582 	 C-Time = 0h 0m 16.7s
+[2023-05-30.13:22:30]	Step = 214 	 S-Time = 0.195/0.2 	 E-inc = 0.00607 	 C-Time = 0h 0m 16.8s
+[2023-05-30.13:22:30]	Step = 215 	 S-Time = 0.196/0.2 	 E-inc = 0.00633 	 C-Time = 0h 0m 16.8s
+[2023-05-30.13:22:30]	Simulation loop finished 	 C-Time = 0h 0m 16.8s
+[2023-05-30.13:22:30]	Finished simulation 	 Last Cuda Error = cudaSuccess 	 C-Time = 0h 0m 16.8s

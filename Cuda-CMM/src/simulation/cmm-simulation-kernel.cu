@@ -307,14 +307,14 @@ __global__ void k_h_sample_map_compact(double *ChiX, double *ChiY, double *x_y, 
 	if(iX >= Grid.NX || iY >= Grid.NY) return;
 	int In = iY*Grid.NX + iX;
 
-	//position
+	//position spanning on targeted grid
 	double x =  Grid.bounds[0] + iX*Grid.hx;
 	double y =  Grid.bounds[2] + iY*Grid.hy;
 	// LX and LY are in reference to the map grid
 	double LX = Grid_map.bounds[1] - Grid_map.bounds[0]; double LY = Grid_map.bounds[3] - Grid_map.bounds[2];
 
 	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, Grid_map);
-	
+
 	// save in two points in array and warp - translate by domain size(s)
 	x_y[2*In  ] = x - floor((x - Grid_map.bounds[0]) / LX) * LX;
 	x_y[2*In+1] = y - floor((y - Grid_map.bounds[2]) / LY) * LY;
@@ -327,7 +327,7 @@ __global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, doub
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 	if(iX >= Grid.NX || iY >= Grid.NY) return;
 	int In = iY*Grid.NX + iX;
-	
+
 	double points[2];
 	double LX = Grid_map.bounds[1] - Grid_map.bounds[0]; double LY = Grid_map.bounds[3] - Grid_map.bounds[2];
 	device_diffeo_interpolate_2D(ChiX_stack, ChiY_stack, x_y[2*In], x_y[2*In+1], &points[0], &points[1], Grid_map);
@@ -335,7 +335,8 @@ __global__ void k_apply_map_compact(double *ChiX_stack, double *ChiY_stack, doub
 	// warping - translate by domain size(s)
 	x_y[2*In  ] = points[0] - floor((points[0] - Grid_map.bounds[0])/LX)*LX;
 	x_y[2*In+1] = points[1] - floor((points[1] - Grid_map.bounds[2])/LY)*LY;
-	// printf("y: %f, y_new: %f\n", x_y[2*In+1], points[1]);
+
+//	if (iX == 10 && iY == 10) printf("Pos3 Apply (%f, %f)\n", x_y[2*In], x_y[2*In+1]);
 }
 // sample from initial condition
 __global__ void k_h_sample_from_init(double *Val_out, double *x_y, TCudaGrid2D Grid, TCudaGrid2D Grid_discrete, int init_var_num, int init_num, double *Val_initial_discrete, bool initial_discrete)
@@ -519,22 +520,23 @@ __global__ void copy_first_row_to_all_rows_in_grid(cufftDoubleReal *val_in, cuff
 	val_out[In] = val_in[iX];
 }
 
-__global__ void set_value(cufftDoubleReal *array, cufftDoubleReal value, TCudaGrid2D Grid){
-	// #############################################################################################
-	// This function creates a NX time NV grid of values f(ix,iv) = value
-	// #############################################################################################
-	
-	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
-	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
-
-	if(iX >= Grid.NX || iY >= Grid.NY)
-			return;
-
-	int In = iY*Grid.NX + iX;
-
-	array[In] = value;
-
-}
+// use cudaMemset(array, value, Size) for this
+//__global__ void set_value(cufftDoubleReal *array, cufftDoubleReal value, TCudaGrid2D Grid){
+//	// #############################################################################################
+//	// This function creates a NX time NV grid of values f(ix,iv) = value
+//	// #############################################################################################
+//
+//	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+//	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+//
+//	if(iX >= Grid.NX || iY >= Grid.NY)
+//			return;
+//
+//	int In = iY*Grid.NX + iX;
+//
+//	array[In] = value;
+//
+//}
 
 __global__ void generate_gridvalues_v(cufftDoubleReal *v, double prefactor, TCudaGrid2D Grid) {
 	// #############################################################################################

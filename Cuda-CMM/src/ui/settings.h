@@ -155,13 +155,13 @@ class SettingsCMM {
 
 private:
 	// main properties, needed to be able to run
-	std::string workspace, sim_name, file_name, simulation_type;
+	std::string workspace, sim_name, file_name, simulation_type; int simulation_type_num;
 	int grid_coarse, grid_fine, grid_psi, grid_vort;
 	std::string initial_condition; double initial_params[10] = {0};
 	std::string initial_discrete_location;
 	int initial_condition_num, initial_discrete_grid; bool initial_discrete;
 	int verbose;
-	double bounds[2*MAX_DIM];
+	double domain_bounds[2*MAX_DIM];
 	// time stepping properties
 	double final_time, factor_dt_by_grid;
 	int steps_per_sec;
@@ -230,25 +230,32 @@ public:
 	std::string getWorkspace() const { return workspace; }
 	void setWorkspace(std::string Workspace) { workspace = Workspace; }
 	std::string getSimulationType() const { return simulation_type; }
-	void setSimulationType(std::string SimulationType) { simulation_type = SimulationType; }
+	void setSimulationType(std::string SimulationType) {
+		simulation_type = SimulationType;
+		// set num coinciding with k_h_sample_from_init
+		if(simulation_type == "cmm_euler_2d") simulation_type_num = 0;
+		else if(simulation_type == "cmm_vlasov_poisson_1d") simulation_type_num = 2;
+	}
+	int getSimulationTypeNum() const { return simulation_type_num; }
 	std::string getSimName() const { return sim_name; }
 	void setSimName(std::string simName) { sim_name = simName; }
 	std::string getFileName() const { return file_name; }
 	void setFileName(std::string fileName) { file_name = fileName; }
 	// grid settings
-	void getDomainBounds(double* domainbounds) { 
+	double* getDomainBoundsPointer() { return domain_bounds; }
+	std::string getDomainBounds() const { return arrayToString(domain_bounds, 2*MAX_DIM); }
+	void getDomainBounds(double* domainBounds) {
 		for (int i= 0; i < 2*MAX_DIM; i++) {
-        	domainbounds[i] = bounds[i];
+        	domainBounds[i] = domain_bounds[i];
     	}
 	}
-	void setDomainBounds(double* domainbounds) { 
+	void setDomainBounds(double* domainBounds) {
 		for (int i= 0; i < 2*MAX_DIM; i++) {
-        	bounds[i]= domainbounds[i];
+        	domain_bounds[i]= domainBounds[i];
     	}
 		
-		// check if bounds are correct
-		double Lx = bounds[1]-bounds[0];
-		double Ly = bounds[3]-bounds[2];
+		// check if bounds are correct (positive non-zero)
+		double Lx = domain_bounds[1]-domain_bounds[0]; double Ly = domain_bounds[3]-domain_bounds[2];
 		if (!(Lx > 1e-16 & Ly > 1e-16)) {
 			error("Bonjour, there might be a problem in the engine room! We need your help! The domain bounds are not correct!" , 20230517);
 		}

@@ -28,8 +28,7 @@ __device__ double d_init_scalar(double x, double y, int scalar_num);
 __device__ double d_init_distirbution_function(double x, double v, int simulation_num);
 
 // initial condition for particles
-__host__ void init_particles(double* Dev_particles_pos, SettingsCMM SettingsMain,
-		int particle_thread, int particle_block, TCudaGrid2D Grid, int particle_type, int i_p);
+__host__ void init_particles(SettingsCMM SettingsMain, CmmPart Part, TCudaGrid2D Grid, int particle_type, int i_p);
 __global__ void k_part_init_circle(int particle_num, double* Dev_particles_pos, TCudaGrid2D Grid);
 __global__ void k_part_init_uniform_grid(int particle_num, double* Dev_particles_pos, TCudaGrid2D Grid);
 __global__ void k_part_init_sine_sheets(int particle_num, double* Dev_particles_pos, TCudaGrid2D Grid);

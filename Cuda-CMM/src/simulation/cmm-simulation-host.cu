@@ -19,7 +19,6 @@
 
 #include "../numerical/cmm-fft.h"
 
-#include "../ui/cmm-io.h"
 #include "../ui/globals.h"
 
 // debugging, using printf
@@ -41,19 +40,18 @@ struct absto1
             return fabs(1-x);
         }
 };
-double incompressibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_map, double *ChiX, double *ChiY, double *grad_Chi) {
+double incompressibility_check(TCudaGrid2D Grid_check, CmmVar2D ChiX, CmmVar2D ChiY, double *grad_Chi) {
 	// compute determinant of gradient and save in gradchi
-	k_incompressibility_check<<<Grid_check.blocksPerGrid, Grid_check.threadsPerBlock>>>(Grid_check, Grid_map, ChiX, ChiY, grad_Chi);
+	k_incompressibility_check<<<Grid_check.blocksPerGrid, Grid_check.threadsPerBlock>>>(Grid_check, *ChiX.Grid, ChiX.Dev_var, ChiY.Dev_var, grad_Chi);
 	// compute maximum using thrust parallel reduction
 	thrust::device_ptr<double> grad_Chi_ptr = thrust::device_pointer_cast(grad_Chi);
 	return thrust::transform_reduce(grad_Chi_ptr, grad_Chi_ptr + Grid_check.N, absto1(), 0.0, thrust::maximum<double>());
 }
 
-double invertibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_backward, TCudaGrid2D Grid_forward,
-		double *ChiX_b, double *ChiY_b, double *ChiX_f, double *ChiY_f, double *abs_invert) {
+double invertibility_check(TCudaGrid2D Grid_check, CmmVar2D ChiX_b, CmmVar2D ChiY_b, CmmVar2D ChiX_f, CmmVar2D ChiY_f, double *abs_invert) {
 	// compute determinant of gradient and save in gradchi
-	k_invertibility_check<<<Grid_check.blocksPerGrid, Grid_check.threadsPerBlock>>>(Grid_check, Grid_backward, Grid_forward,
-			ChiX_b, ChiY_b, ChiX_f, ChiY_f, abs_invert);
+	k_invertibility_check<<<Grid_check.blocksPerGrid, Grid_check.threadsPerBlock>>>(Grid_check, *ChiX_b.Grid, *ChiX_f.Grid,
+			ChiX_b.Dev_var, ChiY_b.Dev_var, ChiX_f.Dev_var, ChiY_f.Dev_var, abs_invert);
 
 	// compute maximum using thrust parallel reduction
 	thrust::device_ptr<double> abs_invert_ptr = thrust::device_pointer_cast(abs_invert);
@@ -62,9 +60,8 @@ double invertibility_check(TCudaGrid2D Grid_check, TCudaGrid2D Grid_backward, TC
 
 
 // wrapper function for map advection
-void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map, TCudaGrid2D Grid_psi,
-		double *ChiX, double *ChiY, double *Chi_new_X, double *Chi_new_Y,
-		double *psi, double *t, double *dt, int loop_ctr, int direction) {
+void advect_using_stream_hermite(SettingsCMM SettingsMain, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Psi,
+		double *Chi_new_X, double *Chi_new_Y, double *t, double *dt, int loop_ctr, int direction) {
 	
 	// compute lagrange coefficients from dt vector for timesteps n+dt and n+dt/2, this makes them dynamic
 	double h_L1[4], h_L12[4];  // constant memory for lagrange coefficient to be computed only once
@@ -99,8 +96,8 @@ void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map,
 //	printf("Time - %f \t dt - %f \t TimeInt - %d \t Lagrange - %d \n", t[loop_ctr_l+1], dt[loop_ctr_l+1], SettingsMain.getTimeIntegrationNum(), SettingsMain.getLagrangeOrder());
 
 	// now launch the kernel
-	k_advect_using_stream_hermite<<<Grid_map.blocksPerGrid, Grid_map.threadsPerBlock>>>(ChiX, ChiY, Chi_new_X, Chi_new_Y,
-			psi, Grid_map, Grid_psi, t[loop_ctr_l+1], dt[loop_ctr_l+1],
+	k_advect_using_stream_hermite<<<ChiX.Grid->blocksPerGrid, ChiX.Grid->threadsPerBlock>>>(ChiX.Dev_var, ChiY.Dev_var, Chi_new_X, Chi_new_Y,
+			Psi.Dev_var, *ChiX.Grid, *Psi.Grid, t[loop_ctr_l+1], dt[loop_ctr_l+1],
 			SettingsMain.getMapEpsilon(), SettingsMain.getTimeIntegrationNum(),
 			SettingsMain.getMapUpdateOrderNum(), SettingsMain.getLagrangeOrder(), direction);
 }
@@ -110,6 +107,7 @@ void advect_using_stream_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_map,
 /*******************************************************************
 *		 Apply mapstacks to get full map to initial condition	   *
 *******************************************************************/
+//void apply_map_stack(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double *ChiY, double *Dev_Temp, int direction)
 void apply_map_stack(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double *ChiY, double *Dev_Temp, int direction)
 {
 	// copy bounds to constant device memory
@@ -157,9 +155,9 @@ void apply_map_stack(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double 
 *		 Apply mapstacks to get full map to initial condition	   *
 *		    and to map specific points / particles
 *******************************************************************/
-void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double *ChiY, double *Dev_Temp, int direction,
-		double **fluid_particles_pos_in, double *fluid_particles_pos_out,
-		SettingsCMM SettingsMain, int* fluid_particles_blocks, int fluid_particles_threads)
+// this one is dirty and needs to be reworked
+void apply_map_stack_points(SettingsCMM SettingsMain, TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, double *ChiY,
+		double *Dev_Temp, int direction, std::map<std::string, CmmPart*> cmmPartMap, double *fluid_particles_pos_out)
 {
 	// copy bounds to constant device memory
 	cudaMemcpyToSymbol(d_bounds, Grid.bounds, sizeof(double)*4);
@@ -174,13 +172,15 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 		ParticlesForwarded *particles_forwarded = SettingsMain.getParticlesForwarded();
 		double *pos_out_counter = fluid_particles_pos_out;
 		for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
+			std::string part_map_name = "PartF_Pos_P" + to_str_0(i_p+1, 2);
+			CmmPart Part_Pos_now = *cmmPartMap[part_map_name];
 			if ((particles_forwarded[i_p].init_map != 0 && particles_forwarded[i_p].init_time != 0) || particles_forwarded[i_p].init_time == 0) {
-				k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
-						fluid_particles_pos_in[i_p], pos_out_counter, particles_forwarded[i_p].num);
+				k_h_sample_points_map<<<Part_Pos_now.block, Part_Pos_now.thread>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
+						Part_Pos_now.Dev_var, pos_out_counter, particles_forwarded[i_p].num);
 			}
 			// particles cannot be traced back, just give back the particle positions
 			else {
-				cudaMemcpy(pos_out_counter, fluid_particles_pos_in[i_p], 2*particles_forwarded[i_p].num*sizeof(double), cudaMemcpyDeviceToDevice);
+				cudaMemcpy(pos_out_counter, Part_Pos_now.Dev_var, Part_Pos_now.sizeN, cudaMemcpyDeviceToDevice);
 			}
 			// shift pointer
 			pos_out_counter += 2*particles_forwarded[i_p].num;
@@ -197,9 +197,11 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 			double *pos_out_counter = fluid_particles_pos_out;
 			pos_out_counter = fluid_particles_pos_out;
 			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
+				std::string part_map_name = "PartF_Pos_P" + to_str_0(i_p+1, 2);
+				CmmPart Part_Pos_now = *cmmPartMap[part_map_name];
 				// check if this map is applied too
 				if ((i_map >= particles_forwarded[i_p].init_map && particles_forwarded[i_p].init_time != 0 && particles_forwarded[i_p].init_map != 0) || particles_forwarded[i_p].init_time == 0) {
-					k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
+					k_h_sample_points_map<<<Part_Pos_now.block, Part_Pos_now.thread>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
 							pos_out_counter, pos_out_counter, particles_forwarded[i_p].num);
 				}
 				// shift pointer
@@ -219,14 +221,16 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 			ParticlesForwarded *particles_forwarded = SettingsMain.getParticlesForwarded();
 			double *pos_out_counter = fluid_particles_pos_out;
 			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
+				std::string part_map_name = "PartF_Pos_P" + to_str_0(i_p+1, 2);
+				CmmPart Part_Pos_now = *cmmPartMap[part_map_name];
 				// apply first map
 				if (particles_forwarded[i_p].init_time == 0) {
-					k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
-							fluid_particles_pos_in[i_p], pos_out_counter, particles_forwarded[i_p].num);
+					k_h_sample_points_map<<<Part_Pos_now.block, Part_Pos_now.thread>>>(*Map_Stack.Grid, Grid, Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
+							Part_Pos_now.Dev_var, pos_out_counter, particles_forwarded[i_p].num);
 				}
 				// copy initially as we do not start at t=0
 				else {
-					cudaMemcpy(pos_out_counter, fluid_particles_pos_in[i_p], 2*particles_forwarded[i_p].num*sizeof(double), cudaMemcpyDeviceToDevice);
+					cudaMemcpy(pos_out_counter, Part_Pos_now.Dev_var, Part_Pos_now.sizeN, cudaMemcpyDeviceToDevice);
 				}
 				// shift pointer
 				pos_out_counter += 2*particles_forwarded[i_p].num;
@@ -240,9 +244,11 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 
 				pos_out_counter = fluid_particles_pos_out;
 				for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
+					std::string part_map_name = "PartF_Pos_P" + to_str_0(i_p+1, 2);
+					CmmPart Part_Pos_now = *cmmPartMap[part_map_name];
 					// apply first map
 					if ((i_map >= particles_forwarded[i_p].init_map && particles_forwarded[i_p].init_time != 0) || particles_forwarded[i_p].init_time == 0) {
-						k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
+						k_h_sample_points_map<<<Part_Pos_now.block, Part_Pos_now.thread>>>(*Map_Stack.Grid, Grid, Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
 								pos_out_counter, pos_out_counter, particles_forwarded[i_p].num);
 					}
 					// shift pointer
@@ -254,9 +260,11 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 			k_apply_map_compact<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(ChiX, ChiY, Dev_Temp, *Map_Stack.Grid, Grid);
 			pos_out_counter = fluid_particles_pos_out;
 			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
+				std::string part_map_name = "PartF_Pos_P" + to_str_0(i_p+1, 2);
+				CmmPart Part_Pos_now = *cmmPartMap[part_map_name];
 				// apply first map
 				if ((particles_forwarded[i_p].init_map != 0 && particles_forwarded[i_p].init_time != 0) || particles_forwarded[i_p].init_time == 0) {
-					k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
+					k_h_sample_points_map<<<Part_Pos_now.block, Part_Pos_now.thread>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
 							pos_out_counter, pos_out_counter, particles_forwarded[i_p].num);
 				}
 				// shift pointer
@@ -271,8 +279,10 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 			ParticlesForwarded *particles_forwarded = SettingsMain.getParticlesForwarded();
 			double *pos_out_counter = fluid_particles_pos_out;
 			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
-				k_h_sample_points_map<<<fluid_particles_blocks[i_p], fluid_particles_threads>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
-						fluid_particles_pos_in[i_p], pos_out_counter, particles_forwarded[i_p].num);
+				std::string part_map_name = "PartF_Pos_P" + to_str_0(i_p+1, 2);
+				CmmPart Part_Pos_now = *cmmPartMap[part_map_name];
+				k_h_sample_points_map<<<Part_Pos_now.block, Part_Pos_now.thread>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
+						Part_Pos_now.Dev_var, pos_out_counter, particles_forwarded[i_p].num);
 
 				pos_out_counter += 2*particles_forwarded[i_p].num;
 			}
@@ -285,62 +295,59 @@ void apply_map_stack_points(TCudaGrid2D Grid, MapStack Map_Stack, double *ChiX, 
 *				Compute fine vorticity hermite					   *
 *******************************************************************/
 
-void translate_initial_condition_through_map_stack(TCudaGrid2D Grid_fine, TCudaGrid2D Grid_discrete, MapStack Map_Stack, double *Dev_ChiX, double *Dev_ChiY,
-		double *W_H_real, cufftHandle cufftPlan_fine_D2Z, cufftHandle cufftPlan_fine_Z2D, cufftDoubleComplex *Dev_Temp_C1,
-		double *W_initial_discrete, int simulation_num_c, bool initial_discrete, int var_num /*=0*/)
+void translate_initial_condition_through_map_stack(MapStack Map_Stack, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Var,
+		CmmVar2D Var_discrete_init, cufftDoubleComplex *Dev_Temp_C1, int simulation_num_c, bool initial_discrete, int var_num /*=0*/)
 {
 	/*
-	@param W_H_real: real space vorticity
-	@param Dev_Temp_C1: complex space vorticity (temp)
-	@param W_initial_discrete: initial condition in discrete space
-	@param initial_discrete: if true, initial condition is in discrete space
-	@param simulation_num_c: number of simulation (inicond)
-	@param var_num: 0 vorticity (default), 1 passive scalar, 2 distribution function (optional)
+	@param Var: output variable to be translated through all maps
+	@param Dev_Temp_C1: complex space temporary variable
+	@param Var_discrete_init: initial condition as discrete array
+	@param initial_discrete: if true, initial condition is used from discrete array
+	@param simulation_num_c: number of simulation (inicond), used for continuous initial condition
+	@param var_num: 0 vorticity (default), 1 passive scalar, 2 distribution function (optional), for continuous IC
 	*/
 
 	// Sample vorticity on fine grid
-	// W_H_real is used as temporary variable and output
-	apply_map_stack(Grid_fine, Map_Stack, Dev_ChiX, Dev_ChiY, W_H_real+Grid_fine.N, -1);
-	// initial condition
-	k_h_sample_from_init<<<Grid_fine.blocksPerGrid, Grid_fine.threadsPerBlock>>>(W_H_real, W_H_real+Grid_fine.N, Grid_fine, Grid_discrete,
-			var_num, simulation_num_c, W_initial_discrete, initial_discrete);
+	// Var is used as temporary variable and output
+	apply_map_stack(*Var.Grid, Map_Stack, ChiX.Dev_var, ChiY.Dev_var, Var.Dev_var+Var.Grid->N, -1);
+	// initial condition from either discrete array or condition
+	k_h_sample_from_init<<<Var.Grid->blocksPerGrid, Var.Grid->threadsPerBlock>>>(Var.Dev_var, Var.Dev_var+Var.Grid->N,
+			*Var.Grid, *Var_discrete_init.Grid, var_num, simulation_num_c, Var_discrete_init.Dev_var, initial_discrete);
 
 	// go to comlex space
-	cufftExecD2Z(cufftPlan_fine_D2Z, W_H_real, Dev_Temp_C1);
-	k_normalize_h<<<Grid_fine.fft_blocks, Grid_fine.threadsPerBlock>>>(Dev_Temp_C1, Grid_fine);
+	cufftExecD2Z(Var.plan_D2Z, Var.Dev_var, Dev_Temp_C1);
+	k_normalize_h<<<Var.Grid->fft_blocks, Var.Grid->threadsPerBlock>>>(Dev_Temp_C1, *Var.Grid);
 
 	// cut_off frequencies at N_fine/3 for turbulence (effectively 2/3)
 //	k_fft_cut_off_scale<<<Grid_fineblocksPerGrid, Grid_finethreadsPerBlock>>>(Dev_Temp_C1, Grid_fineNX, (double)(Grid_fineNX)/3.0);
 
 	// form hermite formulation
-	fourier_hermite(Grid_fine, Dev_Temp_C1, W_H_real, cufftPlan_fine_Z2D);
+	fourier_hermite(*Var.Grid, Dev_Temp_C1, Var.Dev_var, Var.plan_Z2D);
 }
-
 
 
 /*******************************************************************
 *						 Computation of Psi						   *
 *******************************************************************/
-void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_psi, TCudaGrid2D Grid_vort,
-		double *Dev_ChiX, double *Dev_ChiY, double *Dev_W_H_fine_real, double *Psi_real,
-		cufftHandle cufft_plan_coarse_Z2D, cufftHandle cufft_plan_psi, cufftHandle cufft_plan_vort,
+void evaluate_stream_hermite(CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Vort_fine_init, CmmVar2D Psi, CmmVar2D empty_vort,
 		cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_psi)
 {
 	/*
 	This function computes the solution to $L \psi = w $ where $w$ is the vorticity and $\psi$ is the stream function
-	@param Dev_W_H_fine_real: real space vorticity
-	@param Psi_real: real space stream function
-	@param Dev_Temp_C1: complex space vorticity (temp)
+	@param Vort_fine_init: real space vorticity on fine grid as initial condition of sub-map
+	@param Psi: real space stream function in Hermite form as output
+	@param Dev_Temp_C1: complex space temporary variable
+	@param empty_vort: this contains the grid and cufft_plans for the sampling size in real space, we then shift the grid in complex space
 	*/
 
 
 	// apply map to w and sample using mollifier, do it on a special grid for vorticity and apply mollification if wanted
-	k_apply_map_and_sample_from_hermite<<<Grid_vort.blocksPerGrid, Grid_vort.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
-			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_fine_real, Grid_coarse, Grid_vort, Grid_fine, molly_stencil, true);
+	k_apply_map_and_sample_from_hermite<<<empty_vort.Grid->blocksPerGrid, empty_vort.Grid->threadsPerBlock>>>(ChiX.Dev_var, ChiY.Dev_var,
+			(cufftDoubleReal*)Dev_Temp_C1, Vort_fine_init.Dev_var, *ChiX.Grid, *empty_vort.Grid, *Vort_fine_init.Grid, molly_stencil, true);
 
-	// forward fft 
-	cufftExecD2Z(cufft_plan_vort, (cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C1);
-	k_normalize_h<<<Grid_vort.fft_blocks, Grid_vort.threadsPerBlock>>>(Dev_Temp_C1, Grid_vort);  // this is a normalization factor of FFT? if yes we dont need to do it everytime!!! 
+	// forward fft, inline which is possible for forward fft
+	cufftExecD2Z(empty_vort.plan_D2Z, (cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C1);
+	k_normalize_h<<<empty_vort.Grid->fft_blocks, empty_vort.Grid->threadsPerBlock>>>(Dev_Temp_C1, *empty_vort.Grid);  // this is a normalization factor of FFT? if yes we dont need to do it everytime!!!
 
 	// cut_off frequencies at N_psi/3 for turbulence (effectively 2/3) and compute smooth W
 	// use Psi grid here for intermediate storage
@@ -348,22 +355,22 @@ void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCu
 
 	// transition to stream function grid with three cases : grid_vort < grid_psi, grid_vort > grid_psi (a bit dumb) and grid_vort == grid_psi
 	// grid change because inline data movement is nasty, we can use psi_real as buffer anyways
-	if (Grid_vort.NX != Grid_psi.NX || Grid_vort.NY != Grid_psi.NY) {
-		k_fft_grid_move<<<Grid_psi.fft_blocks, Grid_psi.threadsPerBlock>>>(Dev_Temp_C1, (cufftDoubleComplex*) Psi_real, Grid_psi, Grid_vort);
+	if (empty_vort.Grid->NX != Psi.Grid->NX || empty_vort.Grid->NY != Psi.Grid->NY) {
+		k_fft_grid_move<<<Psi.Grid->fft_blocks, Psi.Grid->threadsPerBlock>>>(Dev_Temp_C1, (cufftDoubleComplex*) Psi.Dev_var, *Psi.Grid, *empty_vort.Grid);
 	}
 	// no movement needed, just copy data over
 	else {
-		cudaMemcpy(Psi_real, Dev_Temp_C1, Grid_vort.sizeNfft, cudaMemcpyDeviceToDevice);
+		cudaMemcpy(Psi.Dev_var, Dev_Temp_C1, empty_vort.Grid->sizeNfft, cudaMemcpyDeviceToDevice);
 	}
 
 	// cut high frequencies in fourier space, however not that much happens after zero move add from coarse grid
-	k_fft_cut_off_scale_h<<<Grid_psi.fft_blocks, Grid_psi.threadsPerBlock>>>((cufftDoubleComplex*) Psi_real, Grid_psi, freq_cut_psi);
+	k_fft_cut_off_scale_h<<<Psi.Grid->fft_blocks, Psi.Grid->threadsPerBlock>>>((cufftDoubleComplex*) Psi.Dev_var, *Psi.Grid, freq_cut_psi);
 
 	// Forming Psi hermite now on psi grid
-	k_fft_iLap_h<<<Grid_psi.fft_blocks, Grid_psi.threadsPerBlock>>>((cufftDoubleComplex*) Psi_real, Dev_Temp_C1, Grid_psi);
+	k_fft_iLap_h<<<Psi.Grid->fft_blocks, Psi.Grid->threadsPerBlock>>>((cufftDoubleComplex*) Psi.Dev_var, Dev_Temp_C1, *Psi.Grid);
 
 	// Inverse laplacian in Fourier space
-	fourier_hermite(Grid_psi, Dev_Temp_C1, Psi_real, cufft_plan_psi);
+	fourier_hermite(*Psi.Grid, Dev_Temp_C1, Psi.Dev_var, Psi.plan_Z2D);
 }
 // debugging lines, could be needed here to check psi
 //	cudaMemcpy(Host_Debug, Psi_real, 4*Grid_psi.sizeNReal, cudaMemcpyDeviceToHost);
@@ -374,20 +381,19 @@ void evaluate_stream_hermite(TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCu
 *						 Computation of Psi						   *
 *******************************************************************/
 
-void evaluate_potential_from_density_hermite(SettingsCMM SettingsMain, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_fine, TCudaGrid2D Grid_Psi, TCudaGrid2D Grid_vort,
-		double *Dev_ChiX, double *Dev_ChiY, double *Dev_W_H_fine_real, double *Psi_real,
-		cufftHandle cufft_plan_psi_D2Z, cufftHandle cufft_plan_psi_Z2D, cufftHandle cufft_plan_phi_1D, cufftHandle cufft_plan_phi_1D_inverse,
-		cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_psi)	
+void evaluate_potential_from_density_hermite(SettingsCMM SettingsMain, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Vort_fine_init, CmmVar2D Psi,
+		CmmVar2D empty_vort, cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_psi)
 {	/*
 	This function computes the solution to $L_xx \phi = (1-l \int f dv) $ where $w$ is the vorticity and $\phi$ is the stream function
 	*/	
 	// apply map to w and sample using mollifier, do it on a special grid for vorticity and apply mollification if wanted
-	k_apply_map_and_sample_from_hermite<<<Grid_vort.blocksPerGrid, Grid_vort.threadsPerBlock>>>(Dev_ChiX, Dev_ChiY,
-			(cufftDoubleReal*)Dev_Temp_C1, Dev_W_H_fine_real, Grid_coarse, Grid_vort, Grid_fine, molly_stencil, false);
+	k_apply_map_and_sample_from_hermite<<<empty_vort.Grid->blocksPerGrid, empty_vort.Grid->threadsPerBlock>>>(ChiX.Dev_var, ChiY.Dev_var,
+			(cufftDoubleReal*)Dev_Temp_C1, Vort_fine_init.Dev_var, *ChiX.Grid, *empty_vort.Grid, *Vort_fine_init.Grid, molly_stencil, false);
 	// this function solves the 1D laplace equation on the Grid_vort (coarse) and upsamples to Grid_Psi (fine)
 	// writeTranferToBinaryFile(Grid_vort.N, (cufftDoubleReal*)Dev_Temp_C1, SettingsMain, "/f", false);
-	get_psi_hermite_from_distribution_function(Psi_real, (cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C1, cufft_plan_phi_1D, cufft_plan_phi_1D_inverse, 
-	cufft_plan_psi_D2Z, cufft_plan_psi_Z2D  ,Grid_vort, Grid_Psi);
+	get_psi_hermite_from_distribution_function(Psi, empty_vort, (cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C1);
+//	get_psi_hermite_from_distribution_function(Psi_real, (cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C1, cufft_plan_phi_1D, cufft_plan_phi_1D_inverse,
+//	cufft_plan_psi_D2Z, cufft_plan_psi_Z2D  ,Grid_vort, Grid_Psi);
 	// writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real), SettingsMain, "/psi", false);
 	// writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real+1*Grid_Psi.N), SettingsMain, "/dpsi_dx", false);
 	// writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real+2*Grid_Psi.N), SettingsMain, "/dpsi_dy", false);
@@ -398,50 +404,61 @@ void evaluate_potential_from_density_hermite(SettingsCMM SettingsMain, TCudaGrid
 
 
 
-// sample psi on a fixed grid with vorticity known - assumes periodicity is preserved (no zoom!)
-void psi_upsampling(TCudaGrid2D Grid, double *Dev_W, cufftDoubleComplex *Dev_Temp_C1, double *Dev_Psi,
-		cufftHandle cufft_plan_D2Z, cufftHandle cufft_plan_Z2D){
-	cufftExecD2Z(cufft_plan_D2Z, Dev_W, Dev_Temp_C1);
-	k_normalize_h<<<Grid.fft_blocks, Grid.threadsPerBlock>>>(Dev_Temp_C1, Grid);
 
-	// Forming Psi hermite
-	k_fft_iLap_h<<<Grid.fft_blocks, Grid.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, Grid);
-	fourier_hermite(Grid, Dev_Temp_C1, Dev_Psi, cufft_plan_Z2D);
-}
-
-
-void get_psi_hermite_from_distribution_function(double *Psi_real_out, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1,
-		cufftHandle cufft_plan_phi_1D, cufftHandle cufft_plan_phi_1D_inverse, cufftHandle cufft_plan_psi_D2Z, cufftHandle cufft_plan_psi_Z2D,
-		TCudaGrid2D Grid, TCudaGrid2D Grid_psi){
-	// #################################################################################################################			
-	// this function solves the 1D laplace equation on the Grid_vort (coarse) and upsamples to Grid_Psi (fine)
+/*
+ * This function computes psi and the x-derivative of psi, we splice hermite function up for sampling, where only psi is needed
+ * 		psi= phi  - v^2/2
+ * 		d\psi/dx = dphi/dx = F^{-1} (ik_x F(phi))
+ */
+void get_psi_from_distribution_function(CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1)
+{
 	// #################################################################################################################
-	integral_v<<<Grid.blocksPerGrid.x, Grid.threadsPerBlock.x >>>((cufftDoubleReal*)Dev_f_in, (cufftDoubleReal*)Dev_Temp_C1+Grid.N, Grid.NX, Grid.NY, Grid.hy);
+	// this function solves the 1D laplace equation on the Grid_vort (fine) and downsamples to Grid_Psi (between coarse and fine)
+	// #################################################################################################################
+	integral_v<<<empty_vort.Grid->blocksPerGrid.x, empty_vort.Grid->threadsPerBlock.x >>>((cufftDoubleReal*)Dev_f_in, (cufftDoubleReal*)Dev_Temp_C1+empty_vort.Grid->N, empty_vort.Grid->NX, empty_vort.Grid->NY, empty_vort.Grid->hy);
 	// forward fft
-	cufftExecD2Z (cufft_plan_phi_1D, (cufftDoubleReal*)Dev_Temp_C1+Grid.N, (cufftDoubleComplex*) Psi_real_out);
+	cufftExecD2Z (Psi.plan_1D_D2Z, (cufftDoubleReal*)Dev_Temp_C1+empty_vort.Grid->N, (cufftDoubleComplex*) Psi.Dev_var);
 	// devide by NX to normalize FFT
-	k_normalize_1D_h<<<Grid.fft_blocks.x, Grid.threadsPerBlock.x>>>((cufftDoubleComplex*) Psi_real_out, Grid);  // this is a normalization factor of FFT? if yes we dont need to do it everytime!!! 
+	k_normalize_1D_h<<<empty_vort.Grid->fft_blocks.x, empty_vort.Grid->threadsPerBlock.x>>>((cufftDoubleComplex*) Psi.Dev_var, *empty_vort.Grid);  // this is a normalization factor of FFT? if yes we dont need to do it everytime!!!
 	// inverse laplacian in fourier space - division by kx**2 and ky**2
-	k_fft_iLap_h_1D<<<Grid.fft_blocks.x, Grid.threadsPerBlock.x>>>((cufftDoubleComplex*) Psi_real_out, (cufftDoubleComplex*)  Psi_real_out, Grid);
+	k_fft_iLap_h_1D<<<empty_vort.Grid->fft_blocks.x, empty_vort.Grid->threadsPerBlock.x>>>((cufftDoubleComplex*) Psi.Dev_var, (cufftDoubleComplex*)  Psi.Dev_var, *empty_vort.Grid);
 	// do zero padding if needed
-	if (Grid.NX != Grid_psi.NX || Grid.NY != Grid_psi.NY) {
-		zero_padding_1D<<<Grid_psi.fft_blocks.x, Grid_psi.threadsPerBlock.x>>>((cufftDoubleComplex*)Psi_real_out, (cufftDoubleComplex*) Psi_real_out, Grid_psi, Grid);
+	if (empty_vort.Grid->NX != empty_vort.Grid->NX || empty_vort.Grid->NY != empty_vort.Grid->NY) {
+		zero_padding_1D<<<empty_vort.Grid->fft_blocks.x, empty_vort.Grid->threadsPerBlock.x>>>((cufftDoubleComplex*)Psi.Dev_var, (cufftDoubleComplex*) Psi.Dev_var, *Psi.Grid, *empty_vort.Grid);
 	}
 	else { // no movement needed, just copy data over
 		// cudaMemcpy(Psi_real_out, Dev_Temp_C1, Grid.sizeNfft, cudaMemcpyDeviceToDevice);
 	}
 	//compute x derivative for d\psi/dx = dphi/dx = F^{-1} (ik_x F(phi))
-	k_fft_dx_h_1D<<<Grid_psi.fft_blocks.x, Grid_psi.threadsPerBlock.x>>>((cufftDoubleComplex*) Psi_real_out, (cufftDoubleComplex*) Dev_Temp_C1, Grid_psi);
-	cufftExecZ2D (cufft_plan_phi_1D_inverse, (cufftDoubleComplex*) Dev_Temp_C1, (cufftDoubleReal*)(Psi_real_out+Grid_psi.N));
-	copy_first_row_to_all_rows_in_grid<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>((cufftDoubleReal*) (Psi_real_out+Grid_psi.N), (cufftDoubleReal*) (Psi_real_out+Grid_psi.N), Grid_psi);
+	k_fft_dx_h_1D<<<Psi.Grid->fft_blocks.x, Psi.Grid->threadsPerBlock.x>>>((cufftDoubleComplex*) Psi.Dev_var, (cufftDoubleComplex*) Dev_Temp_C1, *Psi.Grid);
+	cufftExecZ2D (Psi.plan_1D_Z2D, (cufftDoubleComplex*) Dev_Temp_C1, (cufftDoubleReal*)(Psi.Dev_var+Psi.Grid->N));
+	copy_first_row_to_all_rows_in_grid<<<Psi.Grid->blocksPerGrid, Psi.Grid->threadsPerBlock>>>((cufftDoubleReal*) (Psi.Dev_var+Psi.Grid->N), (cufftDoubleReal*) (Psi.Dev_var+Psi.Grid->N), *Psi.Grid);
 	// inverse fft (1D)
-	cufftExecZ2D (cufft_plan_phi_1D_inverse, (cufftDoubleComplex*) Psi_real_out, (cufftDoubleReal*)(Dev_Temp_C1));
+	cufftExecZ2D (Psi.plan_1D_Z2D, (cufftDoubleComplex*) Psi.Dev_var, (cufftDoubleReal*)(Dev_Temp_C1));
 	// // assemble psi= phi  - v^2/2
-	k_assemble_psi<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>((cufftDoubleReal*)(Dev_Temp_C1), Psi_real_out, Grid_psi);
+	k_assemble_psi<<<Psi.Grid->blocksPerGrid, Psi.Grid->threadsPerBlock>>>((cufftDoubleReal*)(Dev_Temp_C1), Psi.Dev_var, *Psi.Grid);
+}
+
+
+/*
+ * This function computes psi, x-, y- and xy-derivative of psi from distribution function
+ * 		psi= phi  - v^2/2
+ * 		d\psi/dx = dphi/dx = F^{-1} (ik_x F(phi))
+ * 		d\psi/(dy) = v
+ * 		d^2\psi/(dxdy) = 0
+ */
+void get_psi_hermite_from_distribution_function(CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1)
+{
+	// compute psi and d\psi/dx in external function
+	get_psi_from_distribution_function(Psi, empty_vort, Dev_f_in, Dev_Temp_C1);
+
 	// // compute y derivative for d\psi/(dy) = v
-	generate_gridvalues_v<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>((cufftDoubleReal*)(Psi_real_out+2*Grid_psi.N), -1.0, Grid_psi);
+	generate_gridvalues_v<<<Psi.Grid->blocksPerGrid, Psi.Grid->threadsPerBlock>>>((cufftDoubleReal*)(Psi.Dev_var+2*Psi.Grid->N), -1.0, *Psi.Grid);
 	// // compute xy derivative for d^2\psi/(dxdy) = 0
-	set_value<<<Grid_psi.blocksPerGrid, Grid_psi.threadsPerBlock>>>((cufftDoubleReal*)(Psi_real_out+3*Grid_psi.N), 0.0, Grid_psi);
+
+	cudaMemset(Psi.Dev_var+3*Psi.Grid->N, 0.0, Psi.Grid->sizeNReal);
+//	set_value<<<Psi.Grid->blocksPerGrid, Psi.Grid->threadsPerBlock>>>((cufftDoubleReal*)(Psi.Dev_var+3*Psi.Grid->N), 0.0, *Psi.Grid);
+
 	// cut high frequencies in fourier space, however not that much happens after zero move add from coarse grid
 	// k_fft_cut_off_scale_h<<<Grid_Psi.fft_blocks, Grid_Psi.threadsPerBlock>>>((cufftDoubleComplex*) Dev_Temp_C1+Grid_Psi.Nfft, Grid_Psi, freq_cut_psi);
 	// Inverse laplacian in Fourier space
@@ -449,71 +466,40 @@ void get_psi_hermite_from_distribution_function(double *Psi_real_out, double *De
 }
 
 
+/*******************************************************************
+*		 			Main output function						   *
+*		 streamlines all save process in one place				   *
+*******************************************************************/
+// this is again massive, maybe I can compress all that particle stuff
+void save_functions(SettingsCMM& SettingsMain, Logger& logger, double t_now, double dt_now, double dt,
+		MapStack Map_Stack, MapStack Map_Stack_f, std::map<std::string, CmmVar2D*> cmmVarMap, std::map<std::string, CmmPart*> cmmPartMap,
+		cufftDoubleComplex *Dev_Temp_C1)
+{
+	std::string message;
+	message = writeTimeStep(SettingsMain, t_now, dt_now, dt, cmmVarMap, cmmPartMap, (double*) Dev_Temp_C1);
+	if (SettingsMain.getVerbose() >= 3 && message != "") logger.push(message);
 
-// compute laplacian on variable grid, needs Grid.sizeNfft + Grid.sizeN memory
-void laplacian(TCudaGrid2D Grid, double *Dev_W, double *Dev_out, cufftDoubleComplex *Dev_Temp_C1, cufftHandle cufft_plan_D2Z, cufftHandle cufft_plan_Z2D){
-    cufftExecD2Z(cufft_plan_D2Z, Dev_W, Dev_Temp_C1);
-    k_normalize_h<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Grid);
+	// compute conservation if wanted
+	message = compute_conservation_targets(SettingsMain, t_now, dt_now, dt, cmmVarMap, Dev_Temp_C1);
+	if (SettingsMain.getVerbose() >= 3 && message != "") logger.push(message);
 
-    k_fft_lap_h<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, Grid);
-    cufftExecZ2D(cufft_plan_Z2D, Dev_Temp_C1, Dev_out);
-}
+	// sample if wanted
+	if (SettingsMain.getSimulationType() == "cmm_euler_2d") {
+		message = sample_compute_and_write(SettingsMain, t_now, dt_now, dt, Map_Stack, Map_Stack_f, cmmVarMap, cmmPartMap);
+		if (SettingsMain.getVerbose() >= 3 && message != "") logger.push(message);
+	}
+	else if (SettingsMain.getSimulationType() == "cmm_vlasov_poisson_1d") {
+		message = sample_compute_and_write_vlasov(SettingsMain, t_now, dt_now, dt, Map_Stack, Map_Stack_f, cmmVarMap, cmmPartMap);
+		if (SettingsMain.getVerbose() >= 3 && message != "") logger.push(message);
+	}
 
-// compute x-gradient on variable grid, needs Grid.sizeNfft + Grid.sizeN memory
-void grad_x(TCudaGrid2D Grid, double *Dev_W, double *Dev_out, cufftDoubleComplex *Dev_Temp_C1, cufftHandle cufft_plan_D2Z, cufftHandle cufft_plan_Z2D){
-    cufftExecD2Z(cufft_plan_D2Z, Dev_W, Dev_Temp_C1);
-    k_normalize_h<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Grid);
+//	// save particle position if interested in that
+//	message = writeParticles(SettingsMain, t_now, dt_now, dt, cmmPartMap, *cmmVarMap["Psi"], (cufftDoubleReal*)Dev_Temp_C1);
+//	if (SettingsMain.getVerbose() >= 3 && message != "") logger.push(message);
 
-    k_fft_dx_h<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, Grid);
-    cufftExecZ2D(cufft_plan_Z2D, Dev_Temp_C1, Dev_out);
-}
-
-// compute x-gradient on variable grid, needs Grid.sizeNfft + Grid.sizeN memory
-void grad_y(TCudaGrid2D Grid, double *Dev_W, double *Dev_out, cufftDoubleComplex *Dev_Temp_C1, cufftHandle cufft_plan_D2Z, cufftHandle cufft_plan_Z2D){
-    cufftExecD2Z(cufft_plan_D2Z, Dev_W, Dev_Temp_C1);
-    k_normalize_h<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Grid);
-
-    k_fft_dy_h<<<Grid.blocksPerGrid, Grid.threadsPerBlock>>>(Dev_Temp_C1, Dev_Temp_C1, Grid);
-    cufftExecZ2D(cufft_plan_Z2D, Dev_Temp_C1, Dev_out);
-}
-
-
-
-
-// compute hermite with derivatives in fourier space, uniform helper function fitted for all grids to utilize only input temporary variable
-// input has size (NX+1)/2*NY and output 4*NX*NY, output is therefore used as temporary variable
-void fourier_hermite(TCudaGrid2D Grid, cufftDoubleComplex *Dev_In, double *Dev_Out, cufftHandle cufft_plan) {
-
-	// reshift for transforming so that we have enough space for everything
-	Dev_Out += Grid.N - 2*Grid.Nfft;
-
-	// dy and dxdy derivates are stored in later parts of output array, we can therefore use the first half as a temporary variable
-	// start with computing dy derivative
-	k_fft_dy_h<<<Grid.fft_blocks, Grid.threadsPerBlock>>>(Dev_In, (cufftDoubleComplex*)Dev_Out, Grid);
-
-	// compute dxdy afterwards, to combine backwards transformations
-	k_fft_dx_h<<<Grid.fft_blocks, Grid.threadsPerBlock>>>((cufftDoubleComplex*)Dev_Out, (cufftDoubleComplex*)(Dev_Out) + Grid.Nfft, Grid);
-
-	// backwards transformation, store dx in position 3/4 and dy in position 4/4
-	cufftExecZ2D(cufft_plan, (cufftDoubleComplex*)(Dev_Out) + Grid.Nfft, Dev_Out + 2*Grid.N + 2*Grid.Nfft);
-	cufftExecZ2D(cufft_plan, (cufftDoubleComplex*)Dev_Out, Dev_Out + Grid.N + 2*Grid.Nfft);
-
-	// now compute dx derivative on itself and store it in the right place
-	k_fft_dx_h<<<Grid.fft_blocks, Grid.threadsPerBlock>>>(Dev_In, (cufftDoubleComplex*)Dev_Out, Grid);
-	cufftExecZ2D(cufft_plan, (cufftDoubleComplex*)Dev_Out, Dev_Out + 2*Grid.Nfft);// x-derivative of the vorticity in Fourier space
-
-	/* Memory layout before shift of Dev_Out:
-	 f	 	... Dev_Out[2*Grid.Nfft-Grid.N	  , ..., 2*Grid.Nfft            - 1]
-	 d/dx 	... Dev_Out[2*Grid.Nfft			  , ..., 2*Grid.Nfft +   Grid.N - 1]
-	 d/dy 	... Dev_Out[2*Grid.Nfft +   Grid.N, ..., 2*Grid.Nfft + 2*Grid.N - 1]
-	 d/dxdy ... Dev_Out[2*Grid.Nfft + 2*Grid.N, ..., 2*Grid.Nfft + 3*Grid.N - 1]
-	*/ 
-	// shift again just before final store
-	Dev_Out += 2*Grid.Nfft - Grid.N;
-
-	// at last, store normal values
-	cufftExecZ2D(cufft_plan, Dev_In, Dev_Out);
-
+	// zoom if wanted, has to be done after particle initialization, maybe a bit useless at first instance
+	message = compute_zoom(SettingsMain, t_now, dt_now, dt, Map_Stack, Map_Stack_f, cmmVarMap, cmmPartMap);
+	if (SettingsMain.getVerbose() >= 3 && message != "") logger.push(message);
 }
 
 
@@ -521,10 +507,7 @@ void fourier_hermite(TCudaGrid2D Grid, cufftDoubleComplex *Dev_In, double *Dev_O
 *		 Computation of Global conservation values				   *
 *******************************************************************/
 std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
-		TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
-		double *Dev_Psi, double *Dev_W_coarse,
-		cufftHandle cufft_plan_coarse_D2Z, cufftHandle cufft_plan_coarse_Z2D, cufftHandle cufftPlan_fine_D2Z, cufftHandle cufftPlan_fine_Z2D,
-		cufftDoubleComplex *Dev_Temp_C1)
+		std::map<std::string, CmmVar2D*> cmmVarMap, cufftDoubleComplex *Dev_Temp_C1)
 {
 	// check if we want to save at this time, combine all variables if so
 	bool save_now = false;
@@ -535,7 +518,7 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 			save_now = true;
 		}
 		// intervals - modulo to steps with safety-increased targets is smaller than step
-		if (!save_comp[i_save].is_instant
+		if (!save_comp[i_save].is_instant && save_comp[i_save].conv
 			&& ((fmod(t_now - save_comp[i_save].time_start + dt*1e-5, save_comp[i_save].time_step) < dt_now
 			&& t_now + dt*1e-5 >= save_comp[i_save].time_start
 			&& t_now - dt*1e-5 <= save_comp[i_save].time_end)
@@ -552,11 +535,12 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 		// compute quantities
 		if (SettingsMain.getSimulationType() == "cmm_vlasov_poisson_1d"){
 			// compute energies
-			Compute_Kinetic_Energy(mesure[1], Dev_W_coarse, (cufftDoubleReal*) Dev_Temp_C1, Grid_coarse); 
-			Compute_Potential_Energy(mesure[2], Dev_Psi, Grid_psi); 
+			Compute_Kinetic_Energy(mesure[1], *cmmVarMap["Vort"], (cufftDoubleReal*) Dev_Temp_C1);
+			Compute_Potential_Energy(mesure[2], *cmmVarMap["Psi"]);
 			mesure[0]=mesure[1]+mesure[2]; // total energy
 			// compute mass
-			Compute_Mass(mesure[3], Dev_W_coarse, Grid_coarse); 
+			Compute_Mass(mesure[3], *cmmVarMap["Vort"]);
+
 			// save
 			writeAppendToBinaryFile(1, &t_now, SettingsMain, "/Monitoring_data/Mesure/Time_s");  // time vector for data
 			writeAppendToBinaryFile(1, mesure, SettingsMain, "/Monitoring_data/Mesure/Etot");
@@ -571,19 +555,16 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 					+ " \t Mass = " + to_str(mesure[3], 8);
 		}
 		else{
-			Compute_Energy(mesure[0], Dev_Psi, Grid_psi);
-			Compute_Enstrophy(mesure[1], Dev_W_coarse, Grid_coarse);
-			Compute_Palinstrophy(Grid_coarse, mesure[2], Dev_W_coarse, Dev_Temp_C1, cufft_plan_coarse_D2Z, cufft_plan_coarse_Z2D);
+			Compute_Energy_H(mesure[0], *cmmVarMap["Psi"]);
+//			Compute_Energy(mesure[0], *cmmVarMap["Psi"], Dev_Temp_C1);
+			Compute_Enstrophy(mesure[1], *cmmVarMap["Vort"]);
+			Compute_Palinstrophy(mesure[2], *cmmVarMap["Vort"], Dev_Temp_C1);
 		
 			// wmax
-			thrust::device_ptr<double> w_ptr = thrust::device_pointer_cast(Dev_W_coarse);
-			double w_max = thrust::reduce(w_ptr, w_ptr + Grid_coarse.N, 0.0, thrust::maximum<double>());
-			double w_min = thrust::reduce(w_ptr, w_ptr + Grid_coarse.N, 0.0, thrust::minimum<double>());
+			thrust::device_ptr<double> w_ptr = thrust::device_pointer_cast(cmmVarMap["Vort"]->Dev_var);
+			double w_max = thrust::reduce(w_ptr, w_ptr + cmmVarMap["Vort"]->Grid->N, 0.0, thrust::maximum<double>());
+			double w_min = thrust::reduce(w_ptr, w_ptr + cmmVarMap["Vort"]->Grid->N, 0.0, thrust::minimum<double>());
 			mesure[3] = std::max(w_max, -w_min);
-
-			// hash of vorticity and stream function
-			double w_hash[2]; Hash_array(Grid_coarse.N, (char*)w_hash, Dev_W_coarse);
-			double psi_hash[2]; Hash_array(Grid_psi.N, (char*)psi_hash, Dev_Psi);
 
 			// save
 			writeAppendToBinaryFile(1, &t_now, SettingsMain, "/Monitoring_data/Mesure/Time_s");  // time vector for data
@@ -591,8 +572,6 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 			writeAppendToBinaryFile(1, mesure+1, SettingsMain, "/Monitoring_data/Mesure/Enstrophy");
 			writeAppendToBinaryFile(1, mesure+2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy");
 			writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity");
-			writeAppendToBinaryFile(2, w_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_vorticity");
-			writeAppendToBinaryFile(2, psi_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_stream_function");
 
 			// construct message
 			message = "Computed coarse Cons : Energ = " + to_str(mesure[0], 8)
@@ -611,11 +590,9 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 *		 Sample on a specific grid and save everything	           *
 *	i know this became quite a beast in terms of input parameters
 *******************************************************************/
-std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
-		MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D* Grid_sample, TCudaGrid2D Grid_discrete, double *Dev_sample,
-		cufftHandle* cufft_plan_sample_D2Z, cufftHandle* cufft_plan_sample_Z2D, cufftDoubleComplex *Dev_Temp_C1,
-		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int *forward_particles_block, int forward_particles_thread,
-		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f, double *W_initial_discrete) {
+std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, MapStack Map_Stack, MapStack Map_Stack_f,
+		std::map<std::string, CmmVar2D*> cmmVarMap, std::map<std::string, CmmPart*> cmmPartMap)
+{
 
 	// check if we want to save at this time, combine all variables if so
 	std::string message = "";
@@ -638,40 +615,48 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 		}
 
 		if (save_now) {
+			CmmVar2D *Sample_var = cmmVarMap["Sample_" + to_str(i_save)];  // extract sample variable
 			std::string save_var = save_sample[i_save].var;  // extract save variables
+			bool save_all = save_var.find("All") != std::string::npos;  // master save switch
+
+			// for debug: save time position
+			if (SettingsMain.getVerbose() >= 4) {
+				writeAppendToBinaryFile(1, &t_now, SettingsMain, "/Monitoring_data/Debug_globals/Time_s_" + to_str(Sample_var->Grid->NX));  // time vector for data
+			}
+
 			// forwards map to get it done
 			if (SettingsMain.getForwardMap()) {
 				// compute only if we actually want to save, elsewhise its a lot of computations for nothing
 				if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos
-						or SettingsMain.getParticlesForwardedNum() > 0) {
+						or save_all or SettingsMain.getParticlesForwardedNum() > 0) {
 					// apply mapstack to map or particle positions
 					if (SettingsMain.getParticlesForwardedNum() == 0) {
-						apply_map_stack(Grid_sample[i_save], Map_Stack_f, Dev_ChiX_f, Dev_ChiY_f, (cufftDoubleReal*)Dev_Temp_C1, 1);
+						apply_map_stack(*Sample_var->Grid, Map_Stack_f, cmmVarMap["ChiX_f"]->Dev_var, cmmVarMap["ChiY_f"]->Dev_var, Sample_var->Dev_var, 1);
 					}
 					// forwarded particles: forward all particles regardless of if they will be saved, needs rework to be more clever
 					else {
-						apply_map_stack_points(Grid_sample[i_save], Map_Stack_f, Dev_ChiX_f, Dev_ChiY_f, (cufftDoubleReal*)Dev_Temp_C1, 1,
-								Dev_forward_particles_pos, (cufftDoubleReal*)Dev_Temp_C1+2*Grid_sample[i_save].N,
-								SettingsMain, forward_particles_block, forward_particles_thread);
+						apply_map_stack_points(SettingsMain, *Sample_var->Grid, Map_Stack_f, cmmVarMap["ChiX_f"]->Dev_var, cmmVarMap["ChiY_f"]->Dev_var,
+								Sample_var->Dev_var, 1, cmmPartMap, Sample_var->Dev_var+3*Sample_var->Grid->N);
 					}
 
 					// save map by copying and saving offsetted data
-					if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos) {
-						cudaMemcpy2D(Dev_sample, sizeof(double), (cufftDoubleReal*)Dev_Temp_C1, sizeof(double)*2,
-												 sizeof(double), Grid_sample[i_save].N, cudaMemcpyDeviceToDevice);
-						writeTimeVariable(SettingsMain, "Map_ChiX_f_"+to_str(Grid_sample[i_save].NX),
-								t_now, Dev_sample, Grid_sample[i_save].N);
-						cudaMemcpy2D(Dev_sample, sizeof(double), (cufftDoubleReal*)Dev_Temp_C1+1, sizeof(double)*2,
-												 sizeof(double), Grid_sample[i_save].N, cudaMemcpyDeviceToDevice);
-						writeTimeVariable(SettingsMain, "Map_ChiY_f_"+to_str(Grid_sample[i_save].NX),
-								t_now, Dev_sample, Grid_sample[i_save].N);
+					if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos or save_all) {
+						// copy map to saving space and then save it
+						cudaMemcpy2D(Sample_var->Dev_var+2*Sample_var->Grid->N, sizeof(double), Sample_var->Dev_var, sizeof(double)*2,
+								sizeof(double), Sample_var->Grid->N, cudaMemcpyDeviceToDevice);
+						writeTimeVariable(SettingsMain, "Map_ChiX_f_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
+						cudaMemcpy2D(Sample_var->Dev_var+2*Sample_var->Grid->N, sizeof(double), Sample_var->Dev_var+1, sizeof(double)*2,
+								sizeof(double), Sample_var->Grid->N, cudaMemcpyDeviceToDevice);
+						writeTimeVariable(SettingsMain, "Map_ChiY_f_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
 					}
 
 					// save position of forwarded particles, go through all and only safe the needed ones
-					ParticlesForwarded* particles_forwarded = SettingsMain.getParticlesForwarded();
-					double* particles_out_counter = (cufftDoubleReal*)Dev_Temp_C1+2*Grid_sample[i_save].N;
+					// ToDo: Change saving to not use writeTransferToBinaryFile
+					double* particles_out_counter = Sample_var->Dev_var+3*Sample_var->Grid->N;
 					for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
-						if (save_var.find("PartF_" + to_str_0(i_p+1, 2)) != std::string::npos) {
+						std::string part_map_name = "PartF_Pos_P" + to_str_0(i_p+1, 2);
+						CmmPart Part_Pos_now = *cmmPartMap[part_map_name];
+						if (save_var.find("PartF_" + to_str_0(i_p+1, 2)) != std::string::npos or save_all) {
 							// create particles folder if necessary
 							std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
 							std::string sub_folder_name = "/Particle_data/Time_" + t_s_now;
@@ -679,127 +664,113 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 							struct stat st = {0};
 							if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
 							// copy data to host and save
-							cudaMemcpy(Host_forward_particles_pos[i_p], particles_out_counter, 2*particles_forwarded[i_p].num*sizeof(double), cudaMemcpyDeviceToHost);
-							writeAllRealToBinaryFile(2*particles_forwarded[i_p].num, Host_forward_particles_pos[i_p], SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_forwarded_pos_P" + to_str_0(i_p+1, 2));
-
+							writeTransferToBinaryFile(2*Part_Pos_now.num, particles_out_counter, SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_forwarded_pos_P" + to_str_0(i_p+1, 2), 0);
 						}
-						particles_out_counter += 2*particles_forwarded[i_p].num;  // increase counter
+						particles_out_counter += 2*Part_Pos_now.num;  // increase counter
 					}
 				}
 
 			}
 
 			// compute map to initial condition through map stack
-			apply_map_stack(Grid_sample[i_save], Map_Stack, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, -1);
+			apply_map_stack(*Sample_var->Grid, Map_Stack, cmmVarMap["ChiX"]->Dev_var, cmmVarMap["ChiY"]->Dev_var, Sample_var->Dev_var, -1);
 
 			// save map by copying and saving offsetted data
-			if (save_var.find("Map_b") != std::string::npos or save_var.find("Chi_b") != std::string::npos) {
-				cudaMemcpy2D(Dev_sample, sizeof(double), (cufftDoubleReal*)Dev_Temp_C1, sizeof(double)*2,
-										 sizeof(double), Grid_sample[i_save].N, cudaMemcpyDeviceToDevice);
-				writeTimeVariable(SettingsMain, "Map_ChiX_"+to_str(Grid_sample[i_save].NX),
-						t_now, Dev_sample, Grid_sample[i_save].N);
-				cudaMemcpy2D(Dev_sample, sizeof(double), (cufftDoubleReal*)Dev_Temp_C1+1, sizeof(double)*2,
-										 sizeof(double), Grid_sample[i_save].N, cudaMemcpyDeviceToDevice);
-				writeTimeVariable(SettingsMain, "Map_ChiY_"+to_str(Grid_sample[i_save].NX),
-						t_now, Dev_sample, Grid_sample[i_save].N);
+			if (save_var.find("Map_b") != std::string::npos or save_var.find("Chi_b") != std::string::npos or save_all) {
+				// copy map to saving space and then save it
+				cudaMemcpy2D(Sample_var->Dev_var+2*Sample_var->Grid->N, sizeof(double), Sample_var->Dev_var, sizeof(double)*2,
+						sizeof(double), Sample_var->Grid->N, cudaMemcpyDeviceToDevice);
+				writeTimeVariable(SettingsMain, "Map_ChiX_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
+				cudaMemcpy2D(Sample_var->Dev_var+2*Sample_var->Grid->N, sizeof(double), Sample_var->Dev_var+1, sizeof(double)*2,
+						sizeof(double), Sample_var->Grid->N, cudaMemcpyDeviceToDevice);
+				writeTimeVariable(SettingsMain, "Map_ChiY_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
 			}
 
 			// passive scalar theta - 1 to switch for passive scalar
-			if (save_var.find("Scalar") != std::string::npos or save_var.find("Theta") != std::string::npos) {
-				k_h_sample_from_init<<<Grid_sample[i_save].blocksPerGrid, Grid_sample[i_save].threadsPerBlock>>>(Dev_sample, (cufftDoubleReal*)Dev_Temp_C1,
-						Grid_sample[i_save], Grid_discrete, 1, SettingsMain.getScalarNum(), W_initial_discrete, SettingsMain.getScalarDiscrete());
+			if (save_var.find("Scalar") != std::string::npos or save_var.find("Theta") != std::string::npos or save_all) {
+				k_h_sample_from_init<<<Sample_var->Grid->blocksPerGrid, Sample_var->Grid->threadsPerBlock>>>(Sample_var->Dev_var+2*Sample_var->Grid->N, Sample_var->Dev_var,
+						*Sample_var->Grid, *cmmVarMap["Vort_discrete_init"]->Grid, 1, SettingsMain.getScalarNum(), cmmVarMap["Vort_discrete_init"]->Dev_var, SettingsMain.getScalarDiscrete());
 
-				writeTimeVariable(SettingsMain, "Scalar_Theta_"+to_str(Grid_sample[i_save].NX),
-						t_now, Dev_sample, Grid_sample[i_save].N);
+				writeTimeVariable(SettingsMain, "Scalar_Theta_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
 
-				thrust::device_ptr<double> scal_ptr = thrust::device_pointer_cast(Dev_sample);
-				double scal_int = Grid_sample[i_save].hx * Grid_sample[i_save].hy * thrust::reduce(scal_ptr, scal_ptr + Grid_sample[i_save].N, 0.0, thrust::plus<double>());
-				writeAppendToBinaryFile(1, &scal_int, SettingsMain, "/Monitoring_data/Mesure/Scalar_integral_"+ to_str(Grid_sample[i_save].NX));
+				double scal_int; Compute_avg(scal_int, *Sample_var, 2*Sample_var->Grid->N);
+				writeAppendToBinaryFile(1, &scal_int, SettingsMain, "/Monitoring_data/Mesure/Scalar_integral_"+ to_str(Sample_var->Grid->NX));
 			}
 
-				
+
 			int varnum = 0;
 			// compute vorticity - 0 to switch for vorticity
-			k_h_sample_from_init<<<Grid_sample[i_save].blocksPerGrid, Grid_sample[i_save].threadsPerBlock>>>(Dev_sample, (cufftDoubleReal*)Dev_Temp_C1,
-					Grid_sample[i_save], Grid_discrete, varnum, SettingsMain.getInitialConditionNum(), W_initial_discrete, SettingsMain.getInitialDiscrete());
+			k_h_sample_from_init<<<Sample_var->Grid->blocksPerGrid, Sample_var->Grid->threadsPerBlock>>>(Sample_var->Dev_var+2*Sample_var->Grid->N, Sample_var->Dev_var,
+					*Sample_var->Grid, *cmmVarMap["Vort_discrete_init"]->Grid, varnum, SettingsMain.getInitialConditionNum(), cmmVarMap["Vort_discrete_init"]->Dev_var, SettingsMain.getInitialDiscrete());
+
+			// vorticity is moved to begin of array - from now on map is discarded
+			// this is made to save memory needed for computing the derivatives (2xsizeNfft saved)
+			cudaMemcpy(Sample_var->Dev_var, Sample_var->Dev_var+2*Sample_var->Grid->N, Sample_var->Grid->sizeNReal, cudaMemcpyDeviceToDevice);
 
 			// save vorticity
-			if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos  or save_var.find("F") != std::string::npos) {
-				writeTimeVariable(SettingsMain, "Vorticity_W_"+to_str(Grid_sample[i_save].NX),
-						t_now, Dev_sample, Grid_sample[i_save].N);
+			if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos  or save_var.find("F") != std::string::npos or save_all) {
+				writeTimeVariable(SettingsMain, "Vorticity_W_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var);
 			}
 
 			// compute enstrophy and palinstrophy
-			Compute_Enstrophy(mesure[1], Dev_sample, Grid_sample[i_save]);
-			Compute_Palinstrophy(Grid_sample[i_save], mesure[2], Dev_sample, Dev_Temp_C1, cufft_plan_sample_D2Z[i_save], cufft_plan_sample_Z2D[i_save]);
+			Compute_Enstrophy(mesure[1], *Sample_var);
+			Compute_Palinstrophy(mesure[2], *Sample_var, (cufftDoubleComplex*)(Sample_var->Dev_var + Sample_var->Grid->N));
 
-			// compute wmax
-			thrust::device_ptr<double> w_ptr = thrust::device_pointer_cast(Dev_sample);
-			double w_max = thrust::reduce(w_ptr, w_ptr + Grid_sample[i_save].N, 0.0, thrust::maximum<double>());
-			double w_min = thrust::reduce(w_ptr, w_ptr + Grid_sample[i_save].N, 0.0, thrust::minimum<double>());
+			// compute max of abs(vort)
+			thrust::device_ptr<double> w_ptr = thrust::device_pointer_cast(Sample_var->Dev_var);
+			double w_max, w_min;
+			Compute_max(w_max, *Sample_var); Compute_max(w_min, *Sample_var);
 			mesure[3] = std::max(w_max, -w_min);
 
-			// hash of vorticity
-			double w_hash[2]; Hash_array(Grid_sample[i_save].N, (char*)w_hash, Dev_sample);
-
 			// compute laplacian of vorticity
-			if (save_var.find("Laplacian_W") != std::string::npos) {
-				laplacian(Grid_sample[i_save], Dev_sample, Dev_sample+Grid_sample[i_save].N, Dev_Temp_C1, cufft_plan_sample_D2Z[i_save], cufft_plan_sample_Z2D[i_save]);
+			if (save_var.find("Laplacian_W") != std::string::npos or save_all) {
+				laplacian(*Sample_var, Sample_var->Dev_var+Sample_var->Grid->N, (cufftDoubleComplex*)(Sample_var->Dev_var+Sample_var->Grid->N)+Sample_var->Grid->Nfft);
 
-				writeTimeVariable(SettingsMain, "Laplacian_W_"+to_str(Grid_sample[i_save].NX),
-						t_now, Dev_sample+Grid_sample[i_save].N, Grid_sample[i_save].N);
+				// extra parameter for offset
+				writeTimeVariable(SettingsMain, "Laplacian_W_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, Sample_var->Grid->N);
 			}
 
 			// compute gradient of vorticity
-			if (save_var.find("Grad_W") != std::string::npos) {
-				grad_x(Grid_sample[i_save], Dev_sample, Dev_sample+Grid_sample[i_save].N, Dev_Temp_C1, cufft_plan_sample_D2Z[i_save], cufft_plan_sample_Z2D[i_save]);
-
-				writeTimeVariable(SettingsMain, "GradX_W_"+to_str(Grid_sample[i_save].NX),
-						t_now, Dev_sample+Grid_sample[i_save].N, Grid_sample[i_save].N);
-
-				grad_y(Grid_sample[i_save], Dev_sample, Dev_sample+Grid_sample[i_save].N, Dev_Temp_C1, cufft_plan_sample_D2Z[i_save], cufft_plan_sample_Z2D[i_save]);
-
-				writeTimeVariable(SettingsMain, "GradY_W_"+to_str(Grid_sample[i_save].NX),
-						t_now, Dev_sample+Grid_sample[i_save].N, Grid_sample[i_save].N);
+			if (save_var.find("Grad_W") != std::string::npos or save_all) {
+				grad_x(*Sample_var, Sample_var->Dev_var+Sample_var->Grid->N, (cufftDoubleComplex*)(Sample_var->Dev_var+Sample_var->Grid->N)+Sample_var->Grid->Nfft);
+				// extra parameter for offset
+				writeTimeVariable(SettingsMain, "GradX_W_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, Sample_var->Grid->N);
+				grad_y(*Sample_var, Sample_var->Dev_var+Sample_var->Grid->N, (cufftDoubleComplex*)(Sample_var->Dev_var+Sample_var->Grid->N)+Sample_var->Grid->Nfft);
+				// extra parameter for offset
+				writeTimeVariable(SettingsMain, "GradY_W_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, Sample_var->Grid->N);
 			}
 
 			// reuse sampled vorticity to compute psi, take fourier_hermite reshifting into account
-			long int shift = 2*Grid_sample[i_save].Nfft - Grid_sample[i_save].N;
-			psi_upsampling(Grid_sample[i_save], Dev_sample, Dev_Temp_C1, Dev_sample+shift, cufft_plan_sample_D2Z[i_save], cufft_plan_sample_Z2D[i_save]);
+			i_laplacian(*Sample_var, Sample_var->Dev_var, (cufftDoubleComplex*)(Sample_var->Dev_var+Sample_var->Grid->N));
+			Compute_Energy(mesure[0], *Sample_var, (cufftDoubleComplex*)(Sample_var->Dev_var+Sample_var->Grid->N));
 
-			// hash of stream function
-			double psi_hash[2]; Hash_array(Grid_sample[i_save].N, (char*)psi_hash, Dev_sample+shift);
 
-			if (save_var.find("Stream") != std::string::npos or save_var.find("Psi") != std::string::npos) {
-				writeTimeVariable(SettingsMain, "Stream_function_Psi_"+to_str(Grid_sample[i_save].NX),
-						t_now, Dev_sample+shift, Grid_sample[i_save].N);
+			if (save_var.find("Stream") != std::string::npos or save_var.find("Psi") != std::string::npos or save_all) {
+				writeTimeVariable(SettingsMain, "Stream_function_Psi_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var);
 			}
-			if (save_var.find("Stream_H") != std::string::npos or save_var.find("Psi_H") != std::string::npos) {
-				writeTimeVariable(SettingsMain, "Stream_function_Psi_"+to_str(Grid_sample[i_save].NX),
-						t_now, Dev_sample+shift, 4*Grid_sample[i_save].N);
+			// disable Hermite of stream function, saves space and all parts could be computed individually anyways
+//			if (save_var.find("Stream_H") != std::string::npos or save_var.find("Psi_H") != std::string::npos) {
+//				writeTimeVariable(SettingsMain, "Stream_function_Psi_"+to_str(Sample_var->Grid->NX),
+//						t_now, Sample_var->Dev_var, 4*Sample_var->Grid->N);
+//			}
+			if (save_var.find("Velocity") != std::string::npos or save_var.find("U") != std::string::npos or save_all) {
+				grad_x(*Sample_var, Sample_var->Dev_var+Sample_var->Grid->N, (cufftDoubleComplex*)(Sample_var->Dev_var+Sample_var->Grid->N)+Sample_var->Grid->Nfft);
+				// extra parameter for offset
+				writeTimeVariable(SettingsMain, "Velocity_UX_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, Sample_var->Grid->N);
+				grad_y(*Sample_var, Sample_var->Dev_var+Sample_var->Grid->N, (cufftDoubleComplex*)(Sample_var->Dev_var+Sample_var->Grid->N)+Sample_var->Grid->Nfft);
+				// extra parameter for offset
+				writeTimeVariable(SettingsMain, "Velocity_UY_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, Sample_var->Grid->N);
 			}
-			if (save_var.find("Velocity") != std::string::npos or save_var.find("U") != std::string::npos) {
-				writeTimeVariable(SettingsMain, "Velocity_UX_"+to_str(Grid_sample[i_save].NX),
-						t_now, Dev_sample+shift+1*Grid_sample[i_save].N, Grid_sample[i_save].N);
-				writeTimeVariable(SettingsMain, "Velocity_UY_"+to_str(Grid_sample[i_save].NX),
-						t_now, Dev_sample+shift+2*Grid_sample[i_save].N, Grid_sample[i_save].N);
-			}
-
-
-
-			Compute_Energy(mesure[0], Dev_sample+shift, Grid_sample[i_save]);
 
 			// save conservation properties
-			writeAppendToBinaryFile(1, &t_now, SettingsMain, "/Monitoring_data/Mesure/Time_s_"+ to_str(Grid_sample[i_save].NX));  // time vector for data
-			writeAppendToBinaryFile(1, mesure, SettingsMain, "/Monitoring_data/Mesure/Energy_"+ to_str(Grid_sample[i_save].NX));
-			writeAppendToBinaryFile(1, mesure+1, SettingsMain, "/Monitoring_data/Mesure/Enstrophy_"+ to_str(Grid_sample[i_save].NX));
-			writeAppendToBinaryFile(1, mesure+2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy_"+ to_str(Grid_sample[i_save].NX));
-			writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity_"+ to_str(Grid_sample[i_save].NX));
-			writeAppendToBinaryFile(2, w_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_vorticity_"+ to_str(Grid_sample[i_save].NX));
-			writeAppendToBinaryFile(2, psi_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_stream_function_"+ to_str(Grid_sample[i_save].NX));
+			writeAppendToBinaryFile(1, &t_now, SettingsMain, "/Monitoring_data/Mesure/Time_s_"+ to_str(Sample_var->Grid->NX));  // time vector for data
+			writeAppendToBinaryFile(1, mesure, SettingsMain, "/Monitoring_data/Mesure/Energy_"+ to_str(Sample_var->Grid->NX));
+			writeAppendToBinaryFile(1, mesure+1, SettingsMain, "/Monitoring_data/Mesure/Enstrophy_"+ to_str(Sample_var->Grid->NX));
+			writeAppendToBinaryFile(1, mesure+2, SettingsMain, "/Monitoring_data/Mesure/Palinstrophy_"+ to_str(Sample_var->Grid->NX));
+			writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Max_vorticity_"+ to_str(Sample_var->Grid->NX));
 
 			// construct message
-			message = message + "Processed sample data " + to_str(i_save + 1) + " on grid " + to_str(Grid_sample[i_save].NX) + ", Cons : Energ = " + to_str(mesure[0], 8)
+			message = message + "Processed sample data " + to_str(i_save + 1) + " on grid " + to_str(Sample_var->Grid->NX) + ", Cons : Energ = " + to_str(mesure[0], 8)
 					+    " \t Enstr = " + to_str(mesure[1], 8)
 					+ " \t Palinstr = " + to_str(mesure[2], 8)
 					+ " \t Wmax = " + to_str(mesure[3], 8);
@@ -811,13 +782,9 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 
 
 
-
-std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
-		MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D* Grid_sample, TCudaGrid2D Grid_discrete, double *Dev_sample,
-		cufftHandle* cufft_plan_sample_phi_1D, cufftHandle* cufft_plan_sample_phi_1D_inverse, cufftHandle* cufft_plan_sample_phi_2D, cufftHandle* cufft_plan_sample_phi_2D_inverse, cufftDoubleComplex *Dev_Temp_C1,
-		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int *forward_particles_block, int forward_particles_thread,
-		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f, double *W_initial_discrete) {
-
+std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, MapStack Map_Stack, MapStack Map_Stack_f,
+		std::map<std::string, CmmVar2D*> cmmVarMap, std::map<std::string, CmmPart*> cmmPartMap)
+{
 	// check if we want to save at this time, combine all variables if so
 	std::string message = "";
 	SaveSample* save_sample = SettingsMain.getSaveSample();
@@ -839,105 +806,130 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 		}
 
 		if (save_now) {
+			CmmVar2D *Sample_var = cmmVarMap["Sample_" + to_str(i_save)];  // extract sample variable
 			std::string save_var = save_sample[i_save].var;  // extract save variables
+			bool save_all = save_var.find("All") != std::string::npos;  // master save switch
+
+			// for debug: save time position
+			if (SettingsMain.getVerbose() >= 4) {
+				writeAppendToBinaryFile(1, &t_now, SettingsMain, "/Monitoring_data/Debug_globals/Time_s_" + to_str(Sample_var->Grid->NX));  // time vector for data
+			}
+
 			// forwards map to get it done
 			if (SettingsMain.getForwardMap()) {
 				// compute only if we actually want to save, elsewhise its a lot of computations for nothing
 				if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos
-						or SettingsMain.getParticlesForwardedNum() > 0) {
+						or save_all or SettingsMain.getParticlesForwardedNum() > 0) {
 					// apply mapstack to map or particle positions
 					if (SettingsMain.getParticlesForwardedNum() == 0) {
-						apply_map_stack(Grid_sample[i_save], Map_Stack_f, Dev_ChiX_f, Dev_ChiY_f, (cufftDoubleReal*)Dev_Temp_C1, 1);
+						apply_map_stack(*Sample_var->Grid, Map_Stack_f, cmmVarMap["ChiX_f"]->Dev_var, cmmVarMap["ChiY_f"]->Dev_var, Sample_var->Dev_var, 1);
 					}
 					// forwarded particles: forward all particles regardless of if they will be saved, needs rework to be more clever
 					else {
-						apply_map_stack_points(Grid_sample[i_save], Map_Stack_f, Dev_ChiX_f, Dev_ChiY_f, (cufftDoubleReal*)Dev_Temp_C1, 1,
-								Dev_forward_particles_pos, (cufftDoubleReal*)Dev_Temp_C1+2*Grid_sample[i_save].N,
-								SettingsMain, forward_particles_block, forward_particles_thread);
+						apply_map_stack_points(SettingsMain, *Sample_var->Grid, Map_Stack_f, cmmVarMap["ChiX_f"]->Dev_var, cmmVarMap["ChiY_f"]->Dev_var,
+								Sample_var->Dev_var, 1, cmmPartMap, Sample_var->Dev_var+3*Sample_var->Grid->N);
 					}
 
 					// save map by copying and saving offsetted data
-					if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos) {
-						cudaMemcpy2D(Dev_sample, sizeof(double), (cufftDoubleReal*)Dev_Temp_C1, sizeof(double)*2,
-												 sizeof(double), Grid_sample[i_save].N, cudaMemcpyDeviceToDevice);
-						writeTimeVariable(SettingsMain, "Map_ChiX_f_"+to_str(Grid_sample[i_save].NX),
-								t_now, Dev_sample, Grid_sample[i_save].N);
-						cudaMemcpy2D(Dev_sample, sizeof(double), (cufftDoubleReal*)Dev_Temp_C1+1, sizeof(double)*2,
-												 sizeof(double), Grid_sample[i_save].N, cudaMemcpyDeviceToDevice);
-						writeTimeVariable(SettingsMain, "Map_ChiY_f_"+to_str(Grid_sample[i_save].NX),
-								t_now, Dev_sample, Grid_sample[i_save].N);
+					if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos or save_all) {
+						// copy map to saving space and then save it
+						cudaMemcpy2D(Sample_var->Dev_var+2*Sample_var->Grid->N, sizeof(double), Sample_var->Dev_var, sizeof(double)*2,
+								sizeof(double), Sample_var->Grid->N, cudaMemcpyDeviceToDevice);
+						writeTimeVariable(SettingsMain, "Map_ChiX_f_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
+						cudaMemcpy2D(Sample_var->Dev_var+2*Sample_var->Grid->N, sizeof(double), Sample_var->Dev_var+1, sizeof(double)*2,
+								sizeof(double), Sample_var->Grid->N, cudaMemcpyDeviceToDevice);
+						writeTimeVariable(SettingsMain, "Map_ChiY_f_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
 					}
 
+					// save position of forwarded particles, go through all and only safe the needed ones
+					// ToDo: Change saving to not use writeTransferToBinaryFile
+					double* particles_out_counter = Sample_var->Dev_var+3*Sample_var->Grid->N;
+					for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
+						std::string part_map_name = "PartF_Pos_P" + to_str_0(i_p+1, 2);
+						CmmPart Part_Pos_now = *cmmPartMap[part_map_name];
+						if (save_var.find("PartF_" + to_str_0(i_p+1, 2)) != std::string::npos or save_all) {
+							// create particles folder if necessary
+							std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
+							std::string sub_folder_name = "/Particle_data/Time_" + t_s_now;
+							std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
+							struct stat st = {0};
+							if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
+							// copy data to host and save
+							writeTransferToBinaryFile(2*Part_Pos_now.num, particles_out_counter, SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_forwarded_pos_P" + to_str_0(i_p+1, 2), 0);
+						}
+						particles_out_counter += 2*Part_Pos_now.num;  // increase counter
+					}
 				}
 
 			}
 
 			// compute map to initial condition through map stack
-			apply_map_stack(Grid_sample[i_save], Map_Stack, Dev_ChiX, Dev_ChiY, (cufftDoubleReal*)Dev_Temp_C1, -1);
+			apply_map_stack(*Sample_var->Grid, Map_Stack, cmmVarMap["ChiX"]->Dev_var, cmmVarMap["ChiY"]->Dev_var, Sample_var->Dev_var, -1);
 
 			// save map by copying and saving offsetted data
-			if (save_var.find("Map_b") != std::string::npos or save_var.find("Chi_b") != std::string::npos) {
-				cudaMemcpy2D(Dev_sample, sizeof(double), (cufftDoubleReal*)Dev_Temp_C1, sizeof(double)*2,
-										 sizeof(double), Grid_sample[i_save].N, cudaMemcpyDeviceToDevice);
-				writeTimeVariable(SettingsMain, "Map_ChiX_"+to_str(Grid_sample[i_save].NX),
-						t_now, Dev_sample, Grid_sample[i_save].N);
-				cudaMemcpy2D(Dev_sample, sizeof(double), (cufftDoubleReal*)Dev_Temp_C1+1, sizeof(double)*2,
-										 sizeof(double), Grid_sample[i_save].N, cudaMemcpyDeviceToDevice);
-				writeTimeVariable(SettingsMain, "Map_ChiY_"+to_str(Grid_sample[i_save].NX),
-						t_now, Dev_sample, Grid_sample[i_save].N);
+			if (save_var.find("Map_b") != std::string::npos or save_var.find("Chi_b") != std::string::npos or save_all) {
+				// copy map to saving space and then save it
+				cudaMemcpy2D(Sample_var->Dev_var+2*Sample_var->Grid->N, sizeof(double), Sample_var->Dev_var, sizeof(double)*2,
+						sizeof(double), Sample_var->Grid->N, cudaMemcpyDeviceToDevice);
+				writeTimeVariable(SettingsMain, "Map_ChiX_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
+				cudaMemcpy2D(Sample_var->Dev_var+2*Sample_var->Grid->N, sizeof(double), Sample_var->Dev_var+1, sizeof(double)*2,
+						sizeof(double), Sample_var->Grid->N, cudaMemcpyDeviceToDevice);
+				writeTimeVariable(SettingsMain, "Map_ChiY_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
 			}
 
 			// passive scalar theta - 1 to switch for passive scalar
-			if (save_var.find("Scalar") != std::string::npos or save_var.find("Theta") != std::string::npos) {
-				k_h_sample_from_init<<<Grid_sample[i_save].blocksPerGrid, Grid_sample[i_save].threadsPerBlock>>>(Dev_sample, (cufftDoubleReal*)Dev_Temp_C1,
-						Grid_sample[i_save], Grid_discrete, 1, SettingsMain.getScalarNum(), W_initial_discrete, SettingsMain.getScalarDiscrete());
+			if (save_var.find("Scalar") != std::string::npos or save_var.find("Theta") != std::string::npos or save_all) {
+				k_h_sample_from_init<<<Sample_var->Grid->blocksPerGrid, Sample_var->Grid->threadsPerBlock>>>(Sample_var->Dev_var+2*Sample_var->Grid->N, Sample_var->Dev_var,
+						*Sample_var->Grid, *cmmVarMap["Vort_discrete_init"]->Grid, 1, SettingsMain.getScalarNum(), cmmVarMap["Vort_discrete_init"]->Dev_var, SettingsMain.getScalarDiscrete());
 
-				writeTimeVariable(SettingsMain, "Scalar_Theta_"+to_str(Grid_sample[i_save].NX),
-						t_now, Dev_sample, Grid_sample[i_save].N);
+				writeTimeVariable(SettingsMain, "Scalar_Theta_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var, 2*Sample_var->Grid->N);
 
-				thrust::device_ptr<double> scal_ptr = thrust::device_pointer_cast(Dev_sample);
-				double scal_int = Grid_sample[i_save].hx * Grid_sample[i_save].hy * thrust::reduce(scal_ptr, scal_ptr + Grid_sample[i_save].N, 0.0, thrust::plus<double>());
-				writeAppendToBinaryFile(1, &scal_int, SettingsMain, "/Monitoring_data/Mesure/Scalar_integral_"+ to_str(Grid_sample[i_save].NX));
+				double scal_int; Compute_avg(scal_int, *Sample_var, 2*Sample_var->Grid->N);
+				writeAppendToBinaryFile(1, &scal_int, SettingsMain, "/Monitoring_data/Mesure/Scalar_integral_"+ to_str(Sample_var->Grid->NX));
 			}
 
-				
+
 			int varnum = 2;
-			// compute distribution function
-			k_h_sample_from_init<<<Grid_sample[i_save].blocksPerGrid, Grid_sample[i_save].threadsPerBlock>>>(Dev_sample, (cufftDoubleReal*)Dev_Temp_C1,
-					Grid_sample[i_save], Grid_discrete, varnum, SettingsMain.getInitialConditionNum(), W_initial_discrete, SettingsMain.getInitialDiscrete());
+			// compute distribution function - 2 to switch for vlasov1D
+			k_h_sample_from_init<<<Sample_var->Grid->blocksPerGrid, Sample_var->Grid->threadsPerBlock>>>(Sample_var->Dev_var+2*Sample_var->Grid->N, Sample_var->Dev_var,
+					*Sample_var->Grid, *cmmVarMap["Vort_discrete_init"]->Grid, varnum, SettingsMain.getInitialConditionNum(), cmmVarMap["Vort_discrete_init"]->Dev_var, SettingsMain.getInitialDiscrete());
+
+			// distribution is moved to begin of array - from now on map is discarded
+			// this is made to save memory needed for computing the derivatives (2xsizeNfft saved)
+			cudaMemcpy(Sample_var->Dev_var, Sample_var->Dev_var+2*Sample_var->Grid->N, Sample_var->Grid->sizeNReal, cudaMemcpyDeviceToDevice);
 
 			// save particle distribution function
-			if (save_var.find("Dist")!= std::string::npos  or save_var.find("F") != std::string::npos) {
-				writeTimeVariable(SettingsMain, "Distribution_F_"+to_str(Grid_sample[i_save].NX),
-						t_now, Dev_sample, Grid_sample[i_save].N);
+			if (save_var.find("Dist") != std::string::npos or save_var.find("F") != std::string::npos or save_all) {
+				writeTimeVariable(SettingsMain, "Distribution_F_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var);
 			}
 
 			// compute enstrophy and palinstrophy
-			Compute_Kinetic_Energy(mesure[1], Dev_sample,(cufftDoubleReal*) Dev_Temp_C1,  Grid_sample[i_save]);
-			Compute_Mass(mesure[3], Dev_sample, Grid_sample[i_save]); 
+			Compute_Kinetic_Energy(mesure[1], *Sample_var, Sample_var->Dev_var + Sample_var->Grid->N);
+			Compute_Mass(mesure[3], *Sample_var);
 
-			// reuse sampled vorticity to compute psi, take fourier_hermite reshifting into account
-			long int shift = 2*Grid_sample[i_save].Nfft - Grid_sample[i_save].N;
-			get_psi_hermite_from_distribution_function(Dev_sample+shift, Dev_sample, Dev_Temp_C1, cufft_plan_sample_phi_1D[i_save], cufft_plan_sample_phi_1D_inverse[i_save], 
-			cufft_plan_sample_phi_2D[i_save], cufft_plan_sample_phi_2D_inverse[i_save], Grid_sample[i_save], Grid_sample[i_save]); // Grid_sample[i_save] is the grid of the distribution function and the grid of Psi_real_out
-			Compute_Potential_Energy(mesure[2], Dev_sample+shift, Grid_sample[i_save]);
-			
-			if (save_var.find("Stream") != std::string::npos or save_var.find("Psi") != std::string::npos) {
-				writeTimeVariable(SettingsMain, "Stream_function_Psi_"+to_str(Grid_sample[i_save].NX),
-						t_now, Dev_sample+shift, Grid_sample[i_save].N);
+			// reuse sampled distribution to compute psi, here distribution is discarded
+//			get_psi_hermite_from_distribution_function(*Sample_var, *Sample_var, Sample_var->Dev_var, Dev_Temp_C1);
+
+			// we only need psi and dx-derivative, so we do not need hermite function, this saves us space
+			get_psi_from_distribution_function(*Sample_var, *Sample_var, Sample_var->Dev_var, (cufftDoubleComplex*)(Sample_var->Dev_var)+Sample_var->Grid->Nfft);
+
+			Compute_Potential_Energy(mesure[2], *Sample_var);
+
+			if (save_var.find("Stream") != std::string::npos or save_var.find("Psi") != std::string::npos or save_all) {
+				writeTimeVariable(SettingsMain, "Stream_function_Psi_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var);
 			}
 
 			mesure[0] = mesure[1] + mesure[2]; // total energy
 			// printf("DEBUG:    Etot = %.4f, Ekin = %.4f, Epot = %.4f, Mass = %.4f\n", mesure[0], mesure[1], mesure[2], mesure[3]);
 			// error("babu", 1014);
-			writeAppendToBinaryFile(1, &t_now, SettingsMain, "/Monitoring_data/Mesure/Time_s_"+ to_str(Grid_sample[i_save].NX));  // time vector for data
-			writeAppendToBinaryFile(1, mesure, SettingsMain, "/Monitoring_data/Mesure/Etot_"+ to_str(Grid_sample[i_save].NX));
-			writeAppendToBinaryFile(1, mesure+1, SettingsMain, "/Monitoring_data/Mesure/Ekin_"+ to_str(Grid_sample[i_save].NX));
-			writeAppendToBinaryFile(1, mesure+2, SettingsMain, "/Monitoring_data/Mesure/Epot_"+ to_str(Grid_sample[i_save].NX));
-			writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Mass_"+ to_str(Grid_sample[i_save].NX));
+			writeAppendToBinaryFile(1, &t_now, SettingsMain, "/Monitoring_data/Mesure/Time_s_"+ to_str(Sample_var->Grid->NX));  // time vector for data
+			writeAppendToBinaryFile(1, mesure, SettingsMain, "/Monitoring_data/Mesure/Etot_"+ to_str(Sample_var->Grid->NX));
+			writeAppendToBinaryFile(1, mesure+1, SettingsMain, "/Monitoring_data/Mesure/Ekin_"+ to_str(Sample_var->Grid->NX));
+			writeAppendToBinaryFile(1, mesure+2, SettingsMain, "/Monitoring_data/Mesure/Epot_"+ to_str(Sample_var->Grid->NX));
+			writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Mass_"+ to_str(Sample_var->Grid->NX));
 
 				// construct message
-			message = message + "Saved sample data " + to_str(i_save + 1) + " on grid " + to_str(Grid_sample[i_save].NX) + ", Cons : Etot = " + to_str(mesure[0], 8)
+			message = message + "Saved sample data " + to_str(i_save + 1) + " on grid " + to_str(Sample_var->Grid->NX) + ", Cons : Etot = " + to_str(mesure[0], 8)
 					+    " \t Ekin = " + to_str(mesure[1], 8)
 					+ " \t Epot = " + to_str(mesure[2], 8)
 					+ " \t Mass = " + to_str(mesure[3], 8);
@@ -952,12 +944,8 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 *							   Zoom								   *
 *			sample vorticity with mapstack at arbitrary frame
 *******************************************************************/
-std::string Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
-		MapStack Map_Stack, MapStack Map_Stack_f, TCudaGrid2D* Grid_zoom, TCudaGrid2D Grid_psi, TCudaGrid2D Grid_discrete,
-		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f,
-		double *Dev_Temp, double *W_initial_discrete, double *psi,
-		double **Host_particles_pos, double **Dev_particles_pos,
-		double **Host_forward_particles_pos, double **Dev_forward_particles_pos, int* forward_particles_block, int forward_particles_thread)
+std::string compute_zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, MapStack Map_Stack, MapStack Map_Stack_f,
+		std::map<std::string, CmmVar2D*> cmmVarMap, std::map<std::string, CmmPart*> cmmPartMap)
 {
 	// check if we want to save at this time, combine all variables if so
 	std::string i_num = to_str(t_now); if (abs(t_now - T_MAX) < 1) i_num = "final";
@@ -979,13 +967,15 @@ std::string Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double d
 			save_now = true;
 		}
 		if (save_now) {
-			// create folder
-			std::string sub_folder_name = "/Zoom_data/Time_" + i_num;
-			std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
-			mkdir(folder_name_now.c_str(), 0777);
-			message = message + "Processed zoom data " + to_str(i_save + 1) + " on grid " + to_str(Grid_zoom[i_save].NX);
-
+			CmmVar2D *Zoom_var = cmmVarMap["Zoom_" + to_str(i_save)];  // extract sample variable
 			std::string save_var = save_zoom[i_save].var;
+			bool save_all = save_var.find("All") != std::string::npos;  // master save switch
+			message = message + "Processed zoom data " + to_str(i_save + 1) + " on grid " + to_str(Zoom_var->Grid->NX);
+
+			if (SettingsMain.getVerbose() >= 4) {
+				writeAppendToBinaryFile(1, &t_now, SettingsMain,
+						"/Monitoring_data/Debug_globals/Time_s_" + to_str(Zoom_var->Grid->NX) + "_Zoom_" + to_str(i_save+1));  // time vector for data
+			}
 
 			double x_min, x_max, y_min, y_max;
 
@@ -993,163 +983,148 @@ std::string Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double d
 			double y_width = save_zoom[i_save].width_y/2.0;
 
 			// do repetetive zooms
-			for(int zoom_ctr = 0; zoom_ctr < save_zoom[i_save].rep; zoom_ctr++){
-				// create new subfolder for current zoom
-				sub_folder_name = "/Zoom_data/Time_" + i_num + "/Zoom_" + to_str(i_save + 1) + "_rep_" + to_str(zoom_ctr);
-				folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
-				mkdir(folder_name_now.c_str(), 0777);
-
+			for(int zoom_ctr = 0; zoom_ctr < save_zoom[i_save].rep; zoom_ctr++) {
 				// construct frame bounds for this zoom
 				x_min = save_zoom[i_save].pos_x - x_width;
 				x_max = save_zoom[i_save].pos_x + x_width;
 				y_min = save_zoom[i_save].pos_y - y_width;
 				y_max = save_zoom[i_save].pos_y + y_width;
 				// safe bounds in array
-				double bounds[4] = {x_min, x_max, y_min, y_max};
+				double bounds[6] = {x_min, x_max, y_min, y_max, 0, 0};
 
-				printf("bounds : %f,  %f,  %f, %f", x_min, x_max, y_min, y_max);
+//				printf("bounds : %f,  %f,  %f, %f\n", x_min, x_max, y_min, y_max);
 
-				TCudaGrid2D Grid_zoom_i(Grid_zoom[i_save].NX, Grid_zoom[i_save].NY, Grid_zoom[i_save].NZ, bounds);
+				TCudaGrid2D Grid_zoom_i(Zoom_var->Grid->NX, Zoom_var->Grid->NY, Zoom_var->Grid->NZ, bounds);
 
 				// compute forwards map for map stack of zoom window first, as it can be discarded afterwards
-				if (SettingsMain.getForwardMap()) {
+				if (SettingsMain.getForwardMap() and (save_var.find("Map_f") != std::string::npos
+						or save_var.find("Chi_f") != std::string::npos or save_all or SettingsMain.getParticlesForwardedNum() > 0)) {
 					
-					// compute only if we actually want to save, elsewhise its a lot of computations for nothing
-					if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos
-							or SettingsMain.getParticlesForwardedNum() > 0) {
-						// apply mapstack to map or particle positions
-						if (SettingsMain.getParticlesForwardedNum() == 0) {
-							apply_map_stack(Grid_zoom_i, Map_Stack_f, Dev_ChiX_f, Dev_ChiY_f, Dev_Temp, 1);
-						}
-						// forwarded particles: forward all particles regardless of if they will be saved, needs rework to be more clever
-						else {
-							apply_map_stack_points(Grid_zoom_i, Map_Stack_f, Dev_ChiX_f, Dev_ChiY_f, Dev_Temp, 1,
-									Dev_forward_particles_pos, Dev_Temp+2*Grid_zoom_i.N,
-									SettingsMain, forward_particles_block, forward_particles_thread);
-						}
+					// apply mapstack to map or particle positions
+					if (SettingsMain.getParticlesForwardedNum() == 0) {
+						apply_map_stack(Grid_zoom_i, Map_Stack_f, cmmVarMap["ChiX_f"]->Dev_var, cmmVarMap["ChiY_f"]->Dev_var, Zoom_var->Dev_var, 1);
+					}
+					// forwarded particles: forward all particles regardless of if they will be saved, needs rework to be more clever
+					else {
+						apply_map_stack_points(SettingsMain, Grid_zoom_i, Map_Stack_f, cmmVarMap["ChiX_f"]->Dev_var, cmmVarMap["ChiY_f"]->Dev_var,
+								Zoom_var->Dev_var, 1, cmmPartMap, Zoom_var->Dev_var+3*Grid_zoom_i.N);
+					}
 
-						// save map by copying and saving offsetted data
-						if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos) {
-							cudaMemcpy2D(Dev_Temp, sizeof(double), Dev_Temp+Grid_zoom_i.N, sizeof(double)*2,
-									sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToDevice);
-							writeTranferToBinaryFile(Grid_zoom_i.N, Dev_Temp, SettingsMain, sub_folder_name+"/Map_ChiX_f_"+to_str(Grid_zoom_i.NX), false);
-							cudaMemcpy2D(Dev_Temp, sizeof(double), Dev_Temp+Grid_zoom_i.N+1, sizeof(double)*2,
-									sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToDevice);
-							writeTranferToBinaryFile(Grid_zoom_i.N, Dev_Temp, SettingsMain, sub_folder_name+"/Map_ChiY_f_"+to_str(Grid_zoom_i.NX), false);
-						}
+					// save map by copying and saving offsetted data
+					if (save_var.find("Map_f") != std::string::npos or save_var.find("Chi_f") != std::string::npos or save_all) {
+						// copy map to saving space and then save it
+						cudaMemcpy2D(Zoom_var->Dev_var+2*Grid_zoom_i.N, sizeof(double), Zoom_var->Dev_var, sizeof(double)*2,
+								sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToDevice);
+						writeZoomVariable(SettingsMain, "Map_ChiX_f_"+to_str(Grid_zoom_i.NX),
+								i_save, zoom_ctr, t_now, *Zoom_var, 2*Grid_zoom_i.N);
+						cudaMemcpy2D(Zoom_var->Dev_var+2*Grid_zoom_i.N, sizeof(double), Zoom_var->Dev_var+1, sizeof(double)*2,
+								sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToDevice);
+						writeZoomVariable(SettingsMain, "Map_ChiY_f_"+to_str(Grid_zoom_i.NX),
+								i_save, zoom_ctr, t_now, *Zoom_var, 2*Grid_zoom_i.N);
+					}
 
-						// save position of forwarded particles, go through all and only safe the needed ones
-						ParticlesForwarded* particles_forwarded = SettingsMain.getParticlesForwarded();
-						double* particles_out_counter = Dev_Temp+2*Grid_zoom_i.N;
-						for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
-							if (save_var.find("PartF_" + to_str_0(i_p+1, 2)) != std::string::npos) {
-								// copy data to host and save
-								cudaMemcpy(Host_forward_particles_pos[i_p], particles_out_counter, 2*particles_forwarded[i_p].num*sizeof(double), cudaMemcpyDeviceToHost);
-								double* part_pos = Host_particles_pos[i_p];
+					// save position of forwarded particles, go through all and only safe the needed ones
+					// ToDo: Change saving to not use writeTransferToBinaryFile
+					double* particles_out_counter = Zoom_var->Dev_var+3*Grid_zoom_i.N;
+					for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
+						std::string part_map_name = "PartF_Pos_P" + to_str_0(i_p+1, 2);
+						CmmPart Part_Pos_now = *cmmPartMap[part_map_name];
+						if (save_var.find("PartF_" + to_str_0(i_p+1, 2)) != std::string::npos) {
+							// create new subfolder for current timestep, doesn't matter if we try to create it several times
+							std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
+							std::string sub_folder_name = "/Zoom_data/Time_" + t_s_now;
+							std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
+							struct stat st = {0};
+							if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
+							// extra folder for specific zoom an repetition
+							std::string zr_s_now = "/Zoom_" + to_str(i_save + 1) + "_rep_" + to_str(zoom_ctr);
+							sub_folder_name += zr_s_now; folder_name_now += zr_s_now;
+							if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
 
-								int part_counter = 0;
-								for (int p_num = 0; p_num < SettingsMain.getParticlesForwardedNum(); p_num++) {
-									// check if particle in frame and then save it inside itself by checking for NaN values
-									if (part_pos[2*p_num  ] == part_pos[2*p_num] and
-										part_pos[2*p_num+1] == part_pos[2*p_num+1]) {
-										// transcribe particle
-										part_pos[2*part_counter  ] = part_pos[2*p_num];
-										part_pos[2*part_counter+1] = part_pos[2*p_num+1];
-										// increment counter
-										part_counter++;
-									}
-								}
-								// save particles
-							    writeAllRealToBinaryFile(2*part_counter, Host_forward_particles_pos[i_p], SettingsMain, sub_folder_name+"/Particles_forwarded_pos_P" + to_str_0(i_p, 2));
-							}
-							particles_out_counter += 2*particles_forwarded[i_p].num;  // increase counter
+							// copy data to host and save
+							writeTransferToBinaryFile(2*Part_Pos_now.num, particles_out_counter, SettingsMain, sub_folder_name+"/Particles_forwarded_pos_P" + to_str_0(i_p, 2), 0);
 						}
+						particles_out_counter += 2*Part_Pos_now.num;  // increase counter
 					}
 				}
 
-
-
 				// compute backwards map for map stack of zoom window
-				apply_map_stack(Grid_zoom_i, Map_Stack, Dev_ChiX, Dev_ChiY, Dev_Temp+Grid_zoom_i.N, -1);
-				// writeTranferToBinaryFile(Grid_zoom_i.N, Dev_Temp+Grid_zoom_i.N, SettingsMain, sub_folder_name+"/Distributions_"+to_str(Grid_zoom_i.NX), false);
-				// error("here",234);
+				apply_map_stack(Grid_zoom_i, Map_Stack, cmmVarMap["ChiX"]->Dev_var, cmmVarMap["ChiY"]->Dev_var, Zoom_var->Dev_var, -1);
+
 				// save map by copying and saving offsetted data
-				if (save_var.find("Map_b") != std::string::npos or save_var.find("Chi_b") != std::string::npos) {
-					cudaMemcpy2D(Dev_Temp, sizeof(double), Dev_Temp+Grid_zoom_i.N, sizeof(double)*2,
+				if (save_var.find("Map_b") != std::string::npos or save_var.find("Chi_b") != std::string::npos or save_all) {
+					// copy map to saving space and then save it
+					cudaMemcpy2D(Zoom_var->Dev_var+2*Grid_zoom_i.N, sizeof(double), Zoom_var->Dev_var, sizeof(double)*2,
 							sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToDevice);
-					writeTranferToBinaryFile(Grid_zoom_i.N, Dev_Temp, SettingsMain, sub_folder_name+"/Map_ChiX_"+to_str(Grid_zoom_i.NX), false);
-					cudaMemcpy2D(Dev_Temp, sizeof(double), Dev_Temp+Grid_zoom_i.N+1, sizeof(double)*2,
-												sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToDevice);
-					writeTranferToBinaryFile(Grid_zoom_i.N, Dev_Temp, SettingsMain, sub_folder_name+"/Map_ChiY_"+to_str(Grid_zoom_i.NX), false);
+					writeZoomVariable(SettingsMain, "Map_ChiX_"+to_str(Grid_zoom_i.NX),
+							i_save, zoom_ctr, t_now, *Zoom_var, 2*Grid_zoom_i.N);
+					cudaMemcpy2D(Zoom_var->Dev_var+2*Grid_zoom_i.N, sizeof(double), Zoom_var->Dev_var+1, sizeof(double)*2,
+							sizeof(double), Grid_zoom_i.N, cudaMemcpyDeviceToDevice);
+					writeZoomVariable(SettingsMain, "Map_ChiY_"+to_str(Grid_zoom_i.NX),
+							i_save, zoom_ctr, t_now, *Zoom_var, 2*Grid_zoom_i.N);
 				}
 
 				// passive scalar theta - 1 to switch for passive scalar
-				if (save_var.find("Scalar") != std::string::npos or save_var.find("Theta") != std::string::npos) {
-					k_h_sample_from_init<<<Grid_zoom_i.blocksPerGrid, Grid_zoom_i.threadsPerBlock>>>(Dev_Temp, Dev_Temp+Grid_zoom_i.N,
-							Grid_zoom_i, Grid_discrete, 1, SettingsMain.getScalarNum(), W_initial_discrete, SettingsMain.getScalarDiscrete());
+				if (save_var.find("Scalar") != std::string::npos or save_var.find("Theta") != std::string::npos or save_all) {
+					k_h_sample_from_init<<<Grid_zoom_i.blocksPerGrid, Grid_zoom_i.threadsPerBlock>>>(Zoom_var->Dev_var+2*Grid_zoom_i.N, Zoom_var->Dev_var,
+							Grid_zoom_i, *cmmVarMap["Vort_discrete_init"]->Grid, 1, SettingsMain.getScalarNum(), cmmVarMap["Vort_discrete_init"]->Dev_var, SettingsMain.getScalarDiscrete());
 
-					writeTranferToBinaryFile(Grid_zoom_i.N, Dev_Temp, SettingsMain, sub_folder_name+"/Scalar_Theta_"+to_str(Grid_zoom_i.NX), false);
+					writeZoomVariable(SettingsMain, "Scalar_Theta_"+to_str(Grid_zoom_i.NX), i_save, zoom_ctr, t_now, *Zoom_var, 2*Grid_zoom_i.N);
 				}
 
 				// compute and save vorticity zoom
-				if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos) {
+				if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos or save_all) {
 					// compute vorticity - 0 to switch for vorticity
-					k_h_sample_from_init<<<Grid_zoom_i.blocksPerGrid, Grid_zoom_i.threadsPerBlock>>>(Dev_Temp, Dev_Temp+Grid_zoom_i.N,
-							Grid_zoom_i, Grid_discrete, 0, SettingsMain.getInitialConditionNum(), W_initial_discrete, SettingsMain.getInitialDiscrete());
+					k_h_sample_from_init<<<Grid_zoom_i.blocksPerGrid, Grid_zoom_i.threadsPerBlock>>>(Zoom_var->Dev_var+2*Grid_zoom_i.N, Zoom_var->Dev_var,
+							Grid_zoom_i, *cmmVarMap["Vort_discrete_init"]->Grid, 0, SettingsMain.getInitialConditionNum(), cmmVarMap["Vort_discrete_init"]->Dev_var, SettingsMain.getInitialDiscrete());
 
-					writeTranferToBinaryFile(Grid_zoom_i.N, Dev_Temp, SettingsMain, sub_folder_name+"/Vorticity_W_"+to_str(Grid_zoom_i.NX), false);
-
-					// hash
-					double w_hash[2]; Hash_array(Grid_zoom_i.N, (char*)w_hash, Dev_Temp);
-					writeAppendToBinaryFile(2, w_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_vorticity_Zoom_" + to_str(i_save + 1) + "_rep_" + to_str(zoom_ctr));
+					writeZoomVariable(SettingsMain, "Vorticity_W_"+to_str(Grid_zoom_i.NX), i_save, zoom_ctr, t_now, *Zoom_var, 2*Grid_zoom_i.N);
 				}
 
-				if (save_var.find("Dist") != std::string::npos or save_var.find("F") != std::string::npos) {
-					k_h_sample_from_init<<<Grid_zoom_i.blocksPerGrid, Grid_zoom_i.threadsPerBlock>>>(Dev_Temp, Dev_Temp+Grid_zoom_i.N,
-							Grid_zoom_i, Grid_discrete, 2, SettingsMain.getInitialConditionNum(), W_initial_discrete, SettingsMain.getInitialDiscrete());
-					writeTranferToBinaryFile(Grid_zoom_i.N, Dev_Temp, SettingsMain, sub_folder_name+"/Distribution_"+to_str(Grid_zoom_i.NX), false);
-		
+				if (save_var.find("Dist") != std::string::npos or save_var.find("F") != std::string::npos or save_all) {
+					// compute distribution - 2 to switch for distribution
+					k_h_sample_from_init<<<Grid_zoom_i.blocksPerGrid, Grid_zoom_i.threadsPerBlock>>>(Zoom_var->Dev_var+2*Grid_zoom_i.N, Zoom_var->Dev_var,
+							Grid_zoom_i, *cmmVarMap["Vort_discrete_init"]->Grid, 2, SettingsMain.getInitialConditionNum(), cmmVarMap["Vort_discrete_init"]->Dev_var, SettingsMain.getInitialDiscrete());
+
+					writeZoomVariable(SettingsMain, "Distribution_"+to_str(Grid_zoom_i.NX), i_save, zoom_ctr, t_now, *Zoom_var, 2*Grid_zoom_i.N);
 				}
 
 				// compute sample of stream function - it's not a zoom though!
-				if (save_var.find("Stream") != std::string::npos or save_var.find("Psi") != std::string::npos) {
+				if (save_var.find("Stream") != std::string::npos or save_var.find("Psi") != std::string::npos or save_all) {
 					// sample stream function from hermite
-					k_h_sample<<<Grid_zoom_i.blocksPerGrid,Grid_zoom_i.threadsPerBlock>>>(psi, Dev_Temp, Grid_psi, Grid_zoom_i);
+					k_h_sample<<<Grid_zoom_i.blocksPerGrid,Grid_zoom_i.threadsPerBlock>>>(cmmVarMap["Psi"]->Dev_var, Zoom_var->Dev_var+2*Grid_zoom_i.N, *cmmVarMap["Psi"]->Grid, Grid_zoom_i);
 
 					// save psi zoom
-					writeTranferToBinaryFile(Grid_zoom_i.N, Dev_Temp, SettingsMain, sub_folder_name+"/Stream_function_Psi_"+to_str(Grid_zoom_i.NX), false);
-
-					// hash
-					double psi_hash[2]; Hash_array(Grid_zoom_i.N, (char*)psi_hash, Dev_Temp);
-					writeAppendToBinaryFile(2, psi_hash, SettingsMain, "/Monitoring_data/Mesure/Hash_vorticity_Zoom_" + to_str(i_save + 1) + "_rep_" + to_str(zoom_ctr));
-
+					writeZoomVariable(SettingsMain, "Stream_function_Psi_"+to_str(Grid_zoom_i.NX), i_save, zoom_ctr, t_now, *Zoom_var, 2*Grid_zoom_i.N);
 				}
 
 				// safe particles in zoomframe if wanted
-				ParticlesAdvected* particles_advected = SettingsMain.getParticlesAdvected();
-				for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
-					// particle position first
-					if (save_var.find("PartA_" + to_str_0(i_p+1, 2)) != std::string::npos) {
-						// copy particles to host
-						cudaMemcpy(Host_particles_pos[i_p], Dev_particles_pos[i_p], 2*particles_advected[i_p].num*sizeof(double), cudaMemcpyDeviceToHost);
-						double* part_pos = Host_particles_pos[i_p];
-
-						int part_counter = 0;
-						for (int i_pn = 0; i_pn < particles_advected[i_pn].num; i_pn++) {
-							// check if particle in frame and then save it inside itself
-							if (part_pos[2*i_pn  ] > x_min and part_pos[2*i_pn  ] < x_max and
-								part_pos[2*i_pn+1] > y_min and part_pos[2*i_pn+1] < y_max) {
-								// transcribe particle
-								part_pos[2*part_counter  ] = part_pos[2*i_pn  ];
-								part_pos[2*part_counter+1] = part_pos[2*i_pn+1];
-								// increment counter
-								part_counter++;
-							}
-						}
-						// save particles
-						writeAllRealToBinaryFile(2*part_counter, Host_particles_pos[i_p], SettingsMain, sub_folder_name+"/Particles_advected_pos_P" + to_str_0(i_p, 2));
-					}
-				}
+				// disabled for now, we can do this in postprocessing easily
+				// problem is that I have written the loop in Host memory
+//				ParticlesAdvected* particles_advected = SettingsMain.getParticlesAdvected();
+//				for (int i_p = 0; i_p < SettingsMain.getParticlesAdvectedNum(); ++i_p) {
+//					// particle position first
+//					if (save_var.find("PartA_" + to_str_0(i_p+1, 2)) != std::string::npos) {
+//						// copy particles to host
+//						cudaMemcpy(Host_particles_pos[i_p], Dev_particles_pos[i_p], 2*particles_advected[i_p].num*sizeof(double), cudaMemcpyDeviceToHost);
+//						double* part_pos = Host_particles_pos[i_p];
+//
+//						int part_counter = 0;
+//						for (int i_pn = 0; i_pn < particles_advected[i_pn].num; i_pn++) {
+//							// check if particle in frame and then save it inside itself
+//							if (part_pos[2*i_pn  ] > x_min and part_pos[2*i_pn  ] < x_max and
+//								part_pos[2*i_pn+1] > y_min and part_pos[2*i_pn+1] < y_max) {
+//								// transcribe particle
+//								part_pos[2*part_counter  ] = part_pos[2*i_pn  ];
+//								part_pos[2*part_counter+1] = part_pos[2*i_pn+1];
+//								// increment counter
+//								part_counter++;
+//							}
+//						}
+//						// save particles
+//						writeAllRealToBinaryFile(2*part_counter, Host_particles_pos[i_p], SettingsMain, sub_folder_name+"/Particles_advected_pos_P" + to_str_0(i_p, 2));
+//					}
+//				}
 
 				x_width *=  save_zoom[i_save].rep_fac;
 				y_width *=  save_zoom[i_save].rep_fac;
@@ -1158,6 +1133,82 @@ std::string Zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double d
 	}
 	return message;
 }
+
+
+/*
+ * MapStack
+ * Since we need to compute initial condition field it has to be done in this file and not cmm-io.h
+ */
+// check how many maps we can load
+int countFilesWithString(const std::string& dirPath, const std::string& searchString) {
+	int count = 0; DIR *dir; struct dirent *ent;
+
+	// try to open the directory
+	if ((dir = opendir (dirPath.c_str())) != NULL) {
+		// loop through the directory entries
+		while ((ent = readdir (dir)) != NULL) {
+			// check if the entry is a regular file and if it contains the search string
+			if (ent->d_type == DT_REG && std::string(ent->d_name).find(searchString) != std::string::npos) {
+				count++;
+			}
+		}
+		closedir (dir);
+	} else {
+		// could not open directory
+		std::cerr << "Error: Could not open directory " << dirPath << std::endl;
+	}
+	return count;
+}
+
+// read the map stack together with current map, create initial condition and read previous psi
+std::string readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, std::map<std::string, CmmVar2D*> cmmVarMap,
+		bool isForward, std::string data_name)
+{
+	// set default path
+	std::string folder_name_now = data_name;
+	if (data_name == "") {
+		folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + "/MapStack";
+	}
+	std::string str_forward = ""; if (isForward) str_forward = "_f";
+	std::string message = "";
+
+	// read in every map one by one
+	for (int i_map = 0; i_map < countFilesWithString(folder_name_now, "Map_ChiX" + str_forward + "_H") - 1; ++i_map) {
+		bool read_X = readAllRealFromBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiX_stack_RAM[i_map], folder_name_now + "/Map_ChiX" + str_forward + "_H_" + to_str(i_map) + ".data");
+		bool read_Y = readAllRealFromBinaryFile(4*Map_Stack.Grid->N, Map_Stack.Host_ChiY_stack_RAM[i_map], folder_name_now + "/Map_ChiY" + str_forward + "_H_" + to_str(i_map) + ".data");
+		Map_Stack.map_stack_ctr++;
+
+		if (!read_X) {
+			message += "Failed to read in map " + to_str(i_map) + " at location " + folder_name_now + "/Map_ChiX" + str_forward + "_H_" + to_str(i_map) + ".data\n";
+		}
+		if (!read_Y) {
+			message += "Failed to read in map " + to_str(i_map) + " at location " + folder_name_now + "/Map_ChiY" + str_forward + "_H_" + to_str(i_map) + ".data\n";
+		}
+	}
+
+	// sample vorticity initial condition, assume that current active map is still identity map
+	if (!isForward) {
+		translate_initial_condition_through_map_stack(Map_Stack, *cmmVarMap["ChiX"], *cmmVarMap["ChiY"], *cmmVarMap["Vort_fine_init"], *cmmVarMap["Vort_discrete_init"],
+				(cufftDoubleComplex*)cmmVarMap["empty_vort"]->Dev_var, SettingsMain.getInitialConditionNum(), SettingsMain.getInitialDiscrete(), SettingsMain.getSimulationTypeNum());
+	}
+
+	// read the active map
+	bool read_X = readTransferFromBinaryFile(4*Map_Stack.Grid->N, cmmVarMap["ChiX"+str_forward]->Dev_var, folder_name_now + "/Map_ChiX"  + str_forward + "_H_coarse.data");
+	bool read_Y = readTransferFromBinaryFile(4*Map_Stack.Grid->N, cmmVarMap["ChiY"+str_forward]->Dev_var, folder_name_now + "/Map_ChiY"  + str_forward + "_H_coarse.data");
+	if (!read_X) { message += "Failed to read in active map at location " + folder_name_now + "/Map_ChiX" + str_forward + "_H_coarse.data\n"; }
+	if (!read_Y) { message += "Failed to read in active map at location " + folder_name_now + "/Map_ChiY" + str_forward + "_H_coarse.data\n"; }
+	// load previous psi
+	if (!isForward) {
+		for (int i_psi = 1; i_psi < SettingsMain.getLagrangeOrder(); ++i_psi) {
+			bool read = readTransferFromBinaryFile(4*cmmVarMap["Psi"]->Grid->N, cmmVarMap["Psi"]->Dev_var + i_psi*4*cmmVarMap["Psi"]->Grid->N, folder_name_now + "/Stream_function_Psi_H_psi_" + to_str(i_psi) + ".data");
+			if (!read) {
+				message += "Failed to read in stream function" + to_str(i_psi) + " at location " + folder_name_now + "/Stream_function_Psi_H_psi_" + to_str(i_psi) + ".data\n";
+			}
+		}
+	}
+	return message;
+}
+
 
 
 // avoid overstepping specific time targets

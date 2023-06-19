@@ -29,6 +29,8 @@
 #include <time.h>
 #include <dirent.h>
 
+#include <map>  // used for a list of all variables
+
 // check for reading in directory
 #include <vector>
 #include <dirent.h> // for directory functions
@@ -50,13 +52,13 @@
 void create_directory_structure(SettingsCMM SettingsMain, double dt, int iterMax);
 
 // fundamental save functions
-void writeAllRealToBinaryFile(int Len, double *var, SettingsCMM SettingsMain, std::string data_name);
-void writeAppendToBinaryFile(int Len, double *var, SettingsCMM SettingsMain, std::string data_name);
-bool readAllRealFromBinaryFile(int Len, double *var, std::string data_name);
+void writeAllRealToBinaryFile(size_t Len, double *var, SettingsCMM SettingsMain, std::string data_name);
+void writeAppendToBinaryFile(size_t Len, double *var, SettingsCMM SettingsMain, std::string data_name);
+bool readAllRealFromBinaryFile(size_t Len, double *var, std::string data_name);
 
 // chunked copy directly from or to device memory
-void writeTranferToBinaryFile(int Len, double *d_var, SettingsCMM SettingsMain, std::string data_name, bool do_append);
-bool readTransferFromBinaryFile(long long int Len, double *d_var, std::string data_name);
+void writeTransferToBinaryFile(size_t Len, double *d_var, SettingsCMM SettingsMain, std::string data_name, bool do_append);
+bool readTransferFromBinaryFile(size_t Len, double *d_var, std::string data_name);
 
 // file handling
 int recursive_delete(std::string path, int debug);
@@ -64,23 +66,26 @@ int recursive_delete(std::string path, int debug);
 
 // function to save all data from one timestep into hdf5 or other file structure
 std::string writeTimeStep(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
-		TCudaGrid2D Grid_fine, TCudaGrid2D Grid_coarse, TCudaGrid2D Grid_psi,
-		double *Dev_W_coarse, double *Dev_Psi_real,
-		double *Dev_ChiX, double *Dev_ChiY, double *Dev_ChiX_f, double *Dev_ChiY_f);
-void writeTimeVariable(SettingsCMM SettingsMain, std::string data_name, double t_now, double *Dev_save, long int N);
-void writeTimeVariable(SettingsCMM SettingsMain, std::string data_name, double t_now, double *Host_save, double *Dev_save, long int size_N, long int N, int offset);
+			std::map<std::string, CmmVar2D*> cmmVarMap, std::map<std::string, CmmPart*> cmmPartMap, double *Dev_Temp);
+//std::string writeTimeStep(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, std::map<std::string, CmmVar2D*> cmmVarMap);
 
-std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
-		double **Dev_particles_pos, double **Dev_particles_vel,
-		TCudaGrid2D Grid_psi, double *Dev_psi, double *Dev_Temp, int* fluid_particles_blocks, int fluid_particles_threads);
+void writeTimeVariable(SettingsCMM SettingsMain, std::string data_name, double t_now, CmmVar2D Var, size_t offset_start=0);
+void writeZoomVariable(SettingsCMM SettingsMain, std::string data_name, int zoom_num, int zoom_rep, double t_now, CmmVar2D Var, size_t offset_start=0);
 
-void writeMapStack(SettingsCMM SettingsMain, MapStack Map_Stack, TCudaGrid2D Grid_psi,
-		double* Dev_ChiX, double* Dev_ChiY, double* Dev_Psi_real, bool isForward);
-void readMapStack(SettingsCMM SettingsMain, MapStack& Map_Stack, TCudaGrid2D Grid_psi,
-		double* Dev_ChiX, double* Dev_ChiY, double* Dev_Psi_real, bool isForward, std::string data_name);
+void writeVar(SettingsCMM SettingsMain, std::string sub_folder_name, std::string data_name, CmmVar2D Var, size_t offset_start=0, std::string debug_name_add="");
+void writePart(SettingsCMM SettingsMain, std::string sub_folder_name, std::string data_name, CmmPart Part, size_t offset_start=0, std::string debug_name_add="");
+void writeArr(SettingsCMM SettingsMain, std::string sub_folder_name, std::string data_name, double* Var, size_t N, size_t offset_start=0, std::string debug_name_add="");
 
-void writeParticlesState(SettingsCMM SettingsMain, double **Dev_particles_pos, double **Dev_particles_vel);
-void readParticlesState(SettingsCMM SettingsMain, double **Dev_particles_pos, double **Dev_particles_vel, std::string data_name);
+void writeVarDebugGlobals(SettingsCMM SettingsMain, std::string data_name, CmmVar2D Var, size_t offset_start=0);
+void writeDebugGlobals(SettingsCMM SettingsMain, std::string data_name, double* Var, size_t N, size_t offset_start=0);
+
+//std::string writeParticles(SettingsCMM SettingsMain, double t_now, double dt_now, double dt,
+//		std::map<std::string, CmmPart*> cmmPartMap, CmmVar2D Psi, double *Dev_Temp);
+
+void writeMapStack(SettingsCMM SettingsMain, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Psi, int map_num, bool isForward);
+
+void writeParticlesState(SettingsCMM SettingsMain, CmmPart** Part_Pos, CmmPart** Part_Vel);
+std::string readParticlesState(SettingsCMM SettingsMain, CmmPart** Part_Pos, CmmPart** Part_Vel, std::string data_name);
 
 class Logger
 {

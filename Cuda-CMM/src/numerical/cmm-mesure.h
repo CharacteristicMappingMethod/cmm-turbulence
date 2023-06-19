@@ -20,17 +20,30 @@
 #include <math.h>
 
 // euler incompressible
-void Compute_Energy(double &E, double *psi, TCudaGrid2D Grid);
-void Compute_Enstrophy(double &E, double *W, TCudaGrid2D Grid);
+void Compute_Energy_H(double &E, CmmVar2D Psi, size_t offset_start=0);
+void Compute_Energy(double &E, CmmVar2D Psi, cufftDoubleComplex *Dev_Temp_C1, size_t offset_start=0);
+void Compute_Enstrophy(double &E, CmmVar2D Vort, size_t offset_start=0);
 void Compute_Enstrophy_fourier(double &E, cufftDoubleComplex *W, TCudaGrid2D Grid);
-void Compute_Palinstrophy(TCudaGrid2D Grid, double &Pal, double *W_real, cufftDoubleComplex *Dev_Temp_C1, cufftHandle cufft_plan_D2Z, cufftHandle cufft_plan_Z2D);
-void Hash_array(long long int n, char *Hash, double *dev_array);
+void Compute_Palinstrophy(double &Pal, CmmVar2D Vort, cufftDoubleComplex *Dev_Temp_C1, size_t offset_start=0);
+void Hash_array(char *Hash, double *Dev_var, size_t n);
 
 // vlasov poisson
-void Compute_Mass(double &mass, double *f_in, TCudaGrid2D Grid);
-void Compute_Total_Energy(double &E_tot, double &E_kin, double &E_pot, double *psi_in, double *f_in, cufftDoubleReal *Dev_Temp_C1, TCudaGrid2D Grid);
-void Compute_Kinetic_Energy(double &E_out, double *f_in, cufftDoubleReal *Dev_Temp_C1, TCudaGrid2D Grid);
-void Compute_Potential_Energy(double &E_out, double *psi_in, TCudaGrid2D Grid);
+void Compute_Mass(double &mass, CmmVar2D VarIn, size_t offset_start=0);
+void Compute_Total_Energy(double &E_tot, double &E_kin, double &E_pot, CmmVar2D VarKin, CmmVar2D VarPot, cufftDoubleReal *Dev_Temp_C1, size_t offset_start_1=0, size_t offset_start_2=0);
+void Compute_Kinetic_Energy(double &E_out, CmmVar2D VarIn, cufftDoubleReal *Dev_Temp_C1, size_t offset_start=0);
+void Compute_Potential_Energy(double &E_out, CmmVar2D VarIn, size_t offset_start=0);
+
+// function to compute several global quantities for comparison purposes
+// currently: min, max, area weighted avg, area weighted L2 norm
+void Compute_min(double &mesure, CmmVar2D Var, size_t offset_start=0);
+void Compute_max(double &mesure, CmmVar2D Var, size_t offset_start=0);
+void Compute_avg(double &mesure, CmmVar2D Var, size_t offset_start=0);
+void Compute_L2(double &mesure, CmmVar2D Var, size_t offset_start=0);
+void Compute_min(double &mesure, double* Dev_var, size_t N, size_t offset_start=0);
+void Compute_max(double &mesure, double* Dev_var, size_t N, size_t offset_start=0);
+void Compute_avg(double &mesure, double* Dev_var, size_t N, size_t offset_start=0);
+void Compute_L2(double &mesure, double* Dev_var, size_t N, size_t offset_start=0);
+
 
 void NDFT_1D(cufftDoubleComplex *X_k, double *x_n, double *p_n, double *f_k, int N);
 void iNDFT_1D(cufftDoubleComplex *X_k, double *x_n, double *p_n, double *f_k, int N);
