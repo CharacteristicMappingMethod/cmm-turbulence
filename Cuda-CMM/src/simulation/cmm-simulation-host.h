@@ -45,8 +45,8 @@ void evaluate_potential_from_density_hermite(SettingsCMM SettingsMain, CmmVar2D 
 
 
 // compute psi on a given Grid_psi from distribution function defined on Grid using a 1D fft
-void get_psi_from_distribution_function(CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1);
-void get_psi_hermite_from_distribution_function(CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1);
+void get_psi_from_distribution_function(SettingsCMM SettingsMain, CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1);
+void get_psi_hermite_from_distribution_function(SettingsCMM SettingsMain, CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1);
 
 
 

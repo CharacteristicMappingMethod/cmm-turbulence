@@ -88,6 +88,8 @@ public:
 	#define BLOCK_SIZE 16	// most devices have maximum thread size of 1024, i don't know why this is 16*16=256
 
 	__global__ void Dev_get_max_min(int len, double *var, double *min, double *max);
+	__device__ double calculate_velocity_coordinate(TCudaGrid2D Grid, int iY);
+
 #endif
 
 #endif

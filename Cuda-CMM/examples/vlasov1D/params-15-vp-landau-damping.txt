@@ -6,12 +6,12 @@ simulation_type	=	cmm_vlasov_poisson_1d
 sim_name	=	15-vp
 domain_bounds	=	{0,4,-2.5,2.5}
 grid_coarse	=	256
-grid_fine	=	512
-grid_psi	=	256
-grid_vort	=	512
+grid_fine	=	1024
+grid_psi	=	2048
+grid_vort	=	1024
 final_time	=	41
 set_dt_by_steps	=	0
-factor_dt_by_grid	=	4
+factor_dt_by_grid	=	3
 save_computational_num	=	1
 save_computational	=	{is_instant=0,time_start=0,time_end=100,time_step=0.01,var= ,conv=1}
 mem_RAM_CPU_remaps	=	5000

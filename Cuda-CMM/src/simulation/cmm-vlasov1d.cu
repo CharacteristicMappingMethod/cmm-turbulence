@@ -74,6 +74,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	}
 	std::cout<<message;
 	printf("Domain bounds:\nx0/PI = %f, x1/PI = %f,\ny0/PI= %f, y1/PI = %f,\nz0/Pi = %f, z1/PI = %f\n", bounds[0], bounds[1], bounds[2], bounds[3], bounds[4], bounds[5]);
+	SettingsMain.setDomainBounds(bounds);
 
 	// the code seems to work only square domains!!! is it a bug of a feature? I think its sad
 	double t0 = SettingsMain.getRestartTime();							// time - initial
@@ -520,6 +521,14 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	if (SettingsMain.getForwardMap()) {
 		k_init_diffeo<<<ChiX_f.Grid->blocksPerGrid, ChiX_f.Grid->threadsPerBlock>>>(ChiX_f.Dev_var, ChiY_f.Dev_var, *ChiX_f.Grid);
 	}
+
+	// check if int_{-L/2}^{L/2} int_{-L/2}^{L/2} chi_y(x,y) dx dy = 0 for initial flow map
+	// this is a check if the coordinates are set correctly, since all grid values v_i \in [-L/2, L/2] must be symmetrical around 0
+	// double sum_velocity = 0;
+	// Compute_Mass(sum_velocity, ChiY); // calculates just the integral over the entire grid
+	// if (abs(sum_velocity) >1e-10) {
+	// 	error("Error: Initial flow map is not symmetrical around 0, sum = " + to_str(sum_velocity, 8), 20230610);
+	// }
 
 	//setting initial conditions for vorticity by translating with initial grid
 	translate_initial_condition_through_map_stack(Map_Stack, ChiX, ChiY, Vort_fine_init, Vort_discrete_init,

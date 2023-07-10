@@ -391,15 +391,14 @@ void evaluate_potential_from_density_hermite(SettingsCMM SettingsMain, CmmVar2D 
 			(cufftDoubleReal*)Dev_Temp_C1, Vort_fine_init.Dev_var, *ChiX.Grid, *empty_vort.Grid, *Vort_fine_init.Grid, molly_stencil, false);
 	// this function solves the 1D laplace equation on the Grid_vort (coarse) and upsamples to Grid_Psi (fine)
 	// writeTranferToBinaryFile(Grid_vort.N, (cufftDoubleReal*)Dev_Temp_C1, SettingsMain, "/f", false);
-	get_psi_hermite_from_distribution_function(Psi, empty_vort, (cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C1);
+	get_psi_hermite_from_distribution_function(SettingsMain, Psi, empty_vort, (cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C1);
 //	get_psi_hermite_from_distribution_function(Psi_real, (cufftDoubleReal*)Dev_Temp_C1, Dev_Temp_C1, cufft_plan_phi_1D, cufft_plan_phi_1D_inverse,
 //	cufft_plan_psi_D2Z, cufft_plan_psi_Z2D  ,Grid_vort, Grid_Psi);
-	// writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real), SettingsMain, "/psi", false);
-	// writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real+1*Grid_Psi.N), SettingsMain, "/dpsi_dx", false);
-	// writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real+2*Grid_Psi.N), SettingsMain, "/dpsi_dy", false);
-	// writeTranferToBinaryFile(Grid_Psi.N, (cufftDoubleReal*)(Psi_real+3*Grid_Psi.N), SettingsMain, "/dpsi_dxy", false);
-   
-// // 
+	// writeTransferToBinaryFile(Psi.Grid->N, Psi.Dev_var, SettingsMain, "/psi", false);
+	// writeTransferToBinaryFile(Psi.Grid->N, Psi.Dev_var + 1 * Psi.Grid->N, SettingsMain, "/dpsi_dx", false);
+	// writeTransferToBinaryFile(Psi.Grid->N, Psi.Dev_var + 2 * Psi.Grid->N, SettingsMain, "/dpsi_dy", false);
+	// writeTransferToBinaryFile(Psi.Grid->N, Psi.Dev_var + 3 * Psi.Grid->N, SettingsMain, "/dpsi_dxy", false);
+
 }
 
 
@@ -410,28 +409,41 @@ void evaluate_potential_from_density_hermite(SettingsCMM SettingsMain, CmmVar2D 
  * 		psi= phi  - v^2/2
  * 		d\psi/dx = dphi/dx = F^{-1} (ik_x F(phi))
  */
-void get_psi_from_distribution_function(CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1)
+void get_psi_from_distribution_function(SettingsCMM SettingsMain, CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1)
 {
 	// #################################################################################################################
 	// this function solves the 1D laplace equation on the Grid_vort (fine) and downsamples to Grid_Psi (between coarse and fine)
 	// #################################################################################################################
+
 	integral_v<<<empty_vort.Grid->blocksPerGrid.x, empty_vort.Grid->threadsPerBlock.x >>>((cufftDoubleReal*)Dev_f_in, (cufftDoubleReal*)Dev_Temp_C1+empty_vort.Grid->N, empty_vort.Grid->NX, empty_vort.Grid->NY, empty_vort.Grid->hy);
+
 	// forward fft
-	cufftExecD2Z (Psi.plan_1D_D2Z, (cufftDoubleReal*)Dev_Temp_C1+empty_vort.Grid->N, (cufftDoubleComplex*) Psi.Dev_var);
+	cufftExecD2Z (empty_vort.plan_1D_D2Z, (cufftDoubleReal*)Dev_Temp_C1+empty_vort.Grid->N, (cufftDoubleComplex*) Psi.Dev_var);
+
 	// devide by NX to normalize FFT
 	k_normalize_1D_h<<<empty_vort.Grid->fft_blocks.x, empty_vort.Grid->threadsPerBlock.x>>>((cufftDoubleComplex*) Psi.Dev_var, *empty_vort.Grid);  // this is a normalization factor of FFT? if yes we dont need to do it everytime!!!
+
 	// inverse laplacian in fourier space - division by kx**2 and ky**2
-	k_fft_iLap_h_1D<<<empty_vort.Grid->fft_blocks.x, empty_vort.Grid->threadsPerBlock.x>>>((cufftDoubleComplex*) Psi.Dev_var, (cufftDoubleComplex*)  Psi.Dev_var, *empty_vort.Grid);
+	k_fft_iLap_h_1D<<<empty_vort.Grid->fft_blocks.x, empty_vort.Grid->threadsPerBlock.x>>>((cufftDoubleComplex*) Psi.Dev_var, (cufftDoubleComplex*)Dev_Temp_C1 , *empty_vort.Grid);
+
 	// do zero padding if needed
-	if (empty_vort.Grid->NX != empty_vort.Grid->NX || empty_vort.Grid->NY != empty_vort.Grid->NY) {
-		zero_padding_1D<<<empty_vort.Grid->fft_blocks.x, empty_vort.Grid->threadsPerBlock.x>>>((cufftDoubleComplex*)Psi.Dev_var, (cufftDoubleComplex*) Psi.Dev_var, *Psi.Grid, *empty_vort.Grid);
+	if (empty_vort.Grid->NX < Psi.Grid->NX || empty_vort.Grid->NY < Psi.Grid->NY) {
+		zero_padding_1D<<<Psi.Grid->fft_blocks.x,Psi.Grid->threadsPerBlock.x>>>((cufftDoubleComplex*)Dev_Temp_C1, (cufftDoubleComplex*) Psi.Dev_var, *Psi.Grid, *empty_vort.Grid);
 	}
+	else if (empty_vort.Grid->NX > Psi.Grid->NX || empty_vort.Grid->NY > Psi.Grid->NY)
+	{
+		error("vorticity grid should be smaller than psi grid", 1013);
+	}
+	
 	else { // no movement needed, just copy data over
-		// cudaMemcpy(Psi_real_out, Dev_Temp_C1, Grid.sizeNfft, cudaMemcpyDeviceToDevice);
+		//  Psi.Dev_var = Dev_Temp_C1;
+		cudaMemcpy((cufftDoubleComplex*) Psi.Dev_var, (cufftDoubleComplex*)Dev_Temp_C1, Psi.Grid->sizeNfft, cudaMemcpyDeviceToDevice);
 	}
+
 	//compute x derivative for d\psi/dx = dphi/dx = F^{-1} (ik_x F(phi))
 	k_fft_dx_h_1D<<<Psi.Grid->fft_blocks.x, Psi.Grid->threadsPerBlock.x>>>((cufftDoubleComplex*) Psi.Dev_var, (cufftDoubleComplex*) Dev_Temp_C1, *Psi.Grid);
 	cufftExecZ2D (Psi.plan_1D_Z2D, (cufftDoubleComplex*) Dev_Temp_C1, (cufftDoubleReal*)(Psi.Dev_var+Psi.Grid->N));
+
 	copy_first_row_to_all_rows_in_grid<<<Psi.Grid->blocksPerGrid, Psi.Grid->threadsPerBlock>>>((cufftDoubleReal*) (Psi.Dev_var+Psi.Grid->N), (cufftDoubleReal*) (Psi.Dev_var+Psi.Grid->N), *Psi.Grid);
 	// inverse fft (1D)
 	cufftExecZ2D (Psi.plan_1D_Z2D, (cufftDoubleComplex*) Psi.Dev_var, (cufftDoubleReal*)(Dev_Temp_C1));
@@ -447,10 +459,10 @@ void get_psi_from_distribution_function(CmmVar2D Psi, CmmVar2D empty_vort, doubl
  * 		d\psi/(dy) = v
  * 		d^2\psi/(dxdy) = 0
  */
-void get_psi_hermite_from_distribution_function(CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1)
+void get_psi_hermite_from_distribution_function(SettingsCMM SettingsMain,CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1)
 {
 	// compute psi and d\psi/dx in external function
-	get_psi_from_distribution_function(Psi, empty_vort, Dev_f_in, Dev_Temp_C1);
+	get_psi_from_distribution_function(SettingsMain,Psi, empty_vort, Dev_f_in, Dev_Temp_C1);
 
 	// // compute y derivative for d\psi/(dy) = v
 	generate_gridvalues_v<<<Psi.Grid->blocksPerGrid, Psi.Grid->threadsPerBlock>>>((cufftDoubleReal*)(Psi.Dev_var+2*Psi.Grid->N), -1.0, *Psi.Grid);
@@ -911,7 +923,7 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 //			get_psi_hermite_from_distribution_function(*Sample_var, *Sample_var, Sample_var->Dev_var, Dev_Temp_C1);
 
 			// we only need psi and dx-derivative, so we do not need hermite function, this saves us space
-			get_psi_from_distribution_function(*Sample_var, *Sample_var, Sample_var->Dev_var, (cufftDoubleComplex*)(Sample_var->Dev_var)+Sample_var->Grid->Nfft);
+			get_psi_from_distribution_function(SettingsMain,*Sample_var, *Sample_var, Sample_var->Dev_var, (cufftDoubleComplex*)(Sample_var->Dev_var)+Sample_var->Grid->Nfft);
 
 			Compute_Potential_Energy(mesure[2], *Sample_var);
 

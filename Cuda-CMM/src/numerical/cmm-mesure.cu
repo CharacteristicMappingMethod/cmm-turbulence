@@ -96,8 +96,8 @@ Vlasov Poisson
 
 void Compute_Mass(double &mass, CmmVar2D VarIn, size_t offset_start) {
 	// #############################################################################################
-	//   this function computes the electrical energy of the system defined by the potential psi
-	//		 \Ekin(t) =\frac{1}{2}\int_{\Omega_v} \int_{\Omega_x} f(x,v,t) \abs{v}^2 \d x\, \d v\,.
+	//   this function computes the mass of the distribution function
+	//		 mass(t) =\frac{1}{2}\int_{\Omega_v} \int_{\Omega_x} f(x,v,t) \d x\, \d v\,.
 	// #############################################################################################
 	
 	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(VarIn.Dev_var+offset_start);
@@ -115,7 +115,7 @@ __global__ void generate_gridvalues_f_times_v_square(cufftDoubleReal *v2,cufftDo
 
 	int In;
 	In = iY*Grid.NX + iX;
-	double v_temp = Grid.bounds[2] + iY*Grid.hy;
+	double v_temp = calculate_velocity_coordinate(Grid, iY);
 	v2[In] = v_temp*v_temp*f[In];
 }
 

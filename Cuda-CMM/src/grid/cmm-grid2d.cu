@@ -184,6 +184,7 @@ MapStack::MapStack(TCudaGrid2D *Grid, int cpu_map_num)
 }
 
 
+
 // copy inserted map into last position at map stack, after 1/4 of all total maps, start using new array
 void MapStack::copy_map_to_host(double *Dev_ChiX, double *Dev_ChiY) {
 	cudaMemcpy(Host_ChiX_stack_RAM[map_stack_ctr], Dev_ChiX, 4*Grid->sizeNReal, cudaMemcpyDeviceToHost);
@@ -207,4 +208,12 @@ void MapStack::free_res() {
 	delete [] Host_ChiY_stack_RAM;
 	cudaFree(Dev_ChiX_stack);
 	cudaFree(Dev_ChiY_stack);
+}
+
+
+// Define the __device__ function to calculate velocity coordinate
+__device__ double calculate_velocity_coordinate(TCudaGrid2D Grid, int iY) {
+	// This method capsulates the calculation of the velocity coordinate
+    // return Grid.bounds[2] + iY * Grid.hy + Grid.hy / 2.0;
+	return Grid.bounds[2] + iY * Grid.hy;
 }

@@ -550,7 +550,7 @@ __global__ void generate_gridvalues_v(cufftDoubleReal *v, double prefactor, TCud
 
 	int In;
 	In = iY*Grid.NX + iX;
-	double v_temp = Grid.bounds[2] + iY*Grid.hy;
+	double v_temp = calculate_velocity_coordinate(Grid, iY);
 	v[In] = v_temp*prefactor;
 }
 

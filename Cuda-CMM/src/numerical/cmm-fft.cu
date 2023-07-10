@@ -331,13 +331,12 @@ __global__ void k_normalize_1D_h(cufftDoubleComplex *F, TCudaGrid2D Grid)
 
 __global__ void zero_padding_1D(cufftDoubleComplex *In, cufftDoubleComplex *Out, TCudaGrid2D Grid_out, TCudaGrid2D Grid_in) {
 	int iXc = (blockDim.x * blockIdx.x + threadIdx.x);
-//	int iYc = 0;
 
 	if(iXc >= Grid_out.NX_fft || iXc < 0 )
 		return;
 
-	int Inc = iXc;
-
+	int Inc = iXc; //iYc*Grid_out.NX_fft + iXc, but here iYc = 0 
+	
 	// check if we have to set values to 0, transform index to lower half and compare to gridsize
 	if ((iXc + (iXc > Grid_out.NX/2.0) * (Grid_out.NX - 2*iXc) > Grid_in.NX/2.0)) {
 		Out[Inc].x = Out[Inc].y = 0;
@@ -353,9 +352,6 @@ __global__ void zero_padding_1D(cufftDoubleComplex *In, cufftDoubleComplex *Out,
 		Out[Inc].x = temp.x;
 		Out[Inc].y = temp.y;
 
-//		if (blockIdx.x+blockIdx.y == 0) {
-//			printf("In - %d \t iXc - %d \t iYc - %d \t iXs - %d \t iYs - %d \n", Inc, iXc, iYc, iXs, iYs);
-//		}
 	}
 }
 
