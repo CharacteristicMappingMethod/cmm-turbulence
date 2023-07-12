@@ -214,6 +214,6 @@ void MapStack::free_res() {
 // Define the __device__ function to calculate velocity coordinate
 __device__ double calculate_velocity_coordinate(TCudaGrid2D Grid, int iY) {
 	// This method capsulates the calculation of the velocity coordinate
-    // return Grid.bounds[2] + iY * Grid.hy + Grid.hy / 2.0;
-	return Grid.bounds[2] + iY * Grid.hy;
+    return Grid.bounds[2] + iY * Grid.hy; // + Grid.hy / 2.0;
+	// return Grid.bounds[2] + iY * Grid.hy;
 }

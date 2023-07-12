@@ -30,8 +30,8 @@ map_update_order	=	4th
 molly_stencil	=	0
 freq_cut_psi	=	256
 skip_remapping	=	0
-save_sample_num	=	0
-save_sample	=	{is_instant=0,time_start=0,time_end=40,time_step=0.1,var=,grid=1024}
+save_sample_num	=	1
+save_sample	=	{is_instant=0,time_start=0,time_end=40,time_step=0.01,var=,grid=1024}
 scalar_name	=	rectangle
 scalar_discrete	=	0
 save_zoom_num	=	0
