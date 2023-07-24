@@ -773,10 +773,10 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 			message = message + "Processed sample data " + to_str(i_save + 1) + " on grid " + to_str(Sample_var->Grid->NX) + ", Cons : Energ = " + to_str(mesure[0], 8)
 					+    " \t Enstr = " + to_str(mesure[1], 8)
 					+ " \t Palinstr = " + to_str(mesure[2], 8)
-					+ " \t Wmax = " + to_str(mesure[3], 8);
+					+ " \t Wmax = " + to_str(mesure[3], 8) + "\n";
 		}
 	}
-	return message;
+	return message.substr(0, message.size()-1);  // remove last /n because logging already adds one
 }
 
 
@@ -929,13 +929,13 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 			writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Mass_"+ to_str(Sample_var->Grid->NX));
 
 				// construct message
-			message = message + "Saved sample data " + to_str(i_save + 1) + " on grid " + to_str(Sample_var->Grid->NX) + ", Cons : Etot = " + to_str(mesure[0], 8)
+			message = message + "Processed sample data " + to_str(i_save + 1) + " on grid " + to_str(Sample_var->Grid->NX) + ", Cons : Etot = " + to_str(mesure[0], 8)
 					+    " \t Ekin = " + to_str(mesure[1], 8)
 					+ " \t Epot = " + to_str(mesure[2], 8)
-					+ " \t Mass = " + to_str(mesure[3], 8);
+					+ " \t Mass = " + to_str(mesure[3], 8) + "\n";
 		}
 	}
-	return message;
+	return message.substr(0, message.size()-1);  // remove last /n because logging already adds one
 }
 
 
@@ -970,7 +970,7 @@ std::string compute_zoom(SettingsCMM SettingsMain, double t_now, double dt_now, 
 			CmmVar2D *Zoom_var = cmmVarMap["Zoom_" + to_str(i_save)];  // extract sample variable
 			std::string save_var = save_zoom[i_save].var;
 			bool save_all = save_var.find("All") != std::string::npos;  // master save switch
-			message = message + "Processed zoom data " + to_str(i_save + 1) + " on grid " + to_str(Zoom_var->Grid->NX);
+			message = message + "Processed zoom data " + to_str(i_save + 1) + " on grid " + to_str(Zoom_var->Grid->NX)  + "\n";
 
 			if (SettingsMain.getVerbose() >= 4) {
 				writeAppendToBinaryFile(1, &t_now, SettingsMain,
@@ -1131,7 +1131,7 @@ std::string compute_zoom(SettingsCMM SettingsMain, double t_now, double dt_now, 
 			}
 		}
 	}
-	return message;
+	return message.substr(0, message.size()-1);  // remove last /n because logging already adds one
 }
 
 

@@ -45,11 +45,12 @@ void SettingsCMM::setPresets() {
 	 *  "shielded_vortex"		-	vortex core with ring of negative vorticity around it
 	 *  "two_cosine"			-	stationary setup of two cosine vortices
 	 *  "vortex_sheets"			-	vortex sheets used for singularity studies
+	 *  "vortex_sheets_delta"	-	vortex sheets used for singularity studies with indicator / delta function
 	 */
-	std::string initial_condition = "4_nodes";
+	std::string initial_condition = "vortex_sheets_delta";
 	// string containing parameters for initial condition, they have to be formatted to fit {D1,D2,D3,...} or "D1,D2,D3,..."
 	// can be 10 values max, check cmm-init.cu if the initial condition needs parameter
-	std::string initial_params = "{0}";
+	std::string initial_params = "{1e2}";
 
 	// possibility to compute from discrete initial condition
 	bool initial_discrete = false;
@@ -120,7 +121,7 @@ void SettingsCMM::setPresets() {
 
 	// set memory properties
 	int mem_RAM_CPU_remaps = 9000;  // mem_RAM_CPU_remaps in MB on the CPU
-	bool save_map_stack = true;  // possibility to save the map stack to reuse for other computations to skip initial time
+	bool save_map_stack = false;  // possibility to save the map stack to reuse for other computations to skip initial time
 	// restart simulation
 	double restart_time = 0;  // other than zero means the simulation is restarted
 	std::string restart_location = "data/debug_4_nodes_C512_F2048_t20_T2.1/MapStack";  // if empty, then data is read from own data folder

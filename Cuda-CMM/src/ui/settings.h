@@ -321,6 +321,7 @@ public:
 			else if(initialCondition == "shielded_vortex") initial_condition_num = 9;
 			else if(initialCondition == "two_cosine") initial_condition_num = 10;
 			else if(initialCondition == "vortex_sheets") initial_condition_num = 11;
+			else if(initialCondition == "vortex_sheets_delta") initial_condition_num = 12;
 			else {
 				initial_condition = "zero";  // make clear, that setting the initial condition failed
 				initial_condition_num = -1;
