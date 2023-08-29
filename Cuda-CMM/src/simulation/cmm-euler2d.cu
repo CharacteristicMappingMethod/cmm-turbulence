@@ -695,12 +695,12 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		double w_min = thrust::reduce(w_ptr, w_ptr + Vort_fine_init.Grid->N, 0.0, thrust::minimum<double>());
 
 		// velocity minimum - we first have to compute the norm elements - problems on anthycithere so i disabled it
-//		thrust::device_ptr<double> psi_ptr = thrust::device_pointer_cast(Vort_finit_init.Dev_var);
+//		thrust::device_ptr<double> psi_ptr = thrust::device_pointer_cast(Psi.Dev_var);
 //		thrust::device_ptr<double> temp_ptr = thrust::device_pointer_cast((cufftDoubleReal*)Dev_Temp_C1);
 //
-//		thrust::transform(psi_ptr + 1**Psi.Grid.N, psi_ptr + 2**Psi.Grid.N, psi_ptr + 2**Psi.Grid.N, temp_ptr, norm_fun());
-//		double u_max = thrust::reduce(temp_ptr, temp_ptr + *Psi.Grid.N, 0.0, thrust::maximum<double>());
-
+//		thrust::transform(psi_ptr + 1*Psi.Grid->N, psi_ptr + 2*Psi.Grid->N, psi_ptr + 2*Psi.Grid->N, temp_ptr, norm_fun());
+//		double u_max = thrust::reduce(temp_ptr, temp_ptr + Psi.Grid->N, 0.0, thrust::maximum<double>());
+//
 //		message = "W min = " + to_str(w_min) + " - W max = " + to_str(w_max) + " - U max = " + to_str(u_max);
 		message = "W min = " + to_str(w_min) + " - W max = " + to_str(w_max);
 		logger.push(message);

@@ -47,10 +47,10 @@ void SettingsCMM::setPresets() {
 	 *  "vortex_sheets"			-	vortex sheets used for singularity studies
 	 *  "vortex_sheets_delta"	-	vortex sheets used for singularity studies with indicator / delta function
 	 */
-	std::string initial_condition = "vortex_sheets_delta";
+	std::string initial_condition = "vortex_sheets";
 	// string containing parameters for initial condition, they have to be formatted to fit {D1,D2,D3,...} or "D1,D2,D3,..."
 	// can be 10 values max, check cmm-init.cu if the initial condition needs parameter
-	std::string initial_params = "{1e2}";
+	std::string initial_params = "{1e3,0.2}";
 
 	// possibility to compute from discrete initial condition
 	bool initial_discrete = false;
@@ -70,10 +70,10 @@ void SettingsCMM::setPresets() {
 	// boundary information for translating, 6 coords for 3D - (x0, x1, y0, y1, z0, z1)
 	double domain_bounds[6]= {0, twoPI, 0, twoPI, 0, 0};
 	// set time properties
-	double final_time = 3;  // end of computation
+	double final_time = 15;  // end of computation
 	bool set_dt_by_steps = true;  // choose whether we want to set dt by steps or by grid
 	double factor_dt_by_grid = 1;  // if dt is set by the grid (cfl), then this should be the max velocity
-	int steps_per_sec = 20;  // how many steps do we want per seconds?
+	int steps_per_sec = 128;  // how many steps do we want per seconds?
 	// dt will be set in cmm-euler, so that all changes can be applied there
 
 	/*
@@ -114,7 +114,7 @@ void SettingsCMM::setPresets() {
 
 
 	// set minor properties
-	double incomp_threshhold = 1e-5;  // the maximum allowance of map to deviate from grad_chi begin 1
+	double incomp_threshhold = 1e-3;  // the maximum allowance of map to deviate from grad_chi begin 1
 	double map_epsilon = 1e-3;  // distance used for foot points for GALS map advection
 	// skip remapping, useful for convergence tests
 	bool skip_remapping = false;

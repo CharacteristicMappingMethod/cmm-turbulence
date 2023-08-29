@@ -227,18 +227,18 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 			break;
 		}
 		// omega = exp(-(y - phi(x))^2 / (2 delta^2)) / (sqrt(2 pi) delta^2) with phi(x) sin(x)/2
-		case 11:  // vortex sheets similar to caflisch
+		case 11:  // vortex sheets similar to caflisch - needs one parameter which sets delta indirectly
 		{
 			// double Re = 5e3;
 			double delta_Re = 1/sqrt(d_init_params[0]);  // rewrite for delta to reduce confusion
 			// compute distance from center
 			return exp(- (y-PI - sin(x)/2.0) * (y-PI - sin(x)/2.0) / (2 * delta_Re * delta_Re)) / sqrt(2*PI) / delta_Re;
 		}
-		case 12:  // vortex sheets with indicator function, similar to caflisch
+		case 12:  // vortex sheets with indicator function, similar to caflisch - needs two parameters: one that sets delta and one for tanh strength
 		{
 			// double Re = 5e3;
 			double delta_Re = 1/sqrt(d_init_params[0]);  // rewrite for delta to reduce confusion
-			double tanh_strength = delta_Re * 0.5;  // strength of tanh curve
+			double tanh_strength = delta_Re * d_init_params[1];  // strength of tanh curve
 			// compute distance from
 //			return (abs(y-PI - sin(x)/2.0) < delta_Re)  / (2.0 * delta_Re);  // sharp step function
 			return (0.5*tanh((y-PI - sin(x)/2.0 + delta_Re)/tanh_strength)
