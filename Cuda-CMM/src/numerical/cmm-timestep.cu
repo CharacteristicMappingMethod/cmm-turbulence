@@ -394,30 +394,35 @@ __device__ void RK4_optimized(double *psi, double *x_in, double *x_out, TCudaGri
 		k[1] += d_L1[i_l] * u[i_l*2+1];
 	};
 
-	// compute u_tilde(X - dt*k1, t_n)
-	k[2] = x_in[0] - dt*k[0]; k[3] = x_in[1] - dt*k[1];
-	device_hermite_interpolate_grad_2D(psi, k+2, k+2, Grid, 1);
-	// k2 = u_tilde(X - dt*k1, t_n) = u_n
-
-	// compute u_tilde(X - 3/8 dt*k1 - 1/8 dt*k2, t_n+1/2)
-	k[4] = x_in[0] - dt*(3*k[0] + k[2])/8.0; k[5] = x_in[1] - dt*(3*k[1] + k[3])/8.0;
-	device_hermite_interpolate_grad_2D(psi, k+4, u, Grid, l_order);
-	//k3 = u_tilde(X - 3/8 dt*k1 - 1/8 dt*k2, t_n+1/2) = 2.1875*u_n - 2.1875*u_n-1 + 1.3125*u_n-2 - 0.3125*u_n-3
-	k[4] = d_L12[0] * u[0]; k[5] = d_L12[0] * u[1];
+	// compute u_tilde(X + 1/2 dt*k1, t_n+1/2)
+	k[2] = x_in[0] + dt*k[0]/2.0; k[3] = x_in[1] + dt*k[1]/2.0;
+	device_hermite_interpolate_grad_2D(psi, k+2, u, Grid, l_order);
+	// k2 = u_tilde(X + 1/2 dt*k1, t_n+1/2) = 2.1875*u_n - 2.1875*u_n-1 + 1.3125*u_n-2 - 0.3125*u_n-3
+	k[2] = d_L12[0] * u[0]; k[3] = d_L12[0] * u[1];
 	for (int i_l = 1; i_l < l_order; i_l++) {
-		k[4] += d_L12[i_l] * u[i_l*2  ];
-		k[5] += d_L12[i_l] * u[i_l*2+1];
+		k[2] += d_L12[i_l] * u[i_l*2  ];
+		k[3] += d_L12[i_l] * u[i_l*2+1];
 	};
 
-	//compute u_tilde(X + 1/3 dt*k2 - 4/3 dt*k3, t_n)
-	k[6] = x_in[0] + dt*(k[2] - 4*k[4])/3.0; k[7] = x_in[1] + dt*(k[3] - 4*k[5])/3.0;
-	device_hermite_interpolate_grad_2D(psi, k+6, k+6, Grid, 1);
-	// k3 = u_tilde(X + 1/3 dt*k2 - 4/3 dt*k3, t_n) = u
+	// compute u_tilde(X - 1/2 dt*k1 + 1/2 dt*k2, t_n)
+	k[4] = x_in[0] + dt*(-k[0] + k[2])/2.0; k[5] = x_in[1] + dt*(-k[1] + k[3])/2.0;
+	device_hermite_interpolate_grad_2D(psi, k+4, k+4, Grid, 1);
+	//k3 = u_tilde(X + 1/2 dt*k1 + 1/2 dt*k2, t_n) = u_n
+
+	//compute u_tilde(X - 3/2 dt*k1 + 3/2 dt*k2 + dt*k3, t_n+1)
+	k[6] = x_in[0] + dt*(-3*k[0] + 3*k[2] + k[4])/2.0; k[7] = x_in[1] + dt*(-3*k[1] + 3*k[3] + k[5])/2.0;
+	device_hermite_interpolate_grad_2D(psi, k+6, u, Grid, l_order);
+	// k3 = u_tilde(X - 3/2 dt*k1 + 3/2 dt*k2 + dt*k3, t_n+1) = 3*u_n - 3*u_n-1 + 1*u_n-2
+	k[6] = d_L12[0] * u[0]; k[7] = d_L12[0] * u[1];
+	for (int i_l = 1; i_l < l_order; i_l++) {
+		k[6] += d_L12[i_l] * u[i_l*2  ];
+		k[7] += d_L12[i_l] * u[i_l*2+1];
+	};
 
 	// build all RK-steps together
-	// x = x_n - dt (2*k1 - k2 + 8*k3 + 3*k4)/12
-	x_out[0] = x_in[0] - dt * (2*k[0] - k[2] + 8*k[4] + 3*k[6])/12.0;
-	x_out[1] = x_in[1] - dt * (2*k[1] - k[3] + 8*k[5] + 3*k[7])/12.0;
+	// x = x_n + dt (4*k2 + 1*k3 + 1*k4)/6
+	x_out[0] = x_in[0] + dt * (4*k[2] + 1*k[4] + 1*k[6])/6.0;
+	x_out[1] = x_in[1] + dt * (4*k[3] + 1*k[5] + 1*k[7])/6.0;
 }
 
 

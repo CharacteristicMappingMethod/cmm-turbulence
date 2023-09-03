@@ -93,7 +93,7 @@ void SettingsCMM::setPresets() {
 	 * Gradient of vorticity: "Grad_W" - only for sample
 	 *
 	 * Passive scalar: "Scalar", "Theta" - not for computational_var
-	 * Distribution function: "Dist", "F"
+	 * Distribution function: "Dist", "F" - F coincides with forwarded particles PartF! Caution
 	 * Advected Particles: "PartA_XX" - not for sample_var, XX is the particle computation number
 	 * Advected Particles velocity: "PartA_Vel_XX" - only for computational_var, XX is the particle computation number
 	 *
@@ -135,7 +135,7 @@ void SettingsCMM::setPresets() {
 	 * Third order: "RK3", "RK3Mod"
 	 * Fourth order: "RK4", "RK4Mod"
 	 */
-	std::string time_integration = "RK3";
+	std::string time_integration = "RK4Mod";
 	/*
 	 * Override lagrange interpolation for velocity
 	 * if -1, then lagrange order is set after time integration schemes
@@ -195,7 +195,7 @@ void SettingsCMM::setPresets() {
 	/*
 	 * Forward map settings to compute forward map for scalar particles,
 	 */
-	bool forward_map = false;  // en- or disable computing of forward map
+	bool forward_map = true;  // en- or disable computing of forward map
 
 	// forwarded particles, parameters similar to advected particles
 	int particles_forwarded_num = 0;

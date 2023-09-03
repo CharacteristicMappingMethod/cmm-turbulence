@@ -708,7 +708,7 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 			cudaMemcpy(Sample_var->Dev_var, Sample_var->Dev_var+2*Sample_var->Grid->N, Sample_var->Grid->sizeNReal, cudaMemcpyDeviceToDevice);
 
 			// save vorticity
-			if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos  or save_var.find("F") != std::string::npos or save_all) {
+			if (save_var.find("Vorticity") != std::string::npos or save_var.find("W") != std::string::npos or save_all) {
 				writeTimeVariable(SettingsMain, "Vorticity_W_"+to_str(Sample_var->Grid->NX), t_now, *Sample_var);
 			}
 
