@@ -29,6 +29,7 @@
 #include <thrust/transform_reduce.h>
 #include <thrust/functional.h>
 #include <thrust/device_ptr.h>
+#include <thrust/extrema.h>
 #include "../numerical/cmm-mesure.h"
 
 
@@ -460,12 +461,23 @@ void get_psi_from_distribution_function(SettingsCMM SettingsMain, CmmVar2D Psi, 
  * 		d^2\psi/(dxdy) = 0
  */
 void get_psi_hermite_from_distribution_function(SettingsCMM SettingsMain,CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1)
-{
+{	
+	bool periodify = true;
 	// compute psi and d\psi/dx in external function
 	get_psi_from_distribution_function(SettingsMain,Psi, empty_vort, Dev_f_in, Dev_Temp_C1);
 
 	// // compute y derivative for d\psi/(dy) = v
-	generate_gridvalues_v<<<Psi.Grid->blocksPerGrid, Psi.Grid->threadsPerBlock>>>((cufftDoubleReal*)(Psi.Dev_var+2*Psi.Grid->N), -1.0, *Psi.Grid);
+	Psi.Dev_var = (cufftDoubleReal*)(Psi.Dev_var+2*Psi.Grid->N);
+	if (periodify){
+		compute_periodified_velocity(SettingsMain, Psi, *Psi.Grid, Dev_Temp_C1);
+	}
+	else
+	{
+		generate_gridvalues_v<<<Psi.Grid->blocksPerGrid, Psi.Grid->threadsPerBlock>>>((cufftDoubleReal*)(Psi.Dev_var+2*Psi.Grid->N), -1.0, *Psi.Grid);
+	}
+	Psi.Dev_var = (cufftDoubleReal*)(Psi.Dev_var-2*Psi.Grid->N);
+	// writeTransferToBinaryFile(Psi.Grid->N, (cufftDoubleReal*) Psi.Dev_var+2*Psi.Grid->N, SettingsMain, "/sigma", false);
+	// error("evaluate_potential_from_density_hermite: not nted yet",134);
 	// // compute xy derivative for d^2\psi/(dxdy) = 0
 
 	cudaMemset(Psi.Dev_var+3*Psi.Grid->N, 0.0, Psi.Grid->sizeNReal);
@@ -475,6 +487,121 @@ void get_psi_hermite_from_distribution_function(SettingsCMM SettingsMain,CmmVar2
 	// k_fft_cut_off_scale_h<<<Grid_Psi.fft_blocks, Grid_Psi.threadsPerBlock>>>((cufftDoubleComplex*) Dev_Temp_C1+Grid_Psi.Nfft, Grid_Psi, freq_cut_psi);
 	// Inverse laplacian in Fourier space
 	// fourier_hermite(Grid_psi, Dev_Temp_C1, Psi_real_out, cufft_plan_psi_Z2D);
+}
+
+
+
+__global__ void compute_bump_function(cufftDoubleReal *sigma, TCudaGrid2D Grid)
+{
+	// #############################################################################################
+	// This function copys the following val_out(iv,ix) = val_in(0,ix)
+	// NOTE: VAL_IN SHOULD NOT BE THE SAME AS VAL_OUT TO MAKE THIS WORK (NO INPLACE TRANSFORMS)
+	// #############################################################################################
+		
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+
+	if(iX >= Grid.NX || iY >= Grid.NY || iY == 0)
+		return;
+
+	double v = calculate_velocity_coordinate(Grid, iY);
+	double Lv = Grid.bounds[3] - Grid.bounds[2];
+	int In = iY*Grid.NX + iX;
+
+	double a = 0.4;
+	double b = 0.05;
+
+	sigma[In] =  0.5 - 0.5 * tanh(2*PI*(abs(v)-a*Lv)/(b*Lv));
+}
+
+// Define a functor for division
+struct DivideFunctor
+{
+    const float divisor;
+
+    DivideFunctor(float _divisor) : divisor(_divisor) {}
+
+    __host__ __device__
+    float operator()(const float& x) const
+    {
+        return x / divisor;
+    }
+};
+
+// Define a functor for division
+struct SubtractConstant
+{
+    const float constant;
+
+    SubtractConstant(float _constant) : constant(_constant) {}
+
+    __host__ __device__
+    float operator()(const float& x) const
+    {
+        return x - constant;
+    }
+};
+
+__global__ void transpose(cufftDoubleReal* in, cufftDoubleReal* out, int numRows, int numCols) {
+    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    int col = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (row < numRows && col < numCols) {
+        out[col * numRows + row] = in[row * numCols + col];
+    }
+}
+
+void compute_periodified_velocity(SettingsCMM SettingsMain, CmmVar2D velocity, TCudaGrid2D Grid, cufftDoubleComplex *Dev_Temp_C1) {
+	// ##########################################################################
+	// 
+	// ##########################################################################
+	
+	// evaluate bump function
+	compute_bump_function<<<velocity.Grid->blocksPerGrid, velocity.Grid->threadsPerBlock>>>((cufftDoubleReal*) velocity.Dev_var, Grid);
+
+	// center bump!  bump - mean(bump)
+	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(velocity.Dev_var);
+	double mean = thrust::reduce( ptr, ptr + Grid.N, 0.0, thrust::plus<double>()) / (double)(Grid.N);
+    SubtractConstant subtractOp(mean);
+    thrust::transform(ptr, ptr + Grid.N, ptr, subtractOp);
+	// --------------- normalization factor: ------------
+	// The bump function should be one in the center such that the periodified velocity has slope 1 in the center.
+	// Therefore we normalize the signal to 1 after we shift it in the previous step.
+	// However, since we will transpose the field and perform 1D fft in the x direction, there is an additional
+	// normalization factor because the lattice spacing is different in x direction. 
+	// To account for this we incoperate factor Lx/Ly.
+	// This assume however that Nx == Ny
+	if (Grid.NX != Grid.NY) error("ERROR: velocity periodification assumes NX==NY, try again!", 20230904); 
+	double max_v = *thrust::max_element(ptr, ptr + velocity.Grid->N);
+	// domain size
+	double LX = Grid.bounds[1] - Grid.bounds[0]; 
+	double LY = Grid.bounds[3] - Grid.bounds[2];
+	max_v = -max_v *LX/LY;
+	// initialize factor for thrust
+    DivideFunctor divideOp(max_v);
+    thrust::transform(ptr, ptr + Grid.N, ptr, divideOp);
+
+	// transpose for easy integrating along fast dimension:
+	transpose<<<velocity.Grid->blocksPerGrid, velocity.Grid->threadsPerBlock>>>(velocity.Dev_var, (cufftDoubleReal*) Dev_Temp_C1, Grid.NY, Grid.NX);
+	// integrate bump function 
+	cufftExecD2Z (velocity.plan_1D_D2Z, (cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleComplex*) velocity.Dev_var);
+	// devide by NX to normalize FFT
+	k_normalize_1D_h<<<velocity.Grid->fft_blocks.x, velocity.Grid->threadsPerBlock.x>>>((cufftDoubleComplex*) velocity.Dev_var, *velocity.Grid);  // this is a normalization factor of FFT? if yes we dont need to do it everytime!!!
+	// inverse laplacian in fourier space - division by kx**2 and ky**2
+	k_fft_iLap_h_1D<<<velocity.Grid->fft_blocks.x, velocity.Grid->threadsPerBlock.x>>>((cufftDoubleComplex*) velocity.Dev_var, (cufftDoubleComplex*)Dev_Temp_C1 , *velocity.Grid);
+	// compute x derivative
+	k_fft_dx_h_1D<<<velocity.Grid->fft_blocks.x, velocity.Grid->threadsPerBlock.x>>>((cufftDoubleComplex*) Dev_Temp_C1, (cufftDoubleComplex*) velocity.Dev_var, Grid);
+	// inverse fft
+	cufftExecZ2D (velocity.plan_1D_Z2D, (cufftDoubleComplex*) velocity.Dev_var, (cufftDoubleReal*)(Dev_Temp_C1));
+	// copy results to rest of the field
+	copy_first_row_to_all_rows_in_grid<<<velocity.Grid->blocksPerGrid, velocity.Grid->threadsPerBlock>>>((cufftDoubleReal*) (Dev_Temp_C1), (cufftDoubleReal*) (Dev_Temp_C1), Grid);
+	// transpose again
+	transpose<<<velocity.Grid->blocksPerGrid, velocity.Grid->threadsPerBlock>>>((cufftDoubleReal*) Dev_Temp_C1, velocity.Dev_var, Grid.NX, Grid.NY);
+	// writeTransferToBinaryFile(Grid.N, (cufftDoubleReal*) velocity.Dev_var, SettingsMain, "/sigma", false);
+	// generate_gridvalues_v<<<velocity.Grid->blocksPerGrid, velocity.Grid->threadsPerBlock>>>((cufftDoubleReal*) (Dev_Temp_C1), 1.0, Grid);
+	// writeTransferToBinaryFile(Grid.N, (cufftDoubleReal*) (Dev_Temp_C1), SettingsMain, "/sigma2", false);
+	// error("evaluate_potential_from_density_hermite: not nted yet",134);
+
 }
 
 

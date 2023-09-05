@@ -43,6 +43,7 @@ void evaluate_stream_hermite(CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Vort_fine_in
 void evaluate_potential_from_density_hermite(SettingsCMM SettingsMain, CmmVar2D ChiX, CmmVar2D ChiY, CmmVar2D Vort_fine_init, CmmVar2D Psi,
 		CmmVar2D empty_vort, cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_psi);
 
+void compute_periodified_velocity(SettingsCMM SettingsMain, CmmVar2D velocity, TCudaGrid2D Grid, cufftDoubleComplex *Dev_Temp_C1);
 
 // compute psi on a given Grid_psi from distribution function defined on Grid using a 1D fft
 void get_psi_from_distribution_function(SettingsCMM SettingsMain, CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1);

@@ -115,7 +115,7 @@ __global__ void generate_gridvalues_f_times_v_square(cufftDoubleReal *v2,cufftDo
 
 	int In;
 	In = iY*Grid.NX + iX;
-	double v_temp = calculate_velocity_coordinate(Grid, iY);
+	double v_temp = Grid.bounds[2] + iY*Grid.hy;
 	v2[In] = v_temp*v_temp*f[In];
 }
 

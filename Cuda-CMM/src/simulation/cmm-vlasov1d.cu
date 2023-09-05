@@ -69,7 +69,7 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	}
 	else if (SettingsMain.getInitialConditionNum() == 1){
 		// Notice that for the twostream instability we only multiply the x bounds by PI
-		 for (int i = 0; i < 2; ++i)	 bounds[i] = bounds[i]*PI; // multiply by PI
+		 for (int i = 0; i < 4; ++i)	 bounds[i] = bounds[i]*PI; // multiply by PI
 		 message += "\nInitial condition: Two Stream Instability\n\n";
 	}
 	std::cout<<message;
@@ -529,6 +529,12 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	// if (abs(sum_velocity) >1e-10) {
 	// 	error("Error: Initial flow map is not symmetrical around 0, sum = " + to_str(sum_velocity, 8), 20230610);
 	// }
+
+	// for vlasov poisson the velocity (u_1,u_2) = (v, dphi_x) unfortunately v is not periodic so we have to periodify it:
+	// compute_periodified_velocity(SettingsMain, Psi, *Psi.Grid, Dev_Temp_C1);
+	// writeTransferToBinaryFile(Psi.Grid->N, Psi.Dev_var, SettingsMain, "/sigma", false);
+	// error("evaluate_potential_from_density_hermite: not nted yet",134);
+
 
 	//setting initial conditions for vorticity by translating with initial grid
 	translate_initial_condition_through_map_stack(Map_Stack, ChiX, ChiY, Vort_fine_init, Vort_discrete_init,

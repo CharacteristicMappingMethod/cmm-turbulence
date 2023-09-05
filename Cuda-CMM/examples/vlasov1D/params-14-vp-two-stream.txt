@@ -4,17 +4,17 @@ param_version	=	3
 workspace	=	./
 simulation_type	=	cmm_vlasov_poisson_1d
 sim_name	=	14-vp-two-stream
-domain_bounds	=	{0,10,-8.0,8.0,0,0}
+domain_bounds	=	{0,10,-5.0,5.0,0,0}
 grid_coarse	=	256
 grid_fine	=	512
 grid_psi	=	512
 grid_vort	=	512
-final_time	=	10
+final_time	=	61
 set_dt_by_steps	=	0
 factor_dt_by_grid	=	3
 save_computational_num	=	2
-save_computational	=	{is_instant=0,time_start=0,time_end=10,time_step=0.01,var= ,conv=1}
-save_computational	=	{is_instant=0,time_start=0,time_end=10,time_step=0.1,var=F ,conv=1}
+save_computational	=	{is_instant=0,time_start=0,time_end=60,time_step=0.01,var= ,conv=1}
+save_computational	=	{is_instant=0,time_start=0,time_end=60,time_step=0.1,var=F ,conv=1}
 mem_RAM_CPU_remaps	=	190000
 save_map_stack	=	0
 restart_time	=	0
@@ -37,7 +37,7 @@ save_sample	=	{is_instant=0,time_start=0,time_end=0,time_step=0,var=W-U,grid=512
 save_sample	=	{is_instant=0,time_start=0,time_end=10,time_step=1,var=W-U,grid=512}
 scalar_name	=	rectangle
 scalar_discrete	=	0
-save_zoom_num	=	1
+save_zoom_num	=	0
 save_zoom	=	{is_instant=0,time_start=9,time_end=11,time_step=1,var=F,grid=512,pos_x=15.7079632679,pos_y=0,width_x=31.4159265359,width_y=8,rep=100,rep_fac=0.9}
 forward_map	=	0
 particles_advected_num	=	0

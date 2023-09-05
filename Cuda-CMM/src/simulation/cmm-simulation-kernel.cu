@@ -32,7 +32,7 @@ __global__ void k_init_diffeo(double *ChiX, double *ChiY, TCudaGrid2D Grid)
 	if(iX >= Grid.NX || iY >= Grid.NY) return;
 	int In = iY*Grid.NX + iX;
 
-	ChiX[In] =Grid.bounds[0] + iX*Grid.hx; ChiY[In] = calculate_velocity_coordinate(Grid, iY);
+	ChiX[In] =Grid.bounds[0] + iX*Grid.hx; ChiY[In] = Grid.bounds[2] + iY*Grid.hy;
 	// x dx = y dy = 1
 	ChiX[1*Grid.N+In] = ChiY[2*Grid.N+In] = 1;
 
@@ -48,7 +48,7 @@ __global__ void k_init_diffeo(double2 *Chi, TCudaGrid2D Grid)
 	if(iX >= Grid.NX || iY >= Grid.NY) return;
 	int In = iY*Grid.NX + iX;
 
-	Chi[In].x =Grid.bounds[0] + iX*Grid.hx; Chi[In].y = calculate_velocity_coordinate(Grid, iY);
+	Chi[In].x =Grid.bounds[0] + iX*Grid.hx; Chi[In].y = Grid.bounds[2] + iY*Grid.hy;;
 	// x dx = y dy = 1
 	Chi[1*Grid.N+In].x = Chi[2*Grid.N+In].y = 1;
 
@@ -85,7 +85,7 @@ __global__ void k_h_sample_map(double *ChiX, double *ChiY, double *ChiX_s, doubl
 
 	//position
 	double x = Grid.bounds[0] + iX*Grid.hx;
-	double y = calculate_velocity_coordinate(Grid, iY);
+	double y = Grid.bounds[2] + iY*Grid.hy;;
 
 	device_diffeo_interpolate_2D(ChiX, ChiY, x, y, &x, &y, Grid_map);
 
@@ -309,7 +309,7 @@ __global__ void k_h_sample_map_compact(double *ChiX, double *ChiY, double *x_y, 
 
 	//position spanning on targeted grid
 	double x =  Grid.bounds[0] + iX*Grid.hx;
-	double y =  calculate_velocity_coordinate(Grid, iY);
+	double y =  Grid.bounds[2] + iY*Grid.hy;;
 	// LX and LY are in reference to the map grid
 	double LX = Grid_map.bounds[1] - Grid_map.bounds[0]; double LY = Grid_map.bounds[3] - Grid_map.bounds[2];
 
@@ -495,7 +495,7 @@ __global__ void k_assemble_psi(double *phi_1D, double *psi_out, TCudaGrid2D Grid
 	if(iX >= Grid.NX || iY >= Grid.NY) return;
 	int In = iY*Grid.NX + iX;
 
-	double v = calculate_velocity_coordinate(Grid, iY);
+	double v = Grid.bounds[2] + iY*Grid.hy;;
 	// double x =  Grid.bounds[0] + iX*Grid.hx;
 	psi_out[In] = phi_1D[iX] - 0.5*v*v;
 }
@@ -512,7 +512,7 @@ __global__ void copy_first_row_to_all_rows_in_grid(cufftDoubleReal *val_in, cuff
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 
-	if(iX >= Grid.NX || iY >= Grid.NY || iY == 0)
+	if(iX >= Grid.NX || iY >= Grid.NY)
 		return;
 
 	int In = iY*Grid.NX + iX;
