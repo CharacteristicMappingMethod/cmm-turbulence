@@ -831,8 +831,13 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 		*							 Initialize variables
 		*******************************************************************/
 	    double monitor_map[5]; bool forwarded_init = false;
-	    monitor_map[0] = incompressibility_check(*Vort_fine_init.Grid, ChiX, ChiY, (cufftDoubleReal*)Dev_Temp_C1);
-//		monitor_map[0] = incompressibility_check(*ChiX.Grid, ChiX, ChiY, (cufftDoubleReal*)Dev_Temp_C1);
+	    // writeTransferToBinaryFile(ChiY.Grid->N, ChiY.Dev_var, SettingsMain, "/ChiY", false); //for debug
+		// writeTransferToBinaryFile(ChiX.Grid->N, ChiX.Dev_var, SettingsMain, "/ChiX", false); //for debug
+		
+		monitor_map[0] = incompressibility_check(*Vort_fine_init.Grid, ChiX, ChiY, (cufftDoubleReal*)Dev_Temp_C1);
+		// writeTransferToBinaryFile(Vort_fine_init.Grid->N, (cufftDoubleReal*)Dev_Temp_C1, SettingsMain, "/grad_chi", false); // for debug
+		//  error("gabu", 1013); //for debug
+//		monitor_map[0] = incompressibility_check(*ChiX.Grid, ChiX, ChiY, (cufftDoubleReal*)Dev_Temp_C1); //for debug
 	    if (monitor_map[0]<=0 || monitor_map[0]>1e15){
 			error("Dear captain there is an incompressibility error in coarse grid. Aborting.",2345);
 		}
