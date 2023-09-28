@@ -437,8 +437,8 @@ void get_psi_from_distribution_function(SettingsCMM SettingsMain, CmmVar2D Psi, 
 	}
 	
 	else { // no movement needed, just copy data over
-		//  Psi.Dev_var = Dev_Temp_C1;
-		cudaMemcpy((cufftDoubleComplex*) Psi.Dev_var, (cufftDoubleComplex*)Dev_Temp_C1, Psi.Grid->sizeNfft, cudaMemcpyDeviceToDevice);
+		//  Psi.Dev_var <- Dev_Temp_C1;
+		cudaMemcpy((cufftDoubleComplex*) Psi.Dev_var, (cufftDoubleComplex*)Dev_Temp_C1, Psi.Grid->NX_fft, cudaMemcpyDeviceToDevice);
 	}
 
 	//compute x derivative for d\psi/dx = dphi/dx = F^{-1} (ik_x F(phi))
