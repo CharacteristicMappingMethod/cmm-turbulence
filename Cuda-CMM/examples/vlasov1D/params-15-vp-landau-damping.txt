@@ -4,7 +4,7 @@ param_version	=	3
 workspace	=	./
 simulation_type	=	cmm_vlasov_poisson_1d
 sim_name	=	15-vp
-domain_bounds	=	{0,4,-2.5,2.5}
+domain_bounds	=	{0,4.0,-2.0,2.0}
 grid_coarse	=	256
 grid_fine	=	1024
 grid_psi	=	2048
@@ -30,8 +30,9 @@ map_update_order	=	4th
 molly_stencil	=	0
 freq_cut_psi	=	256
 skip_remapping	=	0
-save_sample_num	=	1
+save_sample_num	=	2
 save_sample	=	{is_instant=0,time_start=0,time_end=40,time_step=0.01,var=,grid=1024}
+save_sample	=	{is_instant=0,time_start=0,time_end=40,time_step=1,var=F,grid=1024}
 scalar_name	=	rectangle
 scalar_discrete	=	0
 save_zoom_num	=	0

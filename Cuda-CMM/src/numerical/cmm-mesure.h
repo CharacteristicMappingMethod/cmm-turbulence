@@ -29,6 +29,7 @@ void Hash_array(char *Hash, double *Dev_var, size_t n);
 
 // vlasov poisson
 void Compute_Mass(double &mass, CmmVar2D VarIn, size_t offset_start=0);
+void Compute_Momentum(double &P_out, CmmVar2D VarIn, cufftDoubleReal *Dev_Temp_C1, size_t offset_start=0);
 void Compute_Total_Energy(double &E_tot, double &E_kin, double &E_pot, CmmVar2D VarKin, CmmVar2D VarPot, cufftDoubleReal *Dev_Temp_C1, size_t offset_start_1=0, size_t offset_start_2=0);
 void Compute_Kinetic_Energy(double &E_out, CmmVar2D VarIn, cufftDoubleReal *Dev_Temp_C1, size_t offset_start=0);
 void Compute_Potential_Energy(double &E_out, CmmVar2D VarIn, size_t offset_start=0);

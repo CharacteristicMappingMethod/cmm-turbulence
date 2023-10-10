@@ -689,7 +689,7 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 	std::string message = "";
 	if (save_now) {
 		// compute mesure values
-		double mesure[4];
+		double mesure[5];
 
 		// compute quantities
 		if (SettingsMain.getSimulationType() == "cmm_vlasov_poisson_1d"){
@@ -699,16 +699,18 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 			mesure[0]=mesure[1]+mesure[2]; // total energy
 			// compute mass
 			Compute_Mass(mesure[3], *cmmVarMap["Vort"]);
-
+			Compute_Momentum(mesure[4], *cmmVarMap["Vort"], (cufftDoubleReal*) Dev_Temp_C1);
 			// save
 			writeAppendToBinaryFile(1, &t_now, SettingsMain, "/Monitoring_data/Mesure/Time_s");  // time vector for data
 			writeAppendToBinaryFile(1, mesure, SettingsMain, "/Monitoring_data/Mesure/Etot");
 			writeAppendToBinaryFile(1, mesure+1, SettingsMain, "/Monitoring_data/Mesure/Ekin");
 			writeAppendToBinaryFile(1, mesure+2, SettingsMain, "/Monitoring_data/Mesure/Epot");
 			writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Mass");
+			writeAppendToBinaryFile(1, mesure+4, SettingsMain, "/Monitoring_data/Mesure/Momentum");
 
 			// construct message
 			message = "Computed coarse Cons : Etot = " + to_str(mesure[0], 8)
+					+    " \t Momenta = " + to_str(mesure[4], 8)
 					+    " \t Ekin = " + to_str(mesure[1], 8)
 					+ " \t Epot = " + to_str(mesure[2], 8)
 					+ " \t Mass = " + to_str(mesure[3], 8);
@@ -947,7 +949,7 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 	// check if we want to save at this time, combine all variables if so
 	std::string message = "";
 	SaveSample* save_sample = SettingsMain.getSaveSample();
-	double mesure[4];  // it's fine if we only output it last time, thats enough i guess
+	double mesure[5];  // it's fine if we only output it last time, thats enough i guess
 	for (int i_save = 0; i_save < SettingsMain.getSaveSampleNum(); ++i_save) {
 		// check each save and execute it independent
 		bool save_now = false;
@@ -1064,7 +1066,9 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 
 			// compute enstrophy and palinstrophy
 			Compute_Kinetic_Energy(mesure[1], *Sample_var, Sample_var->Dev_var + Sample_var->Grid->N);
+			Compute_Momentum(mesure[4], *Sample_var, Sample_var->Dev_var + Sample_var->Grid->N);
 			Compute_Mass(mesure[3], *Sample_var);
+			
 
 			// reuse sampled distribution to compute psi, here distribution is discarded
 //			get_psi_hermite_from_distribution_function(*Sample_var, *Sample_var, Sample_var->Dev_var, Dev_Temp_C1);
@@ -1086,9 +1090,11 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 			writeAppendToBinaryFile(1, mesure+1, SettingsMain, "/Monitoring_data/Mesure/Ekin_"+ to_str(Sample_var->Grid->NX));
 			writeAppendToBinaryFile(1, mesure+2, SettingsMain, "/Monitoring_data/Mesure/Epot_"+ to_str(Sample_var->Grid->NX));
 			writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Mass_"+ to_str(Sample_var->Grid->NX));
+			writeAppendToBinaryFile(1, mesure+4, SettingsMain, "/Monitoring_data/Mesure/Momentum_"+ to_str(Sample_var->Grid->NX));
 
 				// construct message
 			message = message + "Saved sample data " + to_str(i_save + 1) + " on grid " + to_str(Sample_var->Grid->NX) + ", Cons : Etot = " + to_str(mesure[0], 8)
+					+    " \t Momenta = " + to_str(mesure[4], 8)
 					+    " \t Ekin = " + to_str(mesure[1], 8)
 					+ " \t Epot = " + to_str(mesure[2], 8)
 					+ " \t Mass = " + to_str(mesure[3], 8);

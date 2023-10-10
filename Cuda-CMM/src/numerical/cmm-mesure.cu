@@ -104,6 +104,21 @@ void Compute_Mass(double &mass, CmmVar2D VarIn, size_t offset_start) {
 	mass = VarIn.Grid->hy * VarIn.Grid->hx * thrust::reduce( ptr, ptr + VarIn.Grid->N, 0.0, thrust::plus<double>());
 }
 
+__global__ void generate_gridvalues_f_times_v(cufftDoubleReal *v2,cufftDoubleReal *f, TCudaGrid2D Grid) {
+	// #############################################################################################
+	// This function creates a NX time NV grid of values f(ix,iv) *v[iv]
+	// #############################################################################################
+	
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
+	if(iX >= Grid.NX || iY >= Grid.NY) return;
+
+	int In;
+	In = iY*Grid.NX + iX;
+	double v_temp = Grid.bounds[2] + iY*Grid.hy;
+	v2[In] = v_temp*f[In];
+}
+
 __global__ void generate_gridvalues_f_times_v_square(cufftDoubleReal *v2,cufftDoubleReal *f, TCudaGrid2D Grid) {
 	// #############################################################################################
 	// This function creates a NX time NV grid of values f(ix,iv) *v[iv]^2
@@ -118,6 +133,18 @@ __global__ void generate_gridvalues_f_times_v_square(cufftDoubleReal *v2,cufftDo
 	double v_temp = Grid.bounds[2] + iY*Grid.hy;
 	v2[In] = v_temp*v_temp*f[In];
 }
+
+void Compute_Momentum(double &P_out, CmmVar2D VarIn, cufftDoubleReal *Dev_Temp_C1, size_t offset_start){
+	// #############################################################################################
+	//   this function computes the electrical energy of the system defined by the potential psi
+	//		 P(t) = \int_{\Omega_v} \int_{\Omega_x} f(x,v,t) v \d x\, \d v\,.
+	// #############################################################################################
+	
+	generate_gridvalues_f_times_v<<<VarIn.Grid->blocksPerGrid, VarIn.Grid->threadsPerBlock>>>(Dev_Temp_C1, VarIn.Dev_var+offset_start, *VarIn.Grid);
+	thrust::device_ptr<double> ptr = thrust::device_pointer_cast(Dev_Temp_C1);
+	P_out = VarIn.Grid->hy * VarIn.Grid->hx * thrust::reduce( ptr, ptr + VarIn.Grid->N, 0.0, thrust::plus<double>());
+}
+
 
 void Compute_Kinetic_Energy(double &E_out, CmmVar2D VarIn, cufftDoubleReal *Dev_Temp_C1, size_t offset_start){
 	// #############################################################################################
