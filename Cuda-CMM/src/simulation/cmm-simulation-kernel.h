@@ -53,6 +53,7 @@ __global__ void k_apply_map_and_sample_from_hermite(double *ChiX, double *ChiY, 
 // vlasov integral
 __global__ void integral_v(double *v_in, double *v_out, int nx, int ny, double hy);
 __global__ void k_assemble_psi(double *phi_1D, double *psi_out, double *velocity, TCudaGrid2D Grid);
+__global__ void k_assemble_psi_periodified(double *phi_1D, double *psi_out, double *velocity, TCudaGrid2D Grid);
 __global__ void generate_gridvalues_v(cufftDoubleReal *v, double prefactor, TCudaGrid2D Grid);
 __global__ void copy_first_row_to_all_rows_in_grid(cufftDoubleReal *val_in, cufftDoubleReal *val_out, TCudaGrid2D Grid);
 // use cudaMemset(array, value, Size) for this

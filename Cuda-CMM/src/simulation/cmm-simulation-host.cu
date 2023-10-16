@@ -455,14 +455,21 @@ void get_psi_from_distribution_function(SettingsCMM SettingsMain, CmmVar2D Psi, 
 		Psi.Dev_var = (cufftDoubleReal*)(Psi.Dev_var+2*Psi.Grid->N);
 		compute_periodified_velocity(SettingsMain, Psi, *Psi.Grid, Dev_Temp_C1);
 		Psi.Dev_var = (cufftDoubleReal*)(Psi.Dev_var-2*Psi.Grid->N);
+		k_assemble_psi_periodified<<<Psi.Grid->blocksPerGrid, Psi.Grid->threadsPerBlock>>>((cufftDoubleReal*)(Psi.Dev_var + 3*Psi.Grid->N), Psi.Dev_var  ,(cufftDoubleReal*)(Psi.Dev_var+2*Psi.Grid->N), *Psi.Grid);
 	}
 	else
 	{
 		// currently not supported
 		generate_gridvalues_v<<<Psi.Grid->blocksPerGrid, Psi.Grid->threadsPerBlock>>>((cufftDoubleReal*)(Psi.Dev_var+2*Psi.Grid->N), -1.0, *Psi.Grid);
+		k_assemble_psi<<<Psi.Grid->blocksPerGrid, Psi.Grid->threadsPerBlock>>>((cufftDoubleReal*)(Psi.Dev_var + 3*Psi.Grid->N), Psi.Dev_var  ,(cufftDoubleReal*)(Psi.Dev_var+2*Psi.Grid->N), *Psi.Grid);
 	}
+
+	// cufftExecD2Z(Psi.plan_D2Z, (cufftDoubleReal*)Psi.Dev_var, (cufftDoubleComplex*) Dev_Temp_C1);
+	// k_normalize_h<<<Psi.Grid->fft_blocks, Psi.Grid->threadsPerBlock>>>((cufftDoubleComplex*) Dev_Temp_C1, *Psi.Grid);
 	// // assemble psi= phi  - v^2/2
-	k_assemble_psi<<<Psi.Grid->blocksPerGrid, Psi.Grid->threadsPerBlock>>>((cufftDoubleReal*)(Psi.Dev_var + 3*Psi.Grid->N), Psi.Dev_var  ,(cufftDoubleReal*)(Psi.Dev_var+2*Psi.Grid->N), *Psi.Grid);
+	// // Inverse laplacian in Fourier space
+	// fourier_hermite(*Psi.Grid, Dev_Temp_C1, Psi.Dev_var, Psi.plan_Z2D);
+	// error("evaluate_potential_from_density_hermite: not nted yet",134);
 	// writeTransferToBinaryFile(Psi.Grid->N, (cufftDoubleReal*) Psi.Dev_var, SettingsMain, "/Psi2", false);
 	// error("evaluate_potential_from_density_hermite: not nted yet",134);
 }
@@ -524,7 +531,7 @@ __global__ void compute_bump_function(cufftDoubleReal *sigma, TCudaGrid2D Grid)
 	int In = iY*Grid.NX + iX;
 
 	double a = 0.4;
-	double b = 0.05;
+	double b = 0.2;
 
 	sigma[In] =  0.5 - 0.5 * tanh(2*PI*(abs(v)-a*Lv)/(b*Lv));
 }
@@ -602,7 +609,7 @@ void compute_periodified_velocity(SettingsCMM SettingsMain, CmmVar2D velocity, T
 	cufftExecD2Z (velocity.plan_1D_D2Z, (cufftDoubleReal*)Dev_Temp_C1, (cufftDoubleComplex*) velocity.Dev_var);
 	// devide by NX to normalize FFT
 	k_normalize_1D_h<<<velocity.Grid->fft_blocks.x, velocity.Grid->threadsPerBlock.x>>>((cufftDoubleComplex*) velocity.Dev_var, *velocity.Grid);  // this is a normalization factor of FFT? if yes we dont need to do it everytime!!!
-	// inverse laplacian in fourier space - division by kx**2 and ky**2
+	// inverse laplacian in fourier space - division by kx**2
 	k_fft_iLap_h_1D<<<velocity.Grid->fft_blocks.x, velocity.Grid->threadsPerBlock.x>>>((cufftDoubleComplex*) velocity.Dev_var, (cufftDoubleComplex*)(velocity.Dev_var - 2*velocity.Grid->N) , *velocity.Grid);
 	// compute x derivative
 	k_fft_dx_h_1D<<<velocity.Grid->fft_blocks.x, velocity.Grid->threadsPerBlock.x>>>((cufftDoubleComplex*)(velocity.Dev_var - 2*velocity.Grid->N), (cufftDoubleComplex*) velocity.Dev_var, Grid);
@@ -616,10 +623,13 @@ void compute_periodified_velocity(SettingsCMM SettingsMain, CmmVar2D velocity, T
 	cufftExecZ2D (velocity.plan_1D_Z2D, (cufftDoubleComplex*) (velocity.Dev_var - 2*velocity.Grid->N), (cufftDoubleReal*)(Dev_Temp_C1));
 	copy_first_row_to_all_rows_in_grid<<<velocity.Grid->blocksPerGrid, velocity.Grid->threadsPerBlock>>>((cufftDoubleReal*) (Dev_Temp_C1), (cufftDoubleReal*) (Dev_Temp_C1), Grid);
 	transpose<<<velocity.Grid->blocksPerGrid, velocity.Grid->threadsPerBlock>>>((cufftDoubleReal*) Dev_Temp_C1, (velocity.Dev_var - 2*velocity.Grid->N), Grid.NX, Grid.NY);
-
-	// writeTransferToBinaryFile(Grid.N, (cufftDoubleReal*) (velocity.Dev_var - 2*velocity.Grid->N), SettingsMain, "/Psi2", false);
-	// // generate_gridvalues_v<<<velocity.Grid->blocksPerGrid, velocity.Grid->threadsPerBlock>>>((cufftDoubleReal*) (Dev_Temp_C1), 1.0, Grid);
-	// // writeTransferToBinaryFile(Grid.N, (cufftDoubleReal*) (Dev_Temp_C1), SettingsMain, "/sigma2", false);
+	ptr = thrust::device_pointer_cast(velocity.Dev_var - 2*velocity.Grid->N);
+	max_v = LX/LY;
+	DivideFunctor divideOp2(max_v);
+	thrust::transform(ptr, ptr + Grid.N, ptr, divideOp2);
+	// writeTransferToBinaryFile(Grid.N, (cufftDoubleReal*) (velocity.Dev_var), SettingsMain, "/Psi2", false);
+	// generate_gridvalues_v<<<velocity.Grid->blocksPerGrid, velocity.Grid->threadsPerBlock>>>((cufftDoubleReal*) (Dev_Temp_C1), 1.0, Grid);
+	// writeTransferToBinaryFile(Grid.N, (cufftDoubleReal*) (Dev_Temp_C1), SettingsMain, "/sigma2", false);
 	//  error("evaluate_potential_from_density_hermite: not nted yet",134);
 
 }
