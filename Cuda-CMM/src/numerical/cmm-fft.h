@@ -26,7 +26,8 @@
 // fourier functions for hermitian data / with D2Z and Z2D
 __global__ void k_fft_lap_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
 __global__ void k_fft_iLap_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
-__global__ void k_fft_iLap_h_1D(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
+__global__ void k_fft_iLap_hx_1D(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
+__global__ void k_fft_iLap_hy_1D(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
 __global__ void k_fft_dx_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
 __global__ void k_fft_dy_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
 __global__ void k_fft_dx_h_1D(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid);
@@ -42,7 +43,8 @@ __global__ void k_fft_cut_off_scale_h(cufftDoubleComplex *W, TCudaGrid2D Grid, d
 __global__ void k_fft_grid_move(cufftDoubleComplex *In, cufftDoubleComplex *Out, TCudaGrid2D Grid_c, TCudaGrid2D Grid_s);
 
 __global__ void k_normalize_h(cufftDoubleComplex *F, TCudaGrid2D Grid);
-__global__ void k_normalize_1D_h(cufftDoubleComplex *F, TCudaGrid2D Grid);
+__global__ void k_normalize_1D_hx(cufftDoubleComplex *F, TCudaGrid2D Grid);
+__global__ void k_normalize_1D_hy(cufftDoubleComplex *F, TCudaGrid2D Grid);
 __global__ void zero_padding_1D(cufftDoubleComplex *In, cufftDoubleComplex *Out, TCudaGrid2D Grid_out, TCudaGrid2D Grid_in);
 
 // compute hermite with derivatives in fourier space, uniform helper function fitted for all grids to utilize only input temporary variable

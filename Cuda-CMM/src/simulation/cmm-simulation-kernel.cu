@@ -501,16 +501,14 @@ __global__ void k_assemble_psi(double *phi_1D, double *psi_out, double *velocity
 	psi_out[In] = phi_1D[iX] - 0.5*v*v;
 }
 
-__global__ void k_assemble_psi_periodified(double *phi_1D, double *psi_out, double *velocity, TCudaGrid2D Grid)
+__global__ void k_assemble_psi_periodified(double *phi_1D, double *hy, double *psi_out, TCudaGrid2D Grid)
 {
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
 	int iY = (blockDim.y * blockIdx.y + threadIdx.y);
 	if(iX >= Grid.NX || iY >= Grid.NY) return;
 	int In = iY*Grid.NX + iX;
 
-	double v = velocity[In];//Grid.bounds[2] + iY*Grid.hy;;
-	// double x =  Grid.bounds[0] + iX*Grid.hx;
-	psi_out[In] += phi_1D[iX] ;//- 0.5*v*v;
+	psi_out[In] = phi_1D[iX] + hy[iY];//- 0.5*v*v;
 }
 
 
@@ -583,4 +581,6 @@ __global__ void integral_v(double *v_in, double *v_out, int nx, int ny, double h
 		v_out[IDX] += v_in[In];
 	}
 	v_out[IDX] *= hy;
+	v_out[IDX] += -1.0;
+
 }

@@ -721,7 +721,6 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 
 	// save function to save variables, combined so we always save in the same way and location
 	save_functions(SettingsMain, logger, t0, dt, dt, Map_Stack, Map_Stack_f, cmmVarMap, cmmPartMap, Dev_Temp_C1);
-
 	// displaying max and min of vorticity and velocity for plotting limits and cfl condition
 	// vorticity minimum
 	if (SettingsMain.getVerbose() >= 2) {

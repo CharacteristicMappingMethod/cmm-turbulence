@@ -78,7 +78,7 @@ __global__ void k_fft_iLap_h(cufftDoubleComplex *val_in, cufftDoubleComplex *val
 }
 
 // inverse laplacian in fourier space - division by kx**2
-__global__ void k_fft_iLap_h_1D(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
+__global__ void k_fft_iLap_hx_1D(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -96,8 +96,31 @@ __global__ void k_fft_iLap_h_1D(cufftDoubleComplex *val_in, cufftDoubleComplex *
 	double kx = twoPI/(Grid.hx*Grid.NX) * (iX - (iX>Grid.NX/2)*Grid.NX);
 	double k2 = kx*kx;
 
-    val_out[In].x = - val_in[In].x /k2;
-    val_out[In].y = - val_in[In].y /k2;
+    val_out[In].x = val_in[In].x /k2;
+    val_out[In].y = val_in[In].y /k2;
+}
+
+// inverse laplacian in fourier space - division by ky**2
+__global__ void k_fft_iLap_hy_1D(cufftDoubleComplex *val_in, cufftDoubleComplex *val_out, TCudaGrid2D Grid)
+{
+	//index
+	int iY = (blockDim.x * blockIdx.x + threadIdx.x);
+	if(iY >= Grid.NX_fft)
+		return;
+
+	if(iY == 0)
+	{
+		val_out[0].x = val_out[0].y = 0.0;
+		return;
+	}
+
+	int In = iY;
+
+	double ky = twoPI/(Grid.hy*Grid.NY) * (iY - (iY>Grid.NY/2)*Grid.NY);
+	double k2 = ky*ky;
+
+    val_out[In].x = val_in[In].x /k2;
+    val_out[In].y = val_in[In].y /k2;
 }
 
 
@@ -317,7 +340,7 @@ __global__ void k_normalize_h(cufftDoubleComplex *F, TCudaGrid2D Grid)
 
 
 // divide all values by grid size
-__global__ void k_normalize_1D_h(cufftDoubleComplex *F, TCudaGrid2D Grid)
+__global__ void k_normalize_1D_hx(cufftDoubleComplex *F, TCudaGrid2D Grid)
 {
 	//index
 	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -326,6 +349,18 @@ __global__ void k_normalize_1D_h(cufftDoubleComplex *F, TCudaGrid2D Grid)
 
 	F[In].x /= (double)Grid.NX;
 	F[In].y /= (double)Grid.NX;
+}
+
+// divide all values by grid size
+__global__ void k_normalize_1D_hy(cufftDoubleComplex *F, TCudaGrid2D Grid)
+{
+	//index
+	int iY = (blockDim.x * blockIdx.x + threadIdx.x);
+
+	int In = iY;
+
+	F[In].x /= (double)Grid.NY;
+	F[In].y /= (double)Grid.NY;
 }
 
 

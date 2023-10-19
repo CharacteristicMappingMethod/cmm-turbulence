@@ -44,12 +44,10 @@ void evaluate_potential_from_density_hermite(SettingsCMM SettingsMain, CmmVar2D 
 		CmmVar2D empty_vort, cufftDoubleComplex *Dev_Temp_C1, int molly_stencil, double freq_cut_psi);
 
 void compute_periodified_velocity(SettingsCMM SettingsMain, CmmVar2D velocity, TCudaGrid2D Grid, cufftDoubleComplex *Dev_Temp_C1);
-
+void compute_periodification_function(SettingsCMM SettingsMain, CmmVar2D velocity, TCudaGrid2D Grid, cufftDoubleComplex *Dev_Temp_C1, size_t offset=0);
 // compute psi on a given Grid_psi from distribution function defined on Grid using a 1D fft
-void get_psi_from_distribution_function(SettingsCMM SettingsMain, CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1);
-void get_psi_hermite_from_distribution_function(SettingsCMM SettingsMain, CmmVar2D Psi, CmmVar2D empty_vort, double *Dev_f_in, cufftDoubleComplex *Dev_Temp_C1);
-
-
+void calc_phi(SettingsCMM SettingsMain, CmmVar2D phi_out,  CmmVar2D f_in, cufftDoubleComplex *Dev_Temp_C1, bool isFourierSpaceResult = false);
+void solve_1D_laplace(cufftDoubleComplex *rhs, TCudaGrid2D Grid, cufftHandle plan_1D);
 
 // all save functions under one roof
 void save_functions(SettingsCMM& SettingsMain, Logger& logger, double t_now, double dt_now, double dt,
@@ -65,7 +63,7 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 		std::map<std::string, CmmVar2D*> cmmVarMap, std::map<std::string, CmmPart*> cmmPartMap);
 
 std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, MapStack Map_Stack, MapStack Map_Stack_f,
-		std::map<std::string, CmmVar2D*> cmmVarMap, std::map<std::string, CmmPart*> cmmPartMap);
+		std::map<std::string, CmmVar2D*> cmmVarMap, cufftDoubleComplex *Dev_Temp_C1);
 
 // sample vorticity with mapstack at arbitrary frame
 std::string compute_zoom(SettingsCMM SettingsMain, double t_now, double dt_now, double dt, MapStack Map_Stack, MapStack Map_Stack_f,
