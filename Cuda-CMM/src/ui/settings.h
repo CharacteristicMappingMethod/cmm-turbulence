@@ -300,6 +300,7 @@ public:
 		if (simulation_type=="cmm_vlasov_poisson_1d"){
 			if(initialCondition == "landau_damping") initial_condition_num = 0;
 			else if(initialCondition == "two_stream") initial_condition_num = 1;
+			else if(initialCondition == "nonlin_landau_damping") initial_condition_num = 2;
 			else {
 				initial_condition = "zero";  // make clear, that setting the initial condition failed
 				initial_condition_num = -1;

@@ -459,6 +459,7 @@ __device__ double d_init_distirbution_function(double x, double v, int simulatio
 	/*
 	 *  Initial conditions for vorticity
 	 *  "landau_damping" 		- similar to a single shear layer
+	 *  "nonlin_landau_damping" 		- similar to a single shear layer
 	 *  "two_stream"			- similar to a double shear layer
 	 */
 	
@@ -476,6 +477,13 @@ __device__ double d_init_distirbution_function(double x, double v, int simulatio
 			double k = 0.2;  // thickness of shear layer
 			double eps = 5*1e-2;  // strength of instability
 			return 1/(2*sqrt(2*PI)) * (1 + eps * cos(k*x))  * (exp(-(v-v0)*(v-v0)*0.5) + exp(-(v+v0)*(v+v0)*0.5));															
+			break;
+		}
+		case 2:  // non-lin landau damping
+		{
+			double k = 0.5;  // thickness of shear layer
+			double eps = 0.5;  // strength of instability
+			return (1 + eps*cos(k*x)) * exp(-(v)*(v)*0.5)/sqrt(2 * PI);
 			break;
 		}
 		default:
