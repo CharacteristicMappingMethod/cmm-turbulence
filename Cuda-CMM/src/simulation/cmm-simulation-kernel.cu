@@ -508,7 +508,7 @@ __global__ void k_assemble_psi_periodified(double *phi_1D, double *hy, double *p
 	if(iX >= Grid.NX || iY >= Grid.NY) return;
 	int In = iY*Grid.NX + iX;
 
-	psi_out[In] = phi_1D[iX] + hy[iY];//- 0.5*v*v;
+	psi_out[In] = phi_1D[iX] - hy[iY];//- 0.5*v*v;
 }
 
 
