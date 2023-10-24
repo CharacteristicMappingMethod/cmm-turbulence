@@ -63,15 +63,13 @@ void cuda_vlasov_1d(SettingsCMM& SettingsMain)
 	double bounds[6] = {0, 4.0*PI, -2.5*PI, 2.5*PI, 0, 0};
 	SettingsMain.getDomainBounds(bounds);
 
-	if (SettingsMain.getInitialConditionNum() == 0) {
+	if (SettingsMain.getInitialConditionNum() == 0 || SettingsMain.getInitialConditionNum() == 3) {
 		message += "\nInitial condition: Landau Damping\n\n";
-		for (int i = 0; i < 4; ++i) bounds[i] = bounds[i]*PI; // multiply by PI
 	}
 	else if (SettingsMain.getInitialConditionNum() == 1){
-		// Notice that for the twostream instability we only multiply the x bounds by PI
-		 for (int i = 0; i < 4; ++i)	 bounds[i] = bounds[i]*PI; // multiply by PI
-		 message += "\nInitial condition: Two Stream Instability\n\n";
+		message += "\nInitial condition: Two Stream Instability\n\n";
 	}
+	for (int i = 0; i < 4; ++i) bounds[i] = bounds[i]*PI; // multiply by PI
 	std::cout<<message;
 	printf("Domain bounds:\nx0/PI = %f, x1/PI = %f,\ny0/PI= %f, y1/PI = %f,\nz0/Pi = %f, z1/PI = %f\n", bounds[0], bounds[1], bounds[2], bounds[3], bounds[4], bounds[5]);
 	SettingsMain.setDomainBounds(bounds);

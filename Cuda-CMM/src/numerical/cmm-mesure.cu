@@ -119,6 +119,19 @@ __global__ void generate_gridvalues_f_times_v(cufftDoubleReal *v2,cufftDoubleRea
 	v2[In] = v_temp*f[In];
 }
 
+
+__global__ void generate_Esincos(cufftDoubleReal *Esincos, cufftDoubleReal *Efield, double k, TCudaGrid2D Grid) {
+	
+	int iX = (blockDim.x * blockIdx.x + threadIdx.x);
+	if(iX >= Grid.NX) return;
+
+	double x = Grid.bounds[0] + iX*Grid.hx;
+	Esincos[iX] = Efield[iX]*sin(twoPI * k * x / Grid.bounds[1]);
+    Esincos[iX+Grid.NX] = Efield[iX]*cos(twoPI * k * x / Grid.bounds[1]);
+}
+
+
+
 __global__ void generate_gridvalues_f_times_v_square(cufftDoubleReal *v2,cufftDoubleReal *f, TCudaGrid2D Grid) {
 	// #############################################################################################
 	// This function creates a NX time NV grid of values f(ix,iv) *v[iv]^2
@@ -167,6 +180,25 @@ void Compute_Potential_Energy(double &E_out, CmmVar2D VarIn, size_t offset_start
 	// parallel reduction using thrust
 	thrust::device_ptr<double> psi_ptr = thrust::device_pointer_cast(VarIn.Dev_var+offset_start);
 	E_out = 0.5 * VarIn.Grid->hx * thrust::transform_reduce(psi_ptr + 1*VarIn.Grid->N, psi_ptr + VarIn.Grid->N + VarIn.Grid->NX, thrust::square<double>(), 0.0, thrust::plus<double>());
+}
+
+void Compute_kth_Mode(double *Emodes, CmmVar2D VarIn, cufftDoubleComplex *Dev_Temp_C1, int Nf){
+	// #############################################################################################
+	// this function computes the absolut value of the first Nf fourier modes of the electric field
+	// #############################################################################################
+   
+    cufftDoubleComplex Temp_Host[Nf+2];
+
+	cufftExecD2Z (VarIn.plan_1D_D2Z, VarIn.Dev_var + 1*VarIn.Grid->N, (cufftDoubleComplex*) (Dev_Temp_C1));
+	// devide by NX to normalize FFT
+	k_normalize_1D_hx<<<VarIn.Grid->fft_blocks.x, VarIn.Grid->threadsPerBlock.x>>>((cufftDoubleComplex*) (Dev_Temp_C1),  *VarIn.Grid);  // this is a normalization factor of FFT? if yes we dont need to do it everytime!!!
+    cudaMemcpy(Temp_Host, Dev_Temp_C1, (Nf+1) * sizeof(cufftDoubleComplex), cudaMemcpyDeviceToHost);
+
+    for (int i = 0; i < Nf; i++) {
+        Emodes[i] = sqrt(Temp_Host[i+1].x*Temp_Host[i+1].x + Temp_Host[i+1].y*Temp_Host[i+1].y);
+        Emodes[i] /= 1;//(double)(VarIn.Grid->NX);
+    }
+     //error("gabuuuu", 124);
 }
 
 

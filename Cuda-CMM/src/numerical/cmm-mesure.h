@@ -16,6 +16,7 @@
 
 #include "../grid/cmm-grid2d.h"
 #include "../numerical/cmm-fft.h"
+#include "../ui/globals.h"
 
 #include <math.h>
 
@@ -33,6 +34,7 @@ void Compute_Momentum(double &P_out, CmmVar2D VarIn, cufftDoubleReal *Dev_Temp_C
 void Compute_Total_Energy(double &E_tot, double &E_kin, double &E_pot, CmmVar2D VarKin, CmmVar2D VarPot, cufftDoubleReal *Dev_Temp_C1, size_t offset_start_1=0, size_t offset_start_2=0);
 void Compute_Kinetic_Energy(double &E_out, CmmVar2D VarIn, cufftDoubleReal *Dev_Temp_C1, size_t offset_start=0);
 void Compute_Potential_Energy(double &E_out, CmmVar2D VarIn, size_t offset_start=0);
+void Compute_kth_Mode(double *Emodes, CmmVar2D VarIn, cufftDoubleComplex *Dev_Temp_C1, int Nf = 4 );
 
 // function to compute several global quantities for comparison purposes
 // currently: min, max, area weighted avg, area weighted L2 norm

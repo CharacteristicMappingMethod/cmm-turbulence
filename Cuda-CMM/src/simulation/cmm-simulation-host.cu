@@ -637,13 +637,14 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 	if (save_now) {
 		// compute mesure values
 		double mesure[5];
-
+        double fmodes[4];
 		// compute quantities
 		if (SettingsMain.getSimulationType() == "cmm_vlasov_poisson_1d"){
 			// compute energies
 			Compute_Kinetic_Energy(mesure[1], *cmmVarMap["Vort"], (cufftDoubleReal*) Dev_Temp_C1);
 			Compute_Potential_Energy(mesure[2], *cmmVarMap["Psi"]);
 			mesure[0]=mesure[1]+mesure[2]; // total energy
+            Compute_kth_Mode(fmodes, *cmmVarMap["Psi"], Dev_Temp_C1);
 			// compute mass
 			Compute_Mass(mesure[3], *cmmVarMap["Vort"]);
 			Compute_Momentum(mesure[4], *cmmVarMap["Vort"], (cufftDoubleReal*) Dev_Temp_C1);
@@ -654,6 +655,10 @@ std::string compute_conservation_targets(SettingsCMM SettingsMain, double t_now,
 			writeAppendToBinaryFile(1, mesure+2, SettingsMain, "/Monitoring_data/Mesure/Epot");
 			writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Mass");
 			writeAppendToBinaryFile(1, mesure+4, SettingsMain, "/Monitoring_data/Mesure/Momentum");
+			writeAppendToBinaryFile(1, fmodes, SettingsMain, "/Monitoring_data/Mesure/Emode1");
+            writeAppendToBinaryFile(1, fmodes+1, SettingsMain, "/Monitoring_data/Mesure/Emode2");
+            writeAppendToBinaryFile(1, fmodes+2, SettingsMain, "/Monitoring_data/Mesure/Emode3");
+            writeAppendToBinaryFile(1, fmodes+3, SettingsMain, "/Monitoring_data/Mesure/Emode4");
 
 			// construct message
 			message = "Computed coarse Cons : Etot = " + to_str(mesure[0], 8)
@@ -993,6 +998,8 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 			cufftExecZ2D (Sample_dphi_dx->plan_1D_Z2D, (cufftDoubleComplex*) Sample_dphi_dx->Dev_var, (cufftDoubleReal*)(Sample_dphi_dx->Dev_var));
 			Compute_Potential_Energy(mesure[2], *Sample_dphi_dx, - Sample_var->Grid->N);
 			
+            double fmodes[4];
+            Compute_kth_Mode(fmodes, *cmmVarMap["Psi"], Dev_Temp_C1);
 			// error("hallo", 34);
 
 			if (save_var.find("Stream") != std::string::npos or save_var.find("Psi") != std::string::npos or save_all) {
@@ -1008,7 +1015,10 @@ std::string sample_compute_and_write_vlasov(SettingsCMM SettingsMain, double t_n
 			writeAppendToBinaryFile(1, mesure+2, SettingsMain, "/Monitoring_data/Mesure/Epot_"+ to_str(Sample_var->Grid->NX));
 			writeAppendToBinaryFile(1, mesure+3, SettingsMain, "/Monitoring_data/Mesure/Mass_"+ to_str(Sample_var->Grid->NX));
 			writeAppendToBinaryFile(1, mesure+4, SettingsMain, "/Monitoring_data/Mesure/Momentum_"+ to_str(Sample_var->Grid->NX));
-
+            writeAppendToBinaryFile(1, fmodes, SettingsMain, "/Monitoring_data/Mesure/Emode1_"+ to_str(Sample_var->Grid->NX));
+            writeAppendToBinaryFile(1, fmodes+1, SettingsMain, "/Monitoring_data/Mesure/Emode2_"+ to_str(Sample_var->Grid->NX));
+            writeAppendToBinaryFile(1, fmodes+2, SettingsMain, "/Monitoring_data/Mesure/Emode3_"+ to_str(Sample_var->Grid->NX));
+            writeAppendToBinaryFile(1, fmodes+3, SettingsMain, "/Monitoring_data/Mesure/Emode4_"+ to_str(Sample_var->Grid->NX));
 				// construct message
 			message = message + "Saved sample data " + to_str(i_save + 1) + " on grid " + to_str(Sample_var->Grid->NX) + ", Cons : Etot = " + to_str(mesure[0], 8)
 					+    " \t Momenta = " + to_str(mesure[4], 8)
