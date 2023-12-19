@@ -182,8 +182,8 @@ void apply_map_stack_points(SettingsCMM SettingsMain, TCudaGrid2D Grid, MapStack
 			else {
 				cudaMemcpy(pos_out_counter, Part_Pos_now.Dev_var, Part_Pos_now.sizeN, cudaMemcpyDeviceToDevice);
 			}
-			// shift pointer
-			pos_out_counter += 2*particles_forwarded[i_p].num;
+			// shift pointer by three, third is room for sampled variables
+			pos_out_counter += 3*particles_forwarded[i_p].num;
 		}
 
 		// afterwards: trace back all other maps
@@ -204,8 +204,8 @@ void apply_map_stack_points(SettingsCMM SettingsMain, TCudaGrid2D Grid, MapStack
 					k_h_sample_points_map<<<Part_Pos_now.block, Part_Pos_now.thread>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
 							pos_out_counter, pos_out_counter, particles_forwarded[i_p].num);
 				}
-				// shift pointer
-				pos_out_counter += 2*particles_forwarded[i_p].num;
+				// shift pointer by three, third is room for sampled variables
+				pos_out_counter += 3*particles_forwarded[i_p].num;
 			}
 		}
 	}
@@ -232,8 +232,8 @@ void apply_map_stack_points(SettingsCMM SettingsMain, TCudaGrid2D Grid, MapStack
 				else {
 					cudaMemcpy(pos_out_counter, Part_Pos_now.Dev_var, Part_Pos_now.sizeN, cudaMemcpyDeviceToDevice);
 				}
-				// shift pointer
-				pos_out_counter += 2*particles_forwarded[i_p].num;
+				// shift pointer by three, third is room for sampled variables
+				pos_out_counter += 3*particles_forwarded[i_p].num;
 			}
 
 			// loop over all other maps
@@ -251,8 +251,8 @@ void apply_map_stack_points(SettingsCMM SettingsMain, TCudaGrid2D Grid, MapStack
 						k_h_sample_points_map<<<Part_Pos_now.block, Part_Pos_now.thread>>>(*Map_Stack.Grid, Grid, Map_Stack.Dev_ChiX_stack, Map_Stack.Dev_ChiY_stack,
 								pos_out_counter, pos_out_counter, particles_forwarded[i_p].num);
 					}
-					// shift pointer
-					pos_out_counter += 2*particles_forwarded[i_p].num;
+					// shift pointer by three, third is room for sampled variables
+					pos_out_counter += 3*particles_forwarded[i_p].num;
 				}
 			}
 
@@ -267,8 +267,8 @@ void apply_map_stack_points(SettingsCMM SettingsMain, TCudaGrid2D Grid, MapStack
 					k_h_sample_points_map<<<Part_Pos_now.block, Part_Pos_now.thread>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
 							pos_out_counter, pos_out_counter, particles_forwarded[i_p].num);
 				}
-				// shift pointer
-				pos_out_counter += 2*particles_forwarded[i_p].num;
+				// shift pointer by three, third is room for sampled variables
+				pos_out_counter += 3*particles_forwarded[i_p].num;
 			}
 		}
 		// no remapping has occured yet
@@ -284,7 +284,8 @@ void apply_map_stack_points(SettingsCMM SettingsMain, TCudaGrid2D Grid, MapStack
 				k_h_sample_points_map<<<Part_Pos_now.block, Part_Pos_now.thread>>>(*Map_Stack.Grid, Grid, ChiX, ChiY,
 						Part_Pos_now.Dev_var, pos_out_counter, particles_forwarded[i_p].num);
 
-				pos_out_counter += 2*particles_forwarded[i_p].num;
+				// shift pointer by three, third is room for sampled variables
+				pos_out_counter += 3*particles_forwarded[i_p].num;
 			}
 		}
 	}
@@ -666,7 +667,22 @@ std::string sample_compute_and_write(SettingsCMM SettingsMain, double t_now, dou
 							// copy data to host and save
 							writeTransferToBinaryFile(2*Part_Pos_now.num, particles_out_counter, SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_forwarded_pos_P" + to_str_0(i_p+1, 2), 0);
 						}
-						particles_out_counter += 2*Part_Pos_now.num;  // increase counter
+						// Sample vorticity at forwarded particles position
+						if (save_var.find("PartF_Vort_" + to_str_0(i_p+1, 2)) != std::string::npos or save_all) {
+							// create particles folder if necessary
+							std::string t_s_now = to_str(t_now); if (abs(t_now - T_MAX) < 1) t_s_now = "final";
+							std::string sub_folder_name = "/Particle_data/Time_" + t_s_now;
+							std::string folder_name_now = SettingsMain.getWorkspace() + "data/" + SettingsMain.getFileName() + sub_folder_name;
+							struct stat st = {0};
+							if (stat(folder_name_now.c_str(), &st) == -1) mkdir(folder_name_now.c_str(), 0777);
+							// we need new grid elsewise the function cuts off Ix indices, as it is designed for 2D grids
+							TCudaGrid2D Grid_part(Part_Pos_now.num, 1, 1, Sample_var->Grid->bounds);
+							// sample data at point positions - 0 for vorticity
+							k_h_sample_from_init<<<Part_Pos_now.block, Part_Pos_now.thread>>>(particles_out_counter+2*Part_Pos_now.num, particles_out_counter,
+									Grid_part, *cmmVarMap["Vort_discrete_init"]->Grid, 0, SettingsMain.getInitialConditionNum(), cmmVarMap["Vort_discrete_init"]->Dev_var, SettingsMain.getInitialDiscrete());
+							writeTransferToBinaryFile(Part_Pos_now.num, particles_out_counter+2*Part_Pos_now.num, SettingsMain, "/Particle_data/Time_" + t_s_now + "/Particles_forwarded_Vorticity_W" + to_str_0(i_p+1, 2), 0);
+						}
+						particles_out_counter += 3*Part_Pos_now.num;  // increase counter by three for PosX,PosY,SampleVar
 					}
 				}
 

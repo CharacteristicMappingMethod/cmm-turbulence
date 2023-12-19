@@ -135,7 +135,7 @@ void SettingsCMM::setPresets() {
 	 * Third order: "RK3", "RK3Mod"
 	 * Fourth order: "RK4", "RK4Mod"
 	 */
-	std::string time_integration = "RK4Mod";
+	std::string time_integration = "RK3Mod";
 	/*
 	 * Override lagrange interpolation for velocity
 	 * if -1, then lagrange order is set after time integration schemes
@@ -158,7 +158,7 @@ void SettingsCMM::setPresets() {
 	// time instants or intervals at what we want to save computational data, 0 for initial and T_MAX for final
 	int save_sample_num = 1;
 	std::string save_sample_s[1] = {
-			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=0.5,var=W,grid=1024}"  // save over simulation
+			"{is_instant=0,time_start=0,time_end="+str_t(T_MAX)+",time_step=0.5,var=W-PartF_01-PartF_Vort_01,grid=1024}"  // save over simulation
 	};
 
 
@@ -195,12 +195,12 @@ void SettingsCMM::setPresets() {
 	/*
 	 * Forward map settings to compute forward map for scalar particles,
 	 */
-	bool forward_map = true;  // en- or disable computing of forward map
+	bool forward_map = false;  // en- or disable computing of forward map
 
 	// forwarded particles, parameters similar to advected particles
-	int particles_forwarded_num = 0;
+	int particles_forwarded_num = 1;
 	std::string particles_forwarded_s[2] = {
-		"{num=1000000,seed=0,init_name=uniform,init_time=0"
+		"{num=100000,seed=0,init_name=uniform,init_time=0"
 		",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI*2.0)+",init_param_4="+str_t(PI*2.0)+"}",
 		"{num=20000,seed=0,init_name=circular_ring,init_time=1"
 		",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI/2.0)+",init_param_4="+str_t(PI/2.0)+"}"
@@ -231,7 +231,7 @@ void SettingsCMM::setPresets() {
 	 * init_vel - if the inertial particles velocity should be set after the velocity or to zero
 	 * init_param - specific parameters to control the initial condition
 	 */
-	int particles_advected_num = 2;
+	int particles_advected_num = 0;
 	std::string particles_advected_s[8] = {
 			"{num=100000,tau=0,seed=0,time_integration=RK3,init_name=sine_sheets,init_time=0,init_vel=0"
 			",init_param_1="+str_t(PI)+",init_param_2="+str_t(PI)+",init_param_3="+str_t(PI*2.0)+",init_param_4="+str_t(PI*2.0)+"}",

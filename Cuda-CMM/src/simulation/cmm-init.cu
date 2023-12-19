@@ -90,18 +90,17 @@ __device__ double d_init_vorticity(double x, double y, int simulation_num)
 		{
 			//three vortices
 			double ret = 0;
-			double LX = PI/2;
-			double LY = PI/(2.0*sqrt(2.0));
+			double delta = 1/PI;
+			double LX = PI/4;
+			double LY = PI*(1.0+sqrt(2.0)/4.0);
 
+			// loop over this and neighbouring regions
 			for(int iy = -1; iy <= 1; iy++)
 				for(int ix = -1; ix <= 1; ix++)
 				{
-					ret += sin(0.5*(x + twoPI*ix))*sin(0.5*(x + twoPI*ix))*sin(0.5*((y + twoPI*iy) + twoPI*iy))*sin(0.5*((y + twoPI*iy) + twoPI*iy)) *
-								(
-								+	exp(-(((x + twoPI*ix) - PI - LX)*((x + twoPI*ix) - PI - LX) + ((y + twoPI*iy) - PI)*((y + twoPI*iy) - PI))*5)
-								+	exp(-(((x + twoPI*ix) - PI + LX)*((x + twoPI*ix) - PI + LX) + ((y + twoPI*iy) - PI)*((y + twoPI*iy) - PI))*5)
-								-	exp(-(((x + twoPI*ix) - PI + LX)*((x + twoPI*ix) - PI + LX) + ((y + twoPI*iy) - PI - LY)*((y + twoPI*iy) - PI - LY))*5)
-								);		 //two votices of same size
+					ret += PI     * exp(-(((x + twoPI*ix) - (PI-LX))*((x + twoPI*ix) - (PI-LX)) + ((y + twoPI*iy) - PI)*((y + twoPI*iy) - PI))/(delta*delta))
+						 + PI     *	exp(-(((x + twoPI*ix) - (PI+LX))*((x + twoPI*ix) - (PI+LX)) + ((y + twoPI*iy) - PI)*((y + twoPI*iy) - PI))/(delta*delta))
+						 - PI/2.0 * exp(-(((x + twoPI*ix) - (PI+LX))*((x + twoPI*ix) - (PI+LX)) + ((y + twoPI*iy) - LY)*((y + twoPI*iy) - LY))/(delta*delta));
 				}
 			return ret;
 			break;

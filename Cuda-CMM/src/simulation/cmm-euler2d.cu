@@ -271,11 +271,12 @@ void cuda_euler_2d(SettingsCMM& SettingsMain)
 		size_max_c = std::max(size_max_c, 2*Sample[i_save]->Grid->sizeNfft + 1*Sample[i_save]->Grid->sizeNReal);
 		if (SettingsMain.getForwardMap() and SettingsMain.getParticlesForwarded()) {
 			// we need to save and transfer new particle positions somehow, in addition to map
-			size_t stacked_size = 3*Sample[i_save]->Grid->sizeNReal;
+			size_t particles_f_size = 0;
 			for (int i_p = 0; i_p < SettingsMain.getParticlesForwardedNum(); ++i_p) {
-				stacked_size += 2*SettingsMain.getParticlesForwarded()[i_p].num*sizeof(double);
+				// factor three for: PosX, PosY and a third for sampling from IC (Vorticity or others)
+				particles_f_size += 3*SettingsMain.getParticlesForwarded()[i_p].num*sizeof(double);
 			}
-			size_max_c = std::max(size_max_c, stacked_size);
+			size_max_c = std::max(size_max_c, 3*Sample[i_save]->Grid->sizeNReal + particles_f_size);
 		}
 	}
 	for (int i_save = 0; i_save < SettingsMain.getSaveZoomNum(); ++i_save) {
